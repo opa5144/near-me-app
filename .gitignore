@@ -13,5 +13,6 @@ web-build/
 # Operating system / IDE
 .DS_Store
 Thumbs.db
+desktop.ini
 .idea/
 .vscode/
