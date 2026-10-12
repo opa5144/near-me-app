@@ -1,47 +1,38 @@
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
+import { colors } from '../data/theme';
 
-interface AppButtonProps {
+type Props = {
   title: string;
   onPress: () => void;
-  width?: number;
-  height?: number;
-  backgroundColor?: string;
-}
+  variant?: 'primary' | 'secondary' | 'quiet';
+  style?: ViewStyle;
+  disabled?: boolean;
+};
 
-export default function AppButton({
-  title,
-  onPress,
-  width = 200,
-  height = 50,
-  backgroundColor = '#007AFF',
-}: AppButtonProps) {
+export function AppButton({ title, onPress, variant = 'primary', style, disabled = false }: Props) {
   return (
     <Pressable
+      accessibilityRole="button"
+      disabled={disabled}
       onPress={onPress}
       style={[
         styles.button,
-        {
-          width,
-          height,
-          backgroundColor,
-        },
+        variant === 'primary' ? styles.primary : variant === 'secondary' ? styles.secondary : styles.quiet,
+        disabled && styles.disabled,
+        style,
       ]}
     >
-      <Text style={styles.text}>{title}</Text>
+      <Text style={[styles.text, variant !== 'primary' && styles.secondaryText]}>{title}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  button: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 10,
-  },
-
-  text: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  button: { minHeight: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
+  primary: { backgroundColor: colors.primary },
+  secondary: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  quiet: { backgroundColor: colors.primaryLight },
+  text: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  secondaryText: { color: colors.primary },
+  disabled: { opacity: 0.5 },
 });
