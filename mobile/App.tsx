@@ -7,6 +7,7 @@ import { SearchScreen } from './src/screens/SearchScreen';
 import { MyEventsScreen } from './src/screens/MyEventsScreen';
 import { ItineraryScreen } from './src/screens/ItineraryScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { LoginScreen } from './src/screens/LoginScreen';
 import { EventDetailsScreen } from './src/screens/EventDetailsScreen';
 import { sampleEvents, EventItem } from './src/data/events';
 import { colors } from './src/data/theme';
@@ -21,6 +22,18 @@ export default function App() {
       current.includes(id) ? current.filter(item => item !== id) : [...current, id],
     );
   };
+// Login state management
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  if (!isLoggedIn) {
+  return (
+    <SafeAreaView style={styles.safe}>
+      <StatusBar style="dark" />
+      <LoginScreen
+        onLogin={() => setIsLoggedIn(true)}
+      />
+    </SafeAreaView>
+  );
+}
 
   let screen;
   if (selectedEvent) {
