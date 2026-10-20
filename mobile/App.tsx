@@ -11,6 +11,7 @@ import { LoginScreen } from './src/screens/LoginScreen';
 import { EventDetailsScreen } from './src/screens/EventDetailsScreen';
 import { sampleEvents, EventItem } from './src/data/events';
 import { colors } from './src/data/theme';
+import { SignupScreen } from './src/screens/SignupScreen';
 
 export default function App() {
   const [tab, setTab] = useState<TabName>('Home');
@@ -24,13 +25,21 @@ export default function App() {
   };
 // Login state management
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [authScreen, setAuthScreen] = useState<'login' | 'signup'>('login'); // State to manage which auth screen to show
   if (!isLoggedIn) {
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
-      <LoginScreen
-        onLogin={() => setIsLoggedIn(true)}
-      />
+      {authScreen === 'signup' ? (
+        <SignupScreen
+          onBackToLogin={() => setAuthScreen('login')}
+        />
+        ) : (
+        <LoginScreen
+          onLogin={() => setIsLoggedIn(true)}
+          onSignup={() => setAuthScreen('signup')}
+        />
+    )}
     </SafeAreaView>
   );
 }
