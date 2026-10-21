@@ -1,10 +1,13 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../data/theme';
 
-export type TabName = 'Home' | 'Search' | 'My Events' | 'Itinerary' | 'Settings';
+export type TabName = 'Home' | 'Search' | 'Plans' | 'Host' | 'Profile';
 const tabs: { name: TabName; icon: string }[] = [
-  { name: 'Home', icon: '⌂' }, { name: 'Search', icon: '⌕' }, { name: 'My Events', icon: '▣' },
-  { name: 'Itinerary', icon: '☆' }, { name: 'Settings', icon: '♙' },
+  { name: 'Home', icon: '⌂' }, 
+  { name: 'Search', icon: '⌕' },
+  { name: 'Plans', icon: '☆' }, 
+  { name: 'Host', icon: '▤' }, 
+  { name: 'Profile', icon: '👤' },
 ];
 
 export function BottomTabBar({ active, onChange }: { active: TabName; onChange: (tab: TabName) => void }) {
