@@ -6,20 +6,25 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "reset-project": "expo start -c"
   },
   "dependencies": {
     "@nozbe/watermelondb": "^0.28.0",
+    "@react-native-community/datetimepicker": "9.1.0",
     "axios": "^1.7.0",
     "expo": "~57.0.0",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
     "react": "19.2.3",
     "react-native": "0.86.3",
-    "react-native-mmkv": "^3.1.0"
+    "react-native-calendars": "^1.1314.0",
+    "react-native-mmkv": "^3.1.0",
+    "react-native-modal-datetime-picker": "^18.0.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.0",
+    "@babel/plugin-proposal-decorators": "^7.25.0",
     "@types/react": "~19.2.4",
     "babel-plugin-transform-typescript-metadata": "^0.3.2",
     "typescript": "~6.0.3"

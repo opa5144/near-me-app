@@ -18,7 +18,7 @@ export function CreateStoreScreen({ onBack }: { onBack: () => void }) {
         <ScreenHeader eyebrow="Directory Mode" title="Create Store" subtitle="Tell us about your business location parameters." />
         
         <TouchableOpacity style={styles.googleMapLinkBanner} activeOpacity={0.85} onPress={() => alert('Opening Native Google Maps API Linker Integration...')}>
-          <Text style={styles.bannerLinkText}>🗺️  Import from Google Maps Link</Text>
+          <Text style={styles.bannerLinkText}>🗺️  Import from Google Maps</Text>
         </TouchableOpacity>
 
         <View style={styles.formGroup}>

@@ -2,13 +2,15 @@ import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View, KeyboardAvoidingView, Platform } from 'react-native';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { AppButton } from '../components/AppButton';
+import { DatePickerField } from '../components/DatePickerField';
+import { TimePickerField } from '../components/TimePickerField';
 import { colors } from '../data/theme';
 
 export function CreateEventScreen({ onBack }: { onBack: () => void }) {
   const [title, setTitle] = useState('');
-  const [date, setDate] = useState('');
-  const [startTime, setStartTime] = useState('');
-  const [endTime, setEndTime] = useState('');
+  const [date, setDate] = useState('2026-10-23');
+  const [startTime, setStartTime] = useState('12:00 AM');
+  const [endTime, setEndTime] = useState('3:00 AM');
   const [price, setPrice] = useState('');
   const [location, setLocation] = useState('');
 
@@ -16,27 +18,20 @@ export function CreateEventScreen({ onBack }: { onBack: () => void }) {
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <Text onPress={onBack} style={styles.backLink}>‹  Back to Dashboard</Text>
-        <ScreenHeader eyebrow="Blueprint Mode" title="Create Event" subtitle="Tell us about your event details and entry rules." />
+        <ScreenHeader eyebrow="Event Blueprint" title="Create Event" subtitle="Tell us about your event details and entry rules." />
         
         <View style={styles.formGroup}>
           <Text style={styles.fieldLabel}>Event Title</Text>
           <TextInput value={title} onChangeText={setTitle} placeholder="e.g., Hardcore Synthwave Experience" placeholderTextColor={colors.muted} style={styles.fieldInput} />
         </View>
 
-        <View style={styles.formGroup}>
-          <Text style={styles.fieldLabel}>Date Picker</Text>
-          <TextInput value={date} onChangeText={setDate} placeholder="Jun 18, 2026" placeholderTextColor={colors.muted} style={styles.fieldInput} />
-        </View>
+        {/* Modular Date Picker Component */}
+        <DatePickerField label="Start Date*" date={date} onDateChange={setDate} />
 
+        {/* Modular Time Picker Components */}
         <View style={styles.splitRow}>
-          <View style={styles.splitInput}>
-            <Text style={styles.fieldLabel}>Start Time</Text>
-            <TextInput value={startTime} onChangeText={setStartTime} placeholder="11:00 PM" placeholderTextColor={colors.muted} style={styles.fieldInput} />
-          </View>
-          <View style={styles.splitInput}>
-            <Text style={styles.fieldLabel}>End Time</Text>
-            <TextInput value={endTime} onChangeText={setEndTime} placeholder="3:00 AM" placeholderTextColor={colors.muted} style={styles.fieldInput} />
-          </View>
+          <TimePickerField label="Start Time" time={startTime} onTimeChange={setStartTime} />
+          <TimePickerField label="End Time" time={endTime} onTimeChange={setEndTime} />
         </View>
 
         <View style={styles.formGroup}>
@@ -69,7 +64,6 @@ const styles = StyleSheet.create({
   backLink: { color: colors.primary, fontWeight: '800', fontSize: 13, marginBottom: 12 },
   formGroup: { marginBottom: 14 },
   splitRow: { flexDirection: 'row', gap: 12, marginBottom: 14 },
-  splitInput: { flex: 1 },
   fieldLabel: { color: colors.text, fontSize: 11, fontWeight: '800', marginBottom: 6 },
   fieldInput: { height: 44, borderRadius: 14, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, fontSize: 12, color: colors.text },
   imagePlaceholderFrame: { height: 110, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 6 },

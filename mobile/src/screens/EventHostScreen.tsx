@@ -6,24 +6,44 @@ import { AppButton } from '../components/AppButton';
 import { colors } from '../data/theme';
 
 export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateStore }: { events: EventItem[]; onOpenEvent: (event: EventItem) => void; onCreateEvent: () => void; onCreateStore: () => void }) {
+  const totalEvents = events.length;
+  const totalAudience = events.reduce((sum, ev: any) => sum + (ev.attendees || ev.audience || 0), 0);
+  const totalPageViews = events.reduce((sum, ev: any) => sum + (ev.pageViews || ev.views || 0), 0);
+  
   return (
     <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      <ScreenHeader eyebrow="Workspace Dashboard" title="Host Home" subtitle="Monitor activity metrics and catalog deployments." />
-      <View style={styles.metricsGrid}>
-        <View style={styles.metricCard}><Text style={styles.valueToken}>{events.length}</Text><Text style={styles.labelToken}>Managed Entries</Text></View>
-        <View style={styles.metricCard}><Text style={styles.valueToken}>Live</Text><Text style={styles.labelToken}>Server Link Status</Text></View>
-      </View>
+      <ScreenHeader eyebrow="Manage your events" title="Host Dashboard" subtitle="Manage and monitor your events and stores." />
+      
       <View style={styles.actionRow}>
-        <AppButton title="➕  Create Event" onPress={onCreateEvent} style={styles.halfButton} />
-        <AppButton title="🏬  Create Store" onPress={onCreateStore} style={styles.halfButton} variant="secondary" />
+        <AppButton title="+  Create Event" onPress={onCreateEvent} style={styles.halfButton} />
+        <AppButton title="+  Create Store" onPress={onCreateStore} style={styles.halfButton} />
       </View>
-      <Text style={styles.section}>📊  Active Catalog Management</Text>
+
+    {/* Analytics Section */}
+      <Text style={styles.section}>Analytics</Text>
+      <View style={styles.metricsGrid}>
+        <View style={styles.metricCard}>
+          <Text style={styles.valueToken}>{totalEvents}</Text>
+          <Text style={styles.labelToken}>TOTAL EVENTS</Text>
+        </View>
+        <View style={styles.metricCard}>
+          <Text style={styles.valueToken}>{totalAudience}</Text>
+          <Text style={styles.labelToken}>TOTAL AUDIENCE</Text>
+        </View>
+        <View style={styles.metricCard}>
+          <Text style={styles.valueToken}>{totalPageViews}</Text>
+          <Text style={styles.labelToken}>PAGE VIEWS</Text>
+        </View>
+      </View>
+
+    {/* Your Events Section */}
+      <Text style={styles.section}>Your Events</Text>
       {events.length ? events.map(event => (
         <TouchableOpacity key={event.id} style={styles.eventRow} onPress={() => onOpenEvent(event)} activeOpacity={0.7}>
           <View style={styles.rowMetadata}><Text style={styles.rowTitle} numberOfLines={1}>{event.title}</Text><Text style={styles.rowSub}>📆 {event.date || 'Upcoming'}</Text></View>
-          <Text style={styles.liveBadge}>⚡ Live</Text>
+          <Text style={styles.liveBadge}> Active</Text>
         </TouchableOpacity>
-      )) : <Text style={styles.empty}>Your workspace is empty. Select a creation target above to launch your first local listing node.</Text>}
+      )) : <Text style={styles.empty}>You have no events to display.</Text>}
     </ScrollView>
   );
 }

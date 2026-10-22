@@ -1,9 +1,17 @@
+import React, { useEffect } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { EventItem } from '../data/events';
 import { AppButton } from '../components/AppButton';
 import { colors } from '../data/theme';
 
 export function EventDetailsScreen({ event, interested, onToggleInterested, onBack }: { event: EventItem; interested: boolean; onToggleInterested: () => void; onBack: () => void }) {
+  
+  // 1. Track Page View automatically when the screen mounts/opens
+  useEffect(() => {
+      console.log(`[Analytics] Page view recorded for event: ${event.id}`);
+      // fetch(`https://your-api.com/events/${event.id}/view`, { method: 'POST' }).catch(() => {});
+  }, [event.id]);
+  
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <Text onPress={onBack} style={styles.back}>‹  Back to events</Text>
