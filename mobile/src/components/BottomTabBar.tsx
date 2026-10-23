@@ -6,7 +6,7 @@ const tabs: { name: TabName; icon: string }[] = [
   { name: 'Home', icon: '⌂' }, 
   { name: 'Search', icon: '⌕' },
   { name: 'Plans', icon: '☆' }, 
-  { name: 'Host', icon: '▤' }, 
+  { name: 'Host', icon: '✎' }, 
   { name: 'Profile', icon: '👤' },
 ];
 
