@@ -1,8 +1,15 @@
 import axios from 'axios';
+import Constants from 'expo-constants';
 
-const API_BASE_URL = 'http://10.0.2.2:5000/api'; 
+// Automatically extracts your computer's local Wi-Fi IP from Expo
+const hostUri = Constants.expoConfig?.hostUri || Constants.manifest?.debuggerHost;
+const ipAddress = hostUri ? hostUri.split(':')[0] : 'localhost';
 
-const api = axios.create({
+const API_BASE_URL = `http://${ipAddress}:5000/api`; 
+
+console.log('Connecting to Backend API at:', API_BASE_URL);
+
+export const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000,
   headers: { 'Content-Type': 'application/json' },

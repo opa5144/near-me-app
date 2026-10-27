@@ -5,6 +5,8 @@ import { AppButton } from '../components/AppButton';
 import { DatePickerField } from '../components/DatePickerField';
 import { TimePickerField } from '../components/TimePickerField';
 import { PriceInputField } from '../components/PriceInputField';
+import { LocationComponent } from '../components/LocationInputField';
+import { EventPlace } from '../api/maps';
 import { colors } from '../data/theme';
 
 const MINUTE_INTERVAL: 15 | 30 = 15; // <--- Single source of truth for the picker step
@@ -32,7 +34,7 @@ export function CreateEventScreen({ onBack }: { onBack: () => void }) {
   const [endTime, setEndTime] = useState(snapToInterval(new Date(today.getTime() + 70 * 60 * 1000)));
   
   const [price, setPrice] = useState('');
-  const [location, setLocation] = useState('');
+  const [selectedVenue, setSelectedVenue] = useState<EventPlace | null>(null);
 
   // Helper to calculate total minutes from midnight for robust 24-hour comparisons
   const getMinutesFromMidnight = (d: Date) => d.getHours() * 60 + d.getMinutes();
@@ -90,6 +92,11 @@ export function CreateEventScreen({ onBack }: { onBack: () => void }) {
       return;
     }
 
+    if (!selectedVenue) {
+      Alert.alert("Missing Location", "Please search and select a venue location.");
+      return;
+    }
+
     // Build ISO timestamps based on single event date selection
     const startDateTime = new Date(`${date}T${startTime.toTimeString().split(' ')[0]}`);
     const endDateTime = new Date(`${date}T${endTime.toTimeString().split(' ')[0]}`);
@@ -106,11 +113,19 @@ export function CreateEventScreen({ onBack }: { onBack: () => void }) {
       startTimestamp: startDateTime.toISOString(),
       endTimestamp: endDateTime.toISOString(),
       price: parseFloat(price) || 0, // Blank (or a lone ".") means a free event
-      location,
+      venue: {
+        placeId: selectedVenue.placeId,
+        name: selectedVenue.name,
+        address: selectedVenue.address,
+        geometry: {
+          type: "Point",
+          coordinates: [selectedVenue.longitude, selectedVenue.latitude] // GeoJSON format standard ordering
+        }
+      }
     };
 
     console.log("Event Blueprint Submitted:", eventPayload);
-    alert('Event Blueprint Formulated.');
+    Alert.alert('Success', 'Event Blueprint Formulated.');
   };
 
   return (
@@ -153,10 +168,8 @@ export function CreateEventScreen({ onBack }: { onBack: () => void }) {
         {/* Numbers-only price input (blank = free) */}
         <PriceInputField label="Ticket Price" price={price} onPriceChange={setPrice} />
 
-        <View style={styles.formGroup}>
-          <Text style={styles.fieldLabel}>Location Address / Venue</Text>
-          <TextInput value={location} onChangeText={setLocation} placeholder="e.g., The Matrix Sub-Basement" placeholderTextColor={colors.muted} style={styles.fieldInput} />
-        </View>
+        {/* Secure typeahead autocomplete proxy search drop-down location field */}
+        <LocationComponent onVenueSelected={setSelectedVenue} />
 
         <View style={styles.formGroup}>
           <Text style={styles.fieldLabel}>Upload Banner Image</Text>
@@ -183,9 +196,9 @@ const styles = StyleSheet.create({
   overnightBadgeText: { color: colors.primary, fontSize: 11, fontWeight: '700' },
   warningBadgeText: { color: '#E53E3E', fontSize: 11, fontWeight: '700' },
   fieldLabel: { color: colors.text, fontSize: 11, fontWeight: '800', marginBottom: 6 },
-  fieldInput: { height: 44, borderRadius: 14, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, fontSize: 12, color: colors.text },
-  imagePlaceholderFrame: { height: 110, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  placeholderGlyph: { fontSize: 24 },
-  placeholderText: { color: colors.muted, fontSize: 10, fontWeight: '700' },
-  submitButton: { marginTop: 12 },
+  fieldInput: { height: 44, borderRadius: 14, borderWidth: 1, borderColor: '#ccc', paddingHorizontal: 10, fontSize: 14, color: '#000', backgroundColor: '#fff' },
+  imagePlaceholderFrame: { borderWidth: 1, borderColor: '#ccc', borderStyle: 'dashed', borderRadius: 4, height: 100, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fafafa' },
+  placeholderGlyph: { fontSize: 24, marginBottom: 4 },
+  placeholderText: { color: colors.muted, fontSize: 12, fontWeight: '600' },
+  submitButton: { marginTop: 10 }
 });
