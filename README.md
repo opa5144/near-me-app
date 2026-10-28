@@ -18,6 +18,9 @@ git clone https://github.com/opa5144/near-me-app.git
 cd near-me-app/mobile
 npm install
 npx expo start
+
+cd near-me-app/backend
+npm start
 ```
 
 
