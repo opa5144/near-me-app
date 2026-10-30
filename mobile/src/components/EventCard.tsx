@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { EventItem } from '../data/events';
 import { colors } from '../data/theme';
 
@@ -6,7 +6,11 @@ export function EventCard({ event, onPress, horizontal = false }: { event: Event
   return (
     <Pressable onPress={onPress} style={[styles.card, horizontal && styles.horizontal]}>
       <View style={[styles.art, { backgroundColor: event.accent }, horizontal && styles.horizontalArt]}>
-        <Text style={styles.emoji}>{event.emoji}</Text>
+        {event.bannerImage ? (
+          <Image source={{ uri: event.bannerImage }} style={styles.bannerImage} />
+        ) : (
+          <Text style={styles.emoji}>{event.emoji}</Text>
+        )}
         <View style={styles.artBadge}><Text style={styles.artBadgeText}>{event.category}</Text></View>
       </View>
       <View style={styles.details}>
@@ -24,10 +28,11 @@ export function EventCard({ event, onPress, horizontal = false }: { event: Event
 const styles = StyleSheet.create({
   card: { backgroundColor: colors.surface, borderRadius: 18, borderWidth: 1, borderColor: colors.border, overflow: 'hidden', marginBottom: 11 },
   horizontal: { flexDirection: 'row', alignItems: 'center', padding: 9, gap: 11 },
-  art: { height: 128, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  art: { height: 128, alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' },
   horizontalArt: { width: 88, height: 88, borderRadius: 12, overflow: 'hidden' },
+  bannerImage: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', resizeMode: 'cover' },
   emoji: { fontSize: 45 },
-  artBadge: { position: 'absolute', left: 9, top: 9, backgroundColor: 'rgba(255,255,255,0.92)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 9 },
+  artBadge: { position: 'absolute', left: 9, top: 9, backgroundColor: 'rgba(255,255,255,0.92)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 9, zIndex: 2 },
   artBadgeText: { color: colors.text, fontSize: 9, fontWeight: '700' },
   details: { padding: 11, flex: 1 },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },

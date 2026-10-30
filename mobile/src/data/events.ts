@@ -10,6 +10,7 @@ export type EventItem = {
   emoji: string;
   accent: string;
   location: string;
+  bannerImage?: string;
 };
 
 export const sampleEvents: EventItem[] = [

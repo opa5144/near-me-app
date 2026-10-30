@@ -8,7 +8,7 @@ import { TimePickerField } from '../components/TimePickerField';
 import { PriceInputField } from '../components/PriceInputField';
 import { LocationComponent } from '../components/LocationInputField';
 import { EventPlace } from '../api/maps';
-import { categories } from '../data/events';
+import { categories, sampleEvents, EventItem } from '../data/events';
 import { colors } from '../data/theme';
 
 // Filter out 'All' so hosts assign a specific category
@@ -29,7 +29,6 @@ export function CreateEventScreen({ onBack }: { onBack: () => void }) {
   const [selectedCategory, setSelectedCategory] = useState(eventCategories[0] || 'Music');
   
   // Helpers to format dates and initialize dates/times as native Date objects
-  // Uses local time (not UTC) so "today" is correct in the evening
   const formatDateString = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const today = new Date();
@@ -102,8 +101,8 @@ export function CreateEventScreen({ onBack }: { onBack: () => void }) {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [16, 9],
+      allowsEditing: true, // Re-enables repositioning, zoom, and cropping
+      aspect: [16, 9],     // Enforces a fixed banner frame with standard confirmation buttons
       quality: 0.8,
     });
 
@@ -112,7 +111,22 @@ export function CreateEventScreen({ onBack }: { onBack: () => void }) {
     }
   };
 
+  const handleRemoveImage = () => {
+    setBannerImage(null);
+  };
+
   const handleSubmit = () => {
+    // Validation for Mandatory Fields
+    if (!title.trim()) {
+      Alert.alert("Missing Title", "Please enter an event title.");
+      return;
+    }
+
+    if (!description.trim()) {
+      Alert.alert("Missing Description", "Please enter an event description.");
+      return;
+    }
+
     // Catch-all hard block on submit
     if (isInvalidDuration) {
       Alert.alert("Invalid Schedule", "Event duration must be at least 30 minutes.");
@@ -124,38 +138,35 @@ export function CreateEventScreen({ onBack }: { onBack: () => void }) {
       return;
     }
 
-    // Build ISO timestamps based on single event date selection
-    const startDateTime = new Date(`${date}T${startTime.toTimeString().split(' ')[0]}`);
-    const endDateTime = new Date(`${date}T${endTime.toTimeString().split(' ')[0]}`);
-    
-    if (isOvernight) {
-      endDateTime.setDate(endDateTime.getDate() + 1); // Safely advances date by +1 day for overnight events
-    }
+    // Helper to format 12-hour time (e.g. 4:00 PM)
+    const format12Hour = (d: Date) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
-    const eventPayload = {
-      title,
-      description,
+    // Format display date (e.g. "Fri, Jun 12")
+    const dateObj = new Date(`${date}T00:00:00`);
+    const formattedDate = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+    // Build EventItem matching events.ts structure
+    const newEvent: EventItem = {
+      id: String(Date.now()),
+      title: title.trim(),
       category: selectedCategory,
-      eventDate: date,
-      isOvernight,
-      durationMinutes: durationMins,
-      startTimestamp: startDateTime.toISOString(),
-      endTimestamp: endDateTime.toISOString(),
-      price: parseFloat(price) || 0, // Blank (or a lone ".") means a free event
-      bannerImage,
-      venue: {
-        placeId: selectedVenue.placeId,
-        name: selectedVenue.name,
-        address: selectedVenue.address,
-        geometry: {
-          type: "Point",
-          coordinates: [selectedVenue.longitude, selectedVenue.latitude] // GeoJSON format standard ordering
-        }
-      }
+      date: formattedDate,
+      time: `${format12Hour(startTime)} – ${format12Hour(endTime)}`,
+      venue: selectedVenue.name,
+      price: !price || parseFloat(price) === 0 ? 'Free' : `$${parseFloat(price).toFixed(0)}`,
+      description: description.trim(),
+      emoji: '🎆',
+      accent: colors.primary,
+      location: selectedVenue.address || selectedVenue.name,
+      bannerImage: bannerImage || undefined,
     };
 
-    console.log("Event Blueprint Submitted:", eventPayload);
-    Alert.alert('Success', 'Event Blueprint Formulated.');
+    // Save temporarily in memory to sampleEvents
+    sampleEvents.unshift(newEvent);
+
+    Alert.alert('Success', 'Event Created!', [
+      { text: 'OK', onPress: onBack }
+    ]);
   };
 
   return (
@@ -164,15 +175,15 @@ export function CreateEventScreen({ onBack }: { onBack: () => void }) {
         <Text onPress={onBack} style={styles.backLink}>‹  Back to Dashboard</Text>
         <ScreenHeader eyebrow="Event Blueprint" title="Create Event" subtitle="Tell us about your event details and entry rules." />
         
-        {/* Title Field */}
+        {/* Title Field (Mandatory) */}
         <View style={styles.formGroup}>
-          <Text style={styles.fieldLabel}>Event Title</Text>
+          <Text style={styles.fieldLabel}>Event Title*</Text>
           <TextInput value={title} onChangeText={setTitle} placeholder="e.g., Hardcore Synthwave Experience" placeholderTextColor={colors.muted} style={styles.fieldInput} />
         </View>
 
-        {/* Description Field */}
+        {/* Description Field (Mandatory) */}
         <View style={styles.formGroup}>
-          <Text style={styles.fieldLabel}>Description</Text>
+          <Text style={styles.fieldLabel}>Description*</Text>
           <TextInput
             value={description}
             onChangeText={setDescription}
@@ -236,22 +247,27 @@ export function CreateEventScreen({ onBack }: { onBack: () => void }) {
         {/* Upload Banner Image */}
         <View style={styles.formGroup}>
           <Text style={styles.fieldLabel}>Upload Banner Image</Text>
-          <TouchableOpacity onPress={handlePickImage} activeOpacity={0.8}>
-            {bannerImage ? (
-              <View style={styles.imagePreviewContainer}>
-                <Image source={{ uri: bannerImage }} style={styles.bannerImagePreview} />
-                <Text style={styles.changeImageBadge}>Tap to change image</Text>
+          {bannerImage ? (
+            <View style={styles.imagePreviewContainer}>
+              <Image source={{ uri: bannerImage }} style={styles.bannerImagePreview} />
+              <View style={styles.actionRow}>
+                <TouchableOpacity onPress={handlePickImage} activeOpacity={0.8} style={styles.changeBtn}>
+                  <Text style={styles.actionBtnText}>Change</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleRemoveImage} activeOpacity={0.8} style={styles.removeBtn}>
+                  <Text style={styles.removeBtnText}>Remove</Text>
+                </TouchableOpacity>
               </View>
-            ) : (
-              <View style={styles.imagePlaceholderFrame}>
-                <Text style={styles.placeholderGlyph}>🖼️</Text>
-                <Text style={styles.placeholderText}>Tap to select or browse files</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity onPress={handlePickImage} activeOpacity={0.8} style={styles.imagePlaceholderFrame}>
+              <Text style={styles.placeholderGlyph}>🖼️</Text>
+              <Text style={styles.placeholderText}>Tap to select and crop image</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
-        <AppButton title="Create" onPress={handleSubmit} style={styles.submitButton} />
+        <AppButton title="Create Event" onPress={handleSubmit} style={styles.submitButton} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -275,11 +291,15 @@ const styles = StyleSheet.create({
   activeChip: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { color: colors.text, fontSize: 11, fontWeight: '700' },
   activeChipText: { color: '#FFFFFF' },
-  imagePlaceholderFrame: { borderWidth: 1, borderColor: '#ccc', borderStyle: 'dashed', borderRadius: 4, height: 100, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fafafa' },
+  imagePlaceholderFrame: { borderWidth: 1, borderColor: '#ccc', borderStyle: 'dashed', borderRadius: 8, height: 100, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fafafa' },
   placeholderGlyph: { fontSize: 24, marginBottom: 4 },
   placeholderText: { color: colors.muted, fontSize: 12, fontWeight: '600' },
-  imagePreviewContainer: { position: 'relative', height: 120, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#ccc' },
-  bannerImagePreview: { width: '100%', height: '100%', resizeMode: 'cover' },
-  changeImageBadge: { position: 'absolute', bottom: 8, right: 8, backgroundColor: 'rgba(0, 0, 0, 0.7)', color: '#fff', fontSize: 10, fontWeight: '700', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  imagePreviewContainer: { position: 'relative', height: 140, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: colors.border, backgroundColor: '#000' },
+  bannerImagePreview: { width: '100%', height: '100%', resizeMode: 'cover', opacity: 0.9 },
+  actionRow: { position: 'absolute', bottom: 8, right: 8, flexDirection: 'row', gap: 8 },
+  changeBtn: { backgroundColor: 'rgba(0, 0, 0, 0.75)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 },
+  removeBtn: { backgroundColor: 'rgba(229, 62, 62, 0.85)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 },
+  actionBtnText: { color: '#FFF', fontSize: 11, fontWeight: '700' },
+  removeBtnText: { color: '#FFF', fontSize: 11, fontWeight: '700' },
   submitButton: { marginTop: 10 }
 });
