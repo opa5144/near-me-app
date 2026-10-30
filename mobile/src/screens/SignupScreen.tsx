@@ -1,15 +1,9 @@
 import { useState } from 'react';
-import {
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-} from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, } from 'react-native';
 import { AppButton } from '../components/AppButton';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { colors } from '../data/theme';
-import {AppTextInput} from '../components/AppTextInput';
+import { AppTextInput } from '../components/AppTextInput';
 
 const fields = [
   { key: 'firstName', label: 'First name' },
@@ -42,26 +36,26 @@ export function SignupScreen({ onBackToLogin }: SignupScreenProps) {
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
-    <ScreenHeader title="Sign up" subtitle="Create your account." />
+      <ScreenHeader title="Sign up" subtitle="Create your account." />
 
-    {fields.map(({ key, label }) => (
+      {fields.map(({ key, label }) => (
         <AppTextInput
-            key={key}
-            label={label}
-            value={form[key]}
-            onChangeText={value =>
-                setForm(current => ({ ...current, [key]: value }))
-            }
-            autoCapitalize={
-                key === 'firstName' || key === 'lastName'
-                    ? 'words'
-                    : 'none'
-            }
-            keyboardType={key === 'email' ? 'email-address' : 'default'}
-            autoComplete={key === 'password' ? 'new-password' : undefined}
-            isPassword={key === 'password'}
+          key={key}
+          label={label}
+          value={form[key]}
+          onChangeText={value =>
+            setForm(current => ({ ...current, [key]: value }))
+          }
+          autoCapitalize={
+            key === 'firstName' || key === 'lastName'
+              ? 'words'
+              : 'none'
+          }
+          keyboardType={key === 'email' ? 'email-address' : 'default'}
+          autoComplete={key === 'password' ? 'new-password' : undefined}
+          isPassword={key === 'password'}
         />
-    ))}
+      ))}
 
       <AppButton
         title="Sign up"

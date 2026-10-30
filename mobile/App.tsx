@@ -12,6 +12,7 @@ import { CreateEventScreen } from './src/screens/CreateEventScreen';
 import { CreateStoreScreen } from './src/screens/CreateStoreScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
+import { SignupScreen } from './src/screens/SignupScreen';
 import { EventDetailsScreen } from './src/screens/EventDetailsScreen';
 
 import { sampleEvents, EventItem } from './src/data/events';
@@ -23,20 +24,29 @@ export default function App() {
   const [interestedIds, setInterestedIds] = useState<string[]>(['1', '2']);
 
   const [hostRoute, setHostRoute] = useState<'Home' | 'CreateEvent' | 'CreateStore'>('Home');
+  const [authRoute, setAuthRoute] = useState<'login' | 'signup'>('login');
+
   const toggleInterested = (id: string) => {
     setInterestedIds(current =>
       current.includes(id) ? current.filter(item => item !== id) : [...current, id],
     );
   };
-  // Login state management not implemented yet, but simulated with a state variable for now.
+  // Real login state management not implemented yet, but simulated with a state variable for now.
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   if (!isLoggedIn) {
     return (
       <SafeAreaView style={styles.safe}>
         <StatusBar style="dark" />
-        <LoginScreen
-          onLogin={() => setIsLoggedIn(true)}
-        />
+        {authRoute === 'login' ? (
+          <LoginScreen
+            onLogin={() => setIsLoggedIn(true)}
+            onNavigateToSignup={() => setAuthRoute('signup')}
+          />
+        ) : (
+          <SignupScreen
+            onBackToLogin={() => setAuthRoute('login')}
+          />
+        )}
       </SafeAreaView>
     );
   }

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react'; // 1. Added useEffect
 import { StyleSheet, Text, TextInput, View, TouchableOpacity, ActivityIndicator, Keyboard } from 'react-native';
 import debounce from 'lodash.debounce';
 import { fetchPlaceSuggestions, fetchPlaceDetails, createSessionToken, PlaceSuggestion, EventPlace } from '../api/maps';
@@ -41,6 +41,13 @@ export function LocationComponent({ onVenueSelected }: LocationComponentProps) {
     []
   );
 
+  // 2. MINIMAL ADDITION: Cancels pending debounce triggers if the user leaves the screen
+  useEffect(() => {
+    return () => {
+      debouncedFetch.cancel();
+    };
+  }, [debouncedFetch]);
+
   const handleTextChange = (text: string) => {
     setQuery(text);
     setIsLoading(true);
@@ -51,7 +58,7 @@ export function LocationComponent({ onVenueSelected }: LocationComponentProps) {
     setQuery(item.full);
     setSuggestions([]);
     setIsLoading(true);
-    Keyboard.dismiss(); // Standard UX practice: dismiss keyboard on selection
+    Keyboard.dismiss(); 
 
     const details = await fetchPlaceDetails(item.placeId, sessionTokenRef.current);
     setIsLoading(false);
@@ -72,12 +79,11 @@ export function LocationComponent({ onVenueSelected }: LocationComponentProps) {
           placeholder="Search venues, bars, or stadiums..."
           placeholderTextColor={colors.muted}
           style={styles.fieldInput}
-          clearButtonMode="while-editing" // iOS clear button standard
+          clearButtonMode="while-editing" 
         />
         {isLoading && <ActivityIndicator style={styles.loader} color={colors.primary} />}
       </View>
 
-      {/* Absolute floating dropdown list matching industry standard dropdown patterns */}
       {suggestions.length > 0 && (
         <View style={styles.dropdownList}>
           {suggestions.map((item) => (
