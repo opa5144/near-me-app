@@ -9,7 +9,7 @@ import { PriceInputField } from '../../components/PriceInputField';
 import { LocationComponent } from '../../components/LocationInputField';
 import { EventPlace } from '../../api/maps';
 import { categories, sampleEvents, EventItem } from '../../data/events';
-import { colors } from '../../data/theme';
+import { useTheme } from '../../context/ThemeContext';
 
 // Filter out 'All' so hosts assign a specific category
 const eventCategories = categories.filter(c => c !== 'All');
@@ -24,6 +24,7 @@ const snapToInterval = (d: Date, interval: number = MINUTE_INTERVAL) => {
 };
 
 export function CreateEventScreen({ onBack }: { onBack: () => void }) {
+  const { colors } = useTheme();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(eventCategories[0] || 'Music');
@@ -102,7 +103,7 @@ export function CreateEventScreen({ onBack }: { onBack: () => void }) {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true, // Re-enables repositioning, zoom, and cropping
-      aspect: [16, 9],     // Enforces a fixed banner frame with standard confirmation buttons
+      aspect: [16, 9],    // Enforces a fixed banner frame with standard confirmation buttons
       quality: 0.8,
     });
 
@@ -170,20 +171,20 @@ export function CreateEventScreen({ onBack }: { onBack: () => void }) {
   };
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={[styles.container, { backgroundColor: colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <Text onPress={onBack} style={styles.backLink}>‹  Back to Dashboard</Text>
+        <Text onPress={onBack} style={[styles.backLink, { color: colors.primary }]}>‹  Back</Text>
         <ScreenHeader eyebrow="Event Blueprint" title="Create Event" subtitle="Tell us about your event details and entry rules." />
         
         {/* Title Field (Mandatory) */}
         <View style={styles.formGroup}>
-          <Text style={styles.fieldLabel}>Event Title*</Text>
-          <TextInput value={title} onChangeText={setTitle} placeholder="e.g., Hardcore Synthwave Experience" placeholderTextColor={colors.muted} style={styles.fieldInput} />
+          <Text style={[styles.fieldLabel, { color: colors.text }]}>Event Title*</Text>
+          <TextInput value={title} onChangeText={setTitle} placeholder="e.g., Hardcore Synthwave Experience" placeholderTextColor={colors.muted} style={[styles.fieldInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} />
         </View>
 
         {/* Description Field (Mandatory) */}
         <View style={styles.formGroup}>
-          <Text style={styles.fieldLabel}>Description*</Text>
+          <Text style={[styles.fieldLabel, { color: colors.text }]}>Description*</Text>
           <TextInput
             value={description}
             onChangeText={setDescription}
@@ -191,22 +192,22 @@ export function CreateEventScreen({ onBack }: { onBack: () => void }) {
             placeholderTextColor={colors.muted}
             multiline
             numberOfLines={4}
-            style={[styles.fieldInput, styles.textArea]}
+            style={[styles.fieldInput, styles.textArea, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
           />
         </View>
 
         {/* Category Selection (Wrapped) */}
         <View style={styles.formGroup}>
-          <Text style={styles.fieldLabel}>Category</Text>
+          <Text style={[styles.fieldLabel, { color: colors.text }]}>Category</Text>
           <View style={styles.chipsContainer}>
             {eventCategories.map(cat => (
               <TouchableOpacity
                 key={cat}
                 onPress={() => setSelectedCategory(cat)}
                 activeOpacity={0.7}
-                style={[styles.chip, selectedCategory === cat && styles.activeChip]}
+                style={[styles.chip, { backgroundColor: colors.surface, borderColor: colors.border }, selectedCategory === cat && { backgroundColor: colors.primary, borderColor: colors.primary }]}
               >
-                <Text style={[styles.chipText, selectedCategory === cat && styles.activeChipText]}>{cat}</Text>
+                <Text style={[styles.chipText, { color: colors.text }, selectedCategory === cat && styles.activeChipText]}>{cat}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -231,7 +232,7 @@ export function CreateEventScreen({ onBack }: { onBack: () => void }) {
             </View>
           ) : isOvernight ? (
             <View style={styles.badgeContainer}>
-              <Text style={styles.overnightBadgeText}>
+              <Text style={[styles.overnightBadgeText, { color: colors.primary }]}>
                 🌙 Ends the following day ({getNextDayFormatted(date)})
               </Text>
             </View>
@@ -246,9 +247,9 @@ export function CreateEventScreen({ onBack }: { onBack: () => void }) {
 
         {/* Upload Banner Image */}
         <View style={styles.formGroup}>
-          <Text style={styles.fieldLabel}>Upload Banner Image</Text>
+          <Text style={[styles.fieldLabel, { color: colors.text }]}>Upload Banner Image</Text>
           {bannerImage ? (
-            <View style={styles.imagePreviewContainer}>
+            <View style={[styles.imagePreviewContainer, { borderColor: colors.border }]}>
               <Image source={{ uri: bannerImage }} style={styles.bannerImagePreview} />
               <View style={styles.actionRow}>
                 <TouchableOpacity onPress={handlePickImage} activeOpacity={0.8} style={styles.changeBtn}>
@@ -260,9 +261,9 @@ export function CreateEventScreen({ onBack }: { onBack: () => void }) {
               </View>
             </View>
           ) : (
-            <TouchableOpacity onPress={handlePickImage} activeOpacity={0.8} style={styles.imagePlaceholderFrame}>
+            <TouchableOpacity onPress={handlePickImage} activeOpacity={0.8} style={[styles.imagePlaceholderFrame, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={styles.placeholderGlyph}>🖼️</Text>
-              <Text style={styles.placeholderText}>Tap to select and crop image</Text>
+              <Text style={[styles.placeholderText, { color: colors.muted }]}>Tap to select and crop image</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -276,25 +277,24 @@ export function CreateEventScreen({ onBack }: { onBack: () => void }) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 16, paddingBottom: 32 },
-  backLink: { color: colors.primary, fontWeight: '800', fontSize: 13, marginBottom: 12 },
+  backLink: { fontWeight: '800', fontSize: 13, marginBottom: 12 },
   formGroup: { marginBottom: 14 },
   timeSection: { marginBottom: 14 },
   splitRow: { flexDirection: 'row', gap: 12 },
   badgeContainer: { marginTop: 6, paddingHorizontal: 4 },
-  overnightBadgeText: { color: colors.primary, fontSize: 11, fontWeight: '700' },
+  overnightBadgeText: { fontSize: 11, fontWeight: '700' },
   warningBadgeText: { color: '#E53E3E', fontSize: 11, fontWeight: '700' },
-  fieldLabel: { color: colors.text, fontSize: 11, fontWeight: '800', marginBottom: 6 },
-  fieldInput: { height: 44, borderRadius: 14, borderWidth: 1, borderColor: '#ccc', paddingHorizontal: 10, fontSize: 14, color: '#000', backgroundColor: '#fff' },
+  fieldLabel: { fontSize: 11, fontWeight: '800', marginBottom: 6 },
+  fieldInput: { height: 44, borderRadius: 14, borderWidth: 1, paddingHorizontal: 10, fontSize: 14 },
   textArea: { height: 88, paddingTop: 10, textAlignVertical: 'top' },
   chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 2 },
-  chip: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20 },
-  activeChip: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { color: colors.text, fontSize: 11, fontWeight: '700' },
+  chip: { borderWidth: 1, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20 },
+  chipText: { fontSize: 11, fontWeight: '700' },
   activeChipText: { color: '#FFFFFF' },
-  imagePlaceholderFrame: { borderWidth: 1, borderColor: '#ccc', borderStyle: 'dashed', borderRadius: 8, height: 100, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fafafa' },
+  imagePlaceholderFrame: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 8, height: 100, alignItems: 'center', justifyContent: 'center' },
   placeholderGlyph: { fontSize: 24, marginBottom: 4 },
-  placeholderText: { color: colors.muted, fontSize: 12, fontWeight: '600' },
-  imagePreviewContainer: { position: 'relative', height: 140, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: colors.border, backgroundColor: '#000' },
+  placeholderText: { fontSize: 12, fontWeight: '600' },
+  imagePreviewContainer: { position: 'relative', height: 140, borderRadius: 12, overflow: 'hidden', borderWidth: 1, backgroundColor: '#000' },
   bannerImagePreview: { width: '100%', height: '100%', resizeMode: 'cover', opacity: 0.9 },
   actionRow: { position: 'absolute', bottom: 8, right: 8, flexDirection: 'row', gap: 8 },
   changeBtn: { backgroundColor: 'rgba(0, 0, 0, 0.75)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 },

@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors } from '../data/theme';
+import { useTheme } from '../context/ThemeContext';
 
 export type TabName = 'Home' | 'Search' | 'Plans' | 'Host' | 'Profile';
 const tabs: { name: TabName; icon: string }[] = [
@@ -11,14 +11,16 @@ const tabs: { name: TabName; icon: string }[] = [
 ];
 
 export function BottomTabBar({ active, onChange }: { active: TabName; onChange: (tab: TabName) => void }) {
+  const { colors } = useTheme();
+
   return (
-    <View style={styles.bar}>
+    <View style={[styles.bar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
       {tabs.map(tab => {
         const selected = active === tab.name;
         return (
           <Pressable key={tab.name} onPress={() => onChange(tab.name)} style={styles.item} accessibilityRole="button" accessibilityState={{ selected }}>
-            <Text style={[styles.icon, selected && styles.active]}>{tab.icon}</Text>
-            <Text style={[styles.label, selected && styles.active]}>{tab.name}</Text>
+            <Text style={[styles.icon, { color: colors.muted }, selected && { color: colors.primary, fontWeight: '700' }]}>{tab.icon}</Text>
+            <Text style={[styles.label, { color: colors.muted }, selected && { color: colors.primary, fontWeight: '700' }]}>{tab.name}</Text>
           </Pressable>
         );
       })}
@@ -27,9 +29,8 @@ export function BottomTabBar({ active, onChange }: { active: TabName; onChange: 
 }
 
 const styles = StyleSheet.create({
-  bar: { height: 62, flexDirection: 'row', backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border, alignItems: 'center', justifyContent: 'space-around' },
+  bar: { height: 62, flexDirection: 'row', borderTopWidth: 1, alignItems: 'center', justifyContent: 'space-around' },
   item: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3 },
-  icon: { fontSize: 21, color: colors.muted, lineHeight: 23 },
-  label: { fontSize: 9, color: colors.muted },
-  active: { color: colors.primary, fontWeight: '700' },
+  icon: { fontSize: 21, lineHeight: 23 },
+  label: { fontSize: 9 },
 });

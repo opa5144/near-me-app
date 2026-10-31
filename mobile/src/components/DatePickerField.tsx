@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import { Calendar } from 'react-native-calendars';
-import { colors } from '../data/theme';
+import { useTheme } from '../context/ThemeContext';
 
 interface DatePickerFieldProps {
   label: string;
@@ -11,28 +11,6 @@ interface DatePickerFieldProps {
   open?: boolean; // <--- Optional controlled state so the parent can keep one picker open at a time
   onOpenChange?: (open: boolean) => void;
 }
-
-// Defined outside the component so the object is stable between renders
-const calendarTheme = {
-  calendarBackground: colors.surface,
-  textSectionTitleColor: colors.text,
-  monthTextColor: colors.text,
-  dayTextColor: colors.text,
-  textDisabledColor: colors.border,
-  todayTextColor: colors.primary,
-  arrowColor: colors.primary,
-  selectedDayBackgroundColor: colors.primary,
-  selectedDayTextColor: '#fff',
-  textMonthFontWeight: '800' as const,
-  textDayHeaderFontWeight: '700' as const,
-  textDayFontWeight: '600' as const,
-  textMonthFontSize: 15,
-  textDayFontSize: 13,
-  textDayHeaderFontSize: 11,
-  // textDayFontFamily: 'YourFont', // <--- Set these to your app font
-  // textMonthFontFamily: 'YourFont',
-  // textDayHeaderFontFamily: 'YourFont',
-};
 
 // Adds st / nd / rd / th (11th, 12th, 13th are the exceptions)
 const getOrdinal = (n: number) => {
@@ -55,6 +33,7 @@ const formatDisplayDate = (dateString: string) => {
 };
 
 export function DatePickerField({ label, date, onDateChange, minimumDate, open, onOpenChange }: DatePickerFieldProps) {
+  const { colors } = useTheme();
   const [internalOpen, setInternalOpen] = useState(false);
   const showDatePicker = open ?? internalOpen;
 
@@ -63,14 +42,36 @@ export function DatePickerField({ label, date, onDateChange, minimumDate, open, 
     onOpenChange?.(value);
   };
 
+  // Defined inside component so calendar theme can dynamically react to theme colors
+  const calendarTheme = {
+    calendarBackground: colors.surface,
+    textSectionTitleColor: colors.text,
+    monthTextColor: colors.text,
+    dayTextColor: colors.text,
+    textDisabledColor: colors.border,
+    todayTextColor: colors.primary,
+    arrowColor: colors.primary,
+    selectedDayBackgroundColor: colors.primary,
+    selectedDayTextColor: '#fff',
+    textMonthFontWeight: '800' as const,
+    textDayHeaderFontWeight: '700' as const,
+    textDayFontWeight: '600' as const,
+    textMonthFontSize: 15,
+    textDayFontSize: 13,
+    textDayHeaderFontSize: 11,
+    // textDayFontFamily: 'YourFont', // <--- Set these to your app font
+    // textMonthFontFamily: 'YourFont',
+    // textDayHeaderFontFamily: 'YourFont',
+  };
+
   return (
     <View style={styles.formGroup}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <TouchableOpacity style={styles.fieldInputButton} onPress={() => setShowDatePicker(!showDatePicker)}>
-        <Text style={styles.fieldInputText}>📅 {formatDisplayDate(date)}</Text>
+      <Text style={[styles.fieldLabel, { color: colors.text }]}>{label}</Text>
+      <TouchableOpacity style={[styles.fieldInputButton, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => setShowDatePicker(!showDatePicker)}>
+        <Text style={[styles.fieldInputText, { color: colors.text }]}>📅 {formatDisplayDate(date)}</Text>
       </TouchableOpacity>
       {showDatePicker && (
-        <View style={styles.calendarDropdownContainer}>
+        <View style={[styles.calendarDropdownContainer, { borderColor: colors.border, backgroundColor: colors.surface }]}>
           <Calendar
             current={date}
             minDate={minimumDate} // <--- Pass to react-native-calendars minDate prop
@@ -91,8 +92,8 @@ export function DatePickerField({ label, date, onDateChange, minimumDate, open, 
 
 const styles = StyleSheet.create({
   formGroup: { marginBottom: 14 },
-  fieldLabel: { color: colors.text, fontSize: 11, fontWeight: '800', marginBottom: 6 },
-  fieldInputButton: { height: 44, borderRadius: 14, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, justifyContent: 'center' },
-  fieldInputText: { fontSize: 12, color: colors.text, fontWeight: '600' },
-  calendarDropdownContainer: { marginTop: 6, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  fieldLabel: { fontSize: 11, fontWeight: '800', marginBottom: 6 },
+  fieldInputButton: { height: 44, borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, justifyContent: 'center' },
+  fieldInputText: { fontSize: 12, fontWeight: '600' },
+  calendarDropdownContainer: { marginTop: 6, borderRadius: 14, overflow: 'hidden', borderWidth: 1 },
 });

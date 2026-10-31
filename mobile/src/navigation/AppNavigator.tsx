@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { BottomTabBar, TabName } from '../components/BottomTabBar';
+import { useTheme } from '../context/ThemeContext';
 
 import { HomeScreen } from '../screens/event/HomeScreen';
 import { SearchScreen } from '../screens/event/SearchScreen';
@@ -30,92 +32,112 @@ const ProfileStack = createNativeStackNavigator();
 const HostStack = createNativeStackNavigator();
 const RootStack = createNativeStackNavigator(); // <-- Root stack to hold tabs + details screen
 
-// Profile -> Settings -> Specific Settings Flow
-function ProfileNavigator() {
-  return (
-    <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
-      <ProfileStack.Screen name="ProfileMain" component={UserProfileScreen} />
-      <ProfileStack.Screen name="Settings" component={SettingsScreen} />
-      <ProfileStack.Screen name="Account" component={AccountScreen} />
-      <ProfileStack.Screen name="Security" component={SecurityScreen} />
-      <ProfileStack.Screen name="BookingHistory" component={BookingHistoryScreen} />
-      <ProfileStack.Screen name="Preferences" component={PreferencesScreen} />
-      <ProfileStack.Screen name="Location" component={LocationScreen} />
-      <ProfileStack.Screen name="Notifications" component={NotificationsScreen} />
-      <ProfileStack.Screen name="Display" component={DisplayScreen} />
-      <ProfileStack.Screen name="About" component={AboutScreen} />
-    </ProfileStack.Navigator>
-  );
-}
-
-// Host Flow
-function HostNavigator({ navigation: rootNavigation }: any) {
-  return (
-    <HostStack.Navigator screenOptions={{ headerShown: false }}>
-      <HostStack.Screen name="HostHome">
-        {(props) => (
-          <EventHostScreen
-            {...props}
-            events={sampleEvents}
-            onOpenEvent={(event) => rootNavigation.navigate('EventDetails', { event })}
-            onCreateEvent={() => props.navigation.navigate('CreateEvent')}
-            onCreateStore={() => props.navigation.navigate('CreateStore')}
-          />
-        )}
-      </HostStack.Screen>
-      <HostStack.Screen name="CreateEvent">
-        {(props) => <CreateEventScreen {...props} onBack={() => props.navigation.goBack()} />}
-      </HostStack.Screen>
-      <HostStack.Screen name="CreateStore">
-        {(props) => <CreateStoreScreen {...props} onBack={() => props.navigation.goBack()} />}
-      </HostStack.Screen>
-    </HostStack.Navigator>
-  );
-}
-
-// Bottom Tab Navigation - Uses BottomTabBar Component
-function TabNavigator() {
-  return (
-    <Tab.Navigator
-      screenOptions={{ headerShown: false }}
-      tabBar={({ state, navigation }) => {
-        const currentRouteName = state.routes[state.index].name as TabName;
-        return (
-          <BottomTabBar
-            active={currentRouteName}
-            onChange={(name) => navigation.navigate(name)}
-          />
-        );
-      }}
-    >
-      <Tab.Screen name="Home">
-        {(props) => <HomeScreen {...props} events={sampleEvents} onOpenEvent={(e) => props.navigation.navigate('EventDetails', { event: e })} onSeeAll={() => props.navigation.navigate('Search')} />}
-      </Tab.Screen>
-      <Tab.Screen name="Search">
-        {(props) => <SearchScreen {...props} events={sampleEvents} onOpenEvent={(e) => props.navigation.navigate('EventDetails', { event: e })} />}
-      </Tab.Screen>
-      <Tab.Screen name="Plans">
-        {(props) => <MyEventsScreen {...props} events={sampleEvents} onOpenEvent={(e) => props.navigation.navigate('EventDetails', { event: e })} />}
-      </Tab.Screen>
-      <Tab.Screen name="Host" component={HostNavigator} />
-      <Tab.Screen name="Profile" component={ProfileNavigator} />
-    </Tab.Navigator>
-  );
-}
-
-// Root Stack Navigator to allow pushing EventDetails over the Tab bar
 export function AppNavigator() {
+  const { colors } = useTheme();
+
+  // Track saved/interested events globally across the navigator
+  const [interestedEventIds, setInterestedEventIds] = useState<string[]>([]);
+
+  // Profile -> Settings -> Specific Settings Flow
+  function ProfileNavigator() {
+    return (
+      <ProfileStack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background }, animation: 'fade' }}>
+        <ProfileStack.Screen name="ProfileMain" component={UserProfileScreen} />
+        <ProfileStack.Screen name="Settings" component={SettingsScreen} />
+        <ProfileStack.Screen name="Account" component={AccountScreen} />
+        <ProfileStack.Screen name="Security" component={SecurityScreen} />
+        <ProfileStack.Screen name="BookingHistory" component={BookingHistoryScreen} />
+        <ProfileStack.Screen name="Preferences" component={PreferencesScreen} />
+        <ProfileStack.Screen name="Location" component={LocationScreen} />
+        <ProfileStack.Screen name="Notifications" component={NotificationsScreen} />
+        <ProfileStack.Screen name="Display" component={DisplayScreen} />
+        <ProfileStack.Screen name="About" component={AboutScreen} />
+        <ProfileStack.Screen name="CreateEvent">
+          {(props) => <CreateEventScreen {...props} onBack={() => props.navigation.goBack()} />}
+        </ProfileStack.Screen>
+      </ProfileStack.Navigator>
+    );
+  }
+
+  // Host Flow
+  function HostNavigator({ navigation: rootNavigation }: any) {
+    return (
+      <HostStack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background }, animation: 'fade' }}>
+        <HostStack.Screen name="HostHome">
+          {(props) => (
+            <EventHostScreen
+              {...props}
+              events={sampleEvents}
+              onOpenEvent={(event) => rootNavigation.navigate('EventDetails', { event })}
+              onCreateEvent={() => props.navigation.navigate('CreateEvent')}
+              onCreateStore={() => props.navigation.navigate('CreateStore')}
+            />
+          )}
+        </HostStack.Screen>
+        <HostStack.Screen name="CreateEvent">
+          {(props) => <CreateEventScreen {...props} onBack={() => props.navigation.goBack()} />}
+        </HostStack.Screen>
+        <HostStack.Screen name="CreateStore">
+          {(props) => <CreateStoreScreen {...props} onBack={() => props.navigation.goBack()} />}
+        </HostStack.Screen>
+      </HostStack.Navigator>
+    );
+  }
+
+  // Bottom Tab Navigation - Uses BottomTabBar Component
+  function TabNavigator() {
+    // Filter sampleEvents to only show interested ones on the MyEventsScreen ("Plans") tab
+    const interestedEvents = sampleEvents.filter(e => interestedEventIds.includes(e.id));
+
+    return (
+      <Tab.Navigator
+        screenOptions={{ headerShown: false }}
+        tabBar={({ state, navigation }) => {
+          const currentRouteName = state.routes[state.index].name as TabName;
+          return (
+            <BottomTabBar
+              active={currentRouteName}
+              onChange={(name) => navigation.navigate(name)}
+            />
+          );
+        }}
+      >
+        <Tab.Screen name="Home">
+          {(props) => <HomeScreen {...props} events={sampleEvents} onOpenEvent={(e) => props.navigation.navigate('EventDetails', { event: e })} onSeeAll={() => props.navigation.navigate('Search')} />}
+        </Tab.Screen>
+        <Tab.Screen name="Search">
+          {(props) => <SearchScreen {...props} events={sampleEvents} onOpenEvent={(e) => props.navigation.navigate('EventDetails', { event: e })} />}
+        </Tab.Screen>
+        <Tab.Screen name="Plans">
+          {(props) => <MyEventsScreen {...props} events={interestedEvents} onOpenEvent={(e) => props.navigation.navigate('EventDetails', { event: e })} />}
+        </Tab.Screen>
+        <Tab.Screen name="Host" component={HostNavigator} />
+        <Tab.Screen name="Profile" component={ProfileNavigator} />
+      </Tab.Navigator>
+    );
+  }
+
+  // Root Stack Navigator to allow pushing EventDetails over the Tab bar
   return (
-    <RootStack.Navigator screenOptions={{ headerShown: false }}>
+    <RootStack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background }, animation: 'fade' }}>
       <RootStack.Screen name="MainTabs" component={TabNavigator} />
       <RootStack.Screen name="EventDetails">
         {({ route, navigation }: any) => {
           const { event } = route.params || {};
+          const selectedEvent = event || sampleEvents[0];
+          const isInterested = interestedEventIds.includes(selectedEvent.id);
+
           return (
             <EventDetailsScreen
-              event={event || sampleEvents[0]}
-              interested={false}
-              onToggleInterested={() => {}}
+              event={selectedEvent}
+              interested={isInterested}
+              onToggleInterested={() => {
+                setInterestedEventIds(prev => 
+                  prev.includes(selectedEvent.id) 
+                    ? prev.filter(id => id !== selectedEvent.id) 
+                    : [...prev, selectedEvent.id]
+                );
+              }}
               onBack={() => navigation.goBack()}
             />
           );

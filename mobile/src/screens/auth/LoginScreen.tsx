@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text,} from 'react-native';
 import { AppButton } from '../../components/AppButton';
 import { ScreenHeader } from '../../components/ScreenHeader';
-import { colors } from '../../data/theme';
+import { useTheme } from '../../context/ThemeContext';
 import { AppTextInput } from '../../components/AppTextInput';
 
 const fields = [
@@ -16,6 +16,7 @@ type LoginScreenProps = {
 };
 
 export function LoginScreen({ onLogin, onNavigateToSignup }: LoginScreenProps) {
+  const { colors } = useTheme();
   const [form, setForm] = useState({
     email: '',
     password: '',
@@ -28,7 +29,7 @@ export function LoginScreen({ onLogin, onNavigateToSignup }: LoginScreenProps) {
 
   return (
     <ScrollView
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { backgroundColor: colors.background }]}
       keyboardShouldPersistTaps="handled"
     >
       <ScreenHeader title="Login" subtitle="Login to your account." />
@@ -60,7 +61,7 @@ export function LoginScreen({ onLogin, onNavigateToSignup }: LoginScreenProps) {
         accessibilityRole="link"
         style={styles.link}
       >
-        <Text style={styles.linkText}>
+        <Text style={[styles.linkText, { color: colors.primary }]}>
           Don't have an account? Sign up
         </Text>
       </Pressable>
@@ -69,10 +70,8 @@ export function LoginScreen({ onLogin, onNavigateToSignup }: LoginScreenProps) {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingBottom: 32 },
+  content: { padding: 16, paddingBottom: 32, flexGrow: 1 },
   field: { marginBottom: 16 },
-  label: { color: colors.text, fontSize: 14, fontWeight: '600', marginBottom: 8 },
-  input: { minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 },
   link: { alignItems: 'center', paddingVertical: 16 },
-  linkText: { color: colors.primary, textDecorationLine: 'underline', fontSize: 14 },
+  linkText: { textDecorationLine: 'underline', fontSize: 14 },
 });

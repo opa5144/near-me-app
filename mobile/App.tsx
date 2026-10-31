@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 
 import { LoginScreen } from './src/screens/auth/LoginScreen';
 import { SignupScreen } from './src/screens/auth/SignupScreen';
@@ -14,29 +14,33 @@ function MainApp() {
   const [authRoute, setAuthRoute] = useState<'login' | 'signup'>('login');
   const { colors, theme } = useTheme();
 
-  if (!isLoggedIn) {
-    return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
-        <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
-        {authRoute === 'login' ? (
-          <LoginScreen
-            onLogin={() => setIsLoggedIn(true)}
-            onNavigateToSignup={() => setAuthRoute('signup')}
-          />
-        ) : (
-          <SignupScreen
-            onBackToLogin={() => setAuthRoute('login')}
-          />
-        )}
-      </SafeAreaView>
-    );
-  }
+  // Create a custom navigation theme matching your ThemeContext colors
+  const navTheme = theme === 'dark' ? {
+    ...DarkTheme,
+    colors: { ...DarkTheme.colors, background: colors.background, card: colors.surface, text: colors.text }
+  } : {
+    ...DefaultTheme,
+    colors: { ...DefaultTheme.colors, background: colors.background, card: colors.surface, text: colors.text }
+  };
 
   return (
-    <NavigationContainer>
+    <NavigationContainer theme={navTheme}>
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
         <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
-        <AppNavigator />
+        {!isLoggedIn ? (
+          authRoute === 'login' ? (
+            <LoginScreen
+              onLogin={() => setIsLoggedIn(true)}
+              onNavigateToSignup={() => setAuthRoute('signup')}
+            />
+          ) : (
+            <SignupScreen
+              onBackToLogin={() => setAuthRoute('login')}
+            />
+          )
+        ) : (
+          <AppNavigator />
+        )}
       </SafeAreaView>
     </NavigationContainer>
   );

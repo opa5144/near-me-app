@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Keyboard, ScrollView, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
-import { colors } from '../data/theme';
+import { useTheme } from '../context/ThemeContext';
 
 interface TimePickerFieldProps {
   label: string;
@@ -16,8 +16,8 @@ const VISIBLE_ROWS = 5;
 const WHEEL_HEIGHT = ITEM_HEIGHT * VISIBLE_ROWS;
 const SIDE_PADDING = ITEM_HEIGHT * Math.floor(VISIBLE_ROWS / 2);
 
-function Wheel({ data, initialIndex, onChange }: { data: string[]; initialIndex: number; onChange: (index: number) => void }) {
-  const scrollRef = useRef<ScrollView>(null);
+function Wheel({ data, initialIndex, onChange, textColor, activeColor }: { data: string[]; initialIndex: number; onChange: (index: number) => void; textColor: string; activeColor: string }) {
+  const scrollRef = useRef<any>(null);
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCommitted = useRef(initialIndex);
   const [activeIndex, setActiveIndex] = useState(initialIndex);
@@ -68,7 +68,7 @@ function Wheel({ data, initialIndex, onChange }: { data: string[]; initialIndex:
             style={styles.wheelItem}
             onPress={() => scrollRef.current?.scrollTo({ y: idx * ITEM_HEIGHT, animated: true })}
           >
-            <Text style={[styles.wheelText, idx === activeIndex ? styles.wheelTextActive : styles.wheelTextDim]}>{item}</Text>
+            <Text style={[styles.wheelText, { color: textColor }, idx === activeIndex ? [styles.wheelTextActive, { color: activeColor }] : styles.wheelTextDim]}>{item}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -77,6 +77,7 @@ function Wheel({ data, initialIndex, onChange }: { data: string[]; initialIndex:
 }
 
 export function TimePickerField({ label, time, onTimeChange, minuteInterval = 15, open, onOpenChange }: TimePickerFieldProps) {
+  const { colors } = useTheme();
   const [internalOpen, setInternalOpen] = useState(false);
   const isPickerVisible = open ?? internalOpen;
 
@@ -118,26 +119,26 @@ export function TimePickerField({ label, time, onTimeChange, minuteInterval = 15
 
   return (
     <View style={styles.splitInput}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+      <Text style={[styles.fieldLabel, { color: colors.text }]}>{label}</Text>
       <TouchableOpacity
-        style={styles.fieldInputButton}
+        style={[styles.fieldInputButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
         onPress={() => {
           Keyboard.dismiss(); // Force-closes any software keyboard
           setIsPickerVisible(!isPickerVisible);
         }}
       >
-        <Text style={styles.fieldInputText}>🕒 {formatTime(snapped)}</Text>
+        <Text style={[styles.fieldInputText, { color: colors.text }]}>🕒 {formatTime(snapped)}</Text>
       </TouchableOpacity>
       {isPickerVisible && (
-        <View style={styles.timeDropdownContainer}>
+        <View style={[styles.timeDropdownContainer, { borderColor: colors.border, backgroundColor: colors.surface }]}>
           <View style={styles.wheelsRow}>
-            <View pointerEvents="none" style={styles.selectionBand} />
-            <Wheel data={hours} initialIndex={hourIndex} onChange={(i) => updateTime(i, minuteIndex, periodIndex)} />
+            <View pointerEvents="none" style={[styles.selectionBand, { backgroundColor: colors.primary }]} />
+            <Wheel data={hours} initialIndex={hourIndex} onChange={(i) => updateTime(i, minuteIndex, periodIndex)} textColor={colors.text} activeColor={colors.primary} />
             <View style={styles.colonWrap} pointerEvents="none">
-              <Text style={styles.colon}>:</Text>
+              <Text style={[styles.colon, { color: colors.primary }]}>:</Text>
             </View>
-            <Wheel data={minutes} initialIndex={minuteIndex} onChange={(i) => updateTime(hourIndex, i, periodIndex)} />
-            <Wheel data={periods} initialIndex={periodIndex} onChange={(i) => updateTime(hourIndex, minuteIndex, i)} />
+            <Wheel data={minutes} initialIndex={minuteIndex} onChange={(i) => updateTime(hourIndex, i, periodIndex)} textColor={colors.text} activeColor={colors.primary} />
+            <Wheel data={periods} initialIndex={periodIndex} onChange={(i) => updateTime(hourIndex, minuteIndex, i)} textColor={colors.text} activeColor={colors.primary} />
           </View>
         </View>
       )}
@@ -147,17 +148,17 @@ export function TimePickerField({ label, time, onTimeChange, minuteInterval = 15
 
 const styles = StyleSheet.create({
   splitInput: { flex: 1 },
-  fieldLabel: { color: colors.text, fontSize: 11, fontWeight: '800', marginBottom: 6 },
-  fieldInputButton: { height: 44, borderRadius: 14, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, justifyContent: 'center' },
-  fieldInputText: { fontSize: 12, color: colors.text, fontWeight: '600' },
-  timeDropdownContainer: { marginTop: 6, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  fieldLabel: { fontSize: 11, fontWeight: '800', marginBottom: 6 },
+  fieldInputButton: { height: 44, borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, justifyContent: 'center' },
+  fieldInputText: { fontSize: 12, fontWeight: '600' },
+  timeDropdownContainer: { marginTop: 6, borderRadius: 14, overflow: 'hidden', borderWidth: 1 },
   wheelsRow: { flexDirection: 'row', alignItems: 'center', height: WHEEL_HEIGHT, paddingHorizontal: 8 },
-  selectionBand: { position: 'absolute', left: 8, right: 8, top: SIDE_PADDING, height: ITEM_HEIGHT, borderRadius: 10, backgroundColor: colors.primary, opacity: 0.12 },
+  selectionBand: { position: 'absolute', left: 8, right: 8, top: SIDE_PADDING, height: ITEM_HEIGHT, borderRadius: 10, opacity: 0.12 },
   wheel: { flex: 1, height: WHEEL_HEIGHT },
   wheelItem: { height: ITEM_HEIGHT, justifyContent: 'center', alignItems: 'center' },
-  wheelText: { fontSize: 15, color: colors.text }, // <--- Add fontFamily here to match your app font
-  wheelTextActive: { fontWeight: '800', color: colors.primary },
+  wheelText: { fontSize: 15 }, // <--- Add fontFamily here to match your app font
+  wheelTextActive: { fontWeight: '800' },
   wheelTextDim: { opacity: 0.35, fontWeight: '500' },
   colonWrap: { width: 8, alignItems: 'center', justifyContent: 'center' },
-  colon: { fontSize: 15, fontWeight: '800', color: colors.primary },
+  colon: { fontSize: 15, fontWeight: '800' },
 });
