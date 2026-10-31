@@ -1,6 +1,6 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { ScreenHeader } from '../components/ScreenHeader';
-import { colors } from '../data/theme';
+import { ScreenHeader } from '../../components/ScreenHeader';
+import { colors } from '../../data/theme';
 
 const settings = [
   ['♡', 'My preferences', 'Choose categories you enjoy'],
@@ -22,7 +22,7 @@ export function SettingsScreen() {
       ))}
       <Text style={styles.note}>These settings are visual placeholders for the first UI prototype.</Text>
     </ScrollView>
-  );
+  ); 
 }
 const styles = StyleSheet.create({
   content: { padding: 16 },

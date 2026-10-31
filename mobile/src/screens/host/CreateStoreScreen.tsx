@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View, KeyboardAvoidingView, Platform, Switch, TouchableOpacity } from 'react-native';
-import { ScreenHeader } from '../components/ScreenHeader';
-import { AppButton } from '../components/AppButton';
-import { colors } from '../data/theme';
+import { ScreenHeader } from '../../components/ScreenHeader';
+import { AppButton } from '../../components/AppButton';
+import { colors } from '../../data/theme';
 
 export function CreateStoreScreen({ onBack }: { onBack: () => void }) {
   const [storeName, setStoreName] = useState('');

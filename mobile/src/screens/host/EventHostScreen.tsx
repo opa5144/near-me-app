@@ -1,9 +1,9 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View, TouchableOpacity } from 'react-native';
-import { EventItem } from '../data/events';
-import { ScreenHeader } from '../components/ScreenHeader';
-import { AppButton } from '../components/AppButton';
-import { colors } from '../data/theme';
+import { EventItem } from '../../data/events';
+import { ScreenHeader } from '../../components/ScreenHeader';
+import { AppButton } from '../../components/AppButton';
+import { colors } from '../../data/theme';
 
 export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateStore }: { events: EventItem[]; onOpenEvent: (event: EventItem) => void; onCreateEvent: () => void; onCreateStore: () => void }) {
   const totalEvents = events.length;

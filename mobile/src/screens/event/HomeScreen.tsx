@@ -1,8 +1,8 @@
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { EventItem, categories } from '../data/events';
-import { EventCard } from '../components/EventCard';
-import { ScreenHeader } from '../components/ScreenHeader';
-import { colors } from '../data/theme';
+import { EventItem, categories } from '../../data/events';
+import { EventCard } from '../../components/EventCard';
+import { ScreenHeader } from '../../components/ScreenHeader';
+import { colors } from '../../data/theme';
 
 export function HomeScreen({ events, onOpenEvent, onSeeAll }: { events: EventItem[]; onOpenEvent: (event: EventItem) => void; onSeeAll: () => void }) {
   return (

@@ -3,17 +3,17 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, StyleSheet, View } from 'react-native';
 import { BottomTabBar, TabName } from './src/components/BottomTabBar';
 
-import { HomeScreen } from './src/screens/HomeScreen';
-import { SearchScreen } from './src/screens/SearchScreen';
-import { MyEventsScreen } from './src/screens/MyEventsScreen';
+import { HomeScreen } from './src/screens/event/HomeScreen';
+import { SearchScreen } from './src/screens/event/SearchScreen';
+import { MyEventsScreen } from './src/screens/event/MyEventsScreen';
 // import { ItineraryScreen } from './src/screens/ItineraryScreen';
-import { EventHostScreen } from './src/screens/EventHostScreen';
-import { CreateEventScreen } from './src/screens/CreateEventScreen';
-import { CreateStoreScreen } from './src/screens/CreateStoreScreen';
-import { SettingsScreen } from './src/screens/SettingsScreen';
-import { LoginScreen } from './src/screens/LoginScreen';
-import { SignupScreen } from './src/screens/SignupScreen';
-import { EventDetailsScreen } from './src/screens/EventDetailsScreen';
+import { EventHostScreen } from './src/screens/host/EventHostScreen';
+import { CreateEventScreen } from './src/screens/host/CreateEventScreen';
+import { CreateStoreScreen } from './src/screens/host/CreateStoreScreen';
+import { SettingsScreen } from './src/screens/settings/SettingsScreen';
+import { LoginScreen } from './src/screens/auth/LoginScreen';
+import { SignupScreen } from './src/screens/auth/SignupScreen';
+import { EventDetailsScreen } from './src/screens/event/EventDetailsScreen';
 
 import { sampleEvents, EventItem } from './src/data/events';
 import { colors } from './src/data/theme';

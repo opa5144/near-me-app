@@ -1,8 +1,8 @@
 import { ScrollView, StyleSheet, Text } from 'react-native';
-import { EventItem } from '../data/events';
-import { EventCard } from '../components/EventCard';
-import { ScreenHeader } from '../components/ScreenHeader';
-import { colors } from '../data/theme';
+import { EventItem } from '../../data/events';
+import { EventCard } from '../../components/EventCard';
+import { ScreenHeader } from '../../components/ScreenHeader';
+import { colors } from '../../data/theme';
 
 export function MyEventsScreen({ events, onOpenEvent }: { events: EventItem[]; onOpenEvent: (event: EventItem) => void }) {
   return (

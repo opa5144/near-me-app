@@ -1,8 +1,8 @@
 import React, { useEffect } from 'react';
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { EventItem } from '../data/events';
-import { AppButton } from '../components/AppButton';
-import { colors } from '../data/theme';
+import { EventItem } from '../../data/events';
+import { AppButton } from '../../components/AppButton';
+import { colors } from '../../data/theme';
 
 export function EventDetailsScreen({ event, interested, onToggleInterested, onBack }: { event: EventItem; interested: boolean; onToggleInterested: () => void; onBack: () => void }) {
   

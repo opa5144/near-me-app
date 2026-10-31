@@ -1,29 +1,34 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text,} from 'react-native';
-import { AppButton } from '../components/AppButton';
-import { ScreenHeader } from '../components/ScreenHeader';
-import { colors } from '../data/theme';
-import { AppTextInput } from '../components/AppTextInput';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, } from 'react-native';
+import { AppButton } from '../../components/AppButton';
+import { ScreenHeader } from '../../components/ScreenHeader';
+import { colors } from '../../data/theme';
+import { AppTextInput } from '../../components/AppTextInput';
 
 const fields = [
+  { key: 'firstName', label: 'First name' },
+  { key: 'lastName', label: 'Last name' },
+  { key: 'username', label: 'Username' },
   { key: 'email', label: 'Email' },
   { key: 'password', label: 'Password' },
 ] as const;
 
-type LoginScreenProps = {
-  onLogin: () => void;
-  onNavigateToSignup: () => void;
+type SignupScreenProps = {
+  onBackToLogin: () => void;
 };
 
-export function LoginScreen({ onLogin, onNavigateToSignup }: LoginScreenProps) {
+export function SignupScreen({ onBackToLogin }: SignupScreenProps) {
   const [form, setForm] = useState({
+    firstName: '',
+    lastName: '',
+    username: '',
     email: '',
     password: '',
   });
 
-  function handleLogin() {
-    // Send credentials to auth endpoint.
-    onLogin();
+  function handleSignup() {
+    //Validate and send the form to your backend signup endpoint.
+    Alert.alert('Sign up', 'Account creation is not implemented yet.');
   }
 
   return (
@@ -31,7 +36,7 @@ export function LoginScreen({ onLogin, onNavigateToSignup }: LoginScreenProps) {
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
-      <ScreenHeader title="Login" subtitle="Login to your account." />
+      <ScreenHeader title="Sign up" subtitle="Create your account." />
 
       {fields.map(({ key, label }) => (
         <AppTextInput
@@ -41,27 +46,30 @@ export function LoginScreen({ onLogin, onNavigateToSignup }: LoginScreenProps) {
           onChangeText={value =>
             setForm(current => ({ ...current, [key]: value }))
           }
-          autoCapitalize="none"
+          autoCapitalize={
+            key === 'firstName' || key === 'lastName'
+              ? 'words'
+              : 'none'
+          }
           keyboardType={key === 'email' ? 'email-address' : 'default'}
-          autoComplete={key === 'password' ? 'password' : undefined}
+          autoComplete={key === 'password' ? 'new-password' : undefined}
           isPassword={key === 'password'}
         />
       ))}
 
       <AppButton
-        title="Login"
-        onPress={handleLogin}
+        title="Sign up"
+        onPress={handleSignup}
         disabled={Object.values(form).some(value => value.length === 0)}
       />
 
-      {/* Link to switch to Signup Screen */}
       <Pressable
-        onPress={onNavigateToSignup}
+        onPress={onBackToLogin}
         accessibilityRole="link"
         style={styles.link}
       >
         <Text style={styles.linkText}>
-          Don't have an account? Sign up
+          Already have an account? Log in
         </Text>
       </Pressable>
     </ScrollView>

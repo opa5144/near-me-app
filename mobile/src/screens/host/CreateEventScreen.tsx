@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View, KeyboardAvoidingView, Platform, Alert, Image, TouchableOpacity } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { ScreenHeader } from '../components/ScreenHeader';
-import { AppButton } from '../components/AppButton';
-import { DatePickerField } from '../components/DatePickerField';
-import { TimePickerField } from '../components/TimePickerField';
-import { PriceInputField } from '../components/PriceInputField';
-import { LocationComponent } from '../components/LocationInputField';
-import { EventPlace } from '../api/maps';
-import { categories, sampleEvents, EventItem } from '../data/events';
-import { colors } from '../data/theme';
+import { ScreenHeader } from '../../components/ScreenHeader';
+import { AppButton } from '../../components/AppButton';
+import { DatePickerField } from '../../components/DatePickerField';
+import { TimePickerField } from '../../components/TimePickerField';
+import { PriceInputField } from '../../components/PriceInputField';
+import { LocationComponent } from '../../components/LocationInputField';
+import { EventPlace } from '../../api/maps';
+import { categories, sampleEvents, EventItem } from '../../data/events';
+import { colors } from '../../data/theme';
 
 // Filter out 'All' so hosts assign a specific category
 const eventCategories = categories.filter(c => c !== 'All');
