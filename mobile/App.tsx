@@ -1,42 +1,23 @@
 import { useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaView, StyleSheet, View } from 'react-native';
-import { BottomTabBar, TabName } from './src/components/BottomTabBar';
+import { StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { NavigationContainer } from '@react-navigation/native';
 
-import { HomeScreen } from './src/screens/event/HomeScreen';
-import { SearchScreen } from './src/screens/event/SearchScreen';
-import { MyEventsScreen } from './src/screens/event/MyEventsScreen';
-// import { ItineraryScreen } from './src/screens/ItineraryScreen';
-import { EventHostScreen } from './src/screens/host/EventHostScreen';
-import { CreateEventScreen } from './src/screens/host/CreateEventScreen';
-import { CreateStoreScreen } from './src/screens/host/CreateStoreScreen';
-import { SettingsScreen } from './src/screens/settings/SettingsScreen';
 import { LoginScreen } from './src/screens/auth/LoginScreen';
 import { SignupScreen } from './src/screens/auth/SignupScreen';
-import { EventDetailsScreen } from './src/screens/event/EventDetailsScreen';
+import { AppNavigator } from './src/navigation/AppNavigator';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 
-import { sampleEvents, EventItem } from './src/data/events';
-import { colors } from './src/data/theme';
-
-export default function App() {
-  const [tab, setTab] = useState<TabName>('Home');
-  const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(null);
-  const [interestedIds, setInterestedIds] = useState<string[]>(['1', '2']);
-
-  const [hostRoute, setHostRoute] = useState<'Home' | 'CreateEvent' | 'CreateStore'>('Home');
-  const [authRoute, setAuthRoute] = useState<'login' | 'signup'>('login');
-
-  const toggleInterested = (id: string) => {
-    setInterestedIds(current =>
-      current.includes(id) ? current.filter(item => item !== id) : [...current, id],
-    );
-  };
-  // Real login state management not implemented yet, but simulated with a state variable for now.
+function MainApp() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [authRoute, setAuthRoute] = useState<'login' | 'signup'>('login');
+  const { colors, theme } = useTheme();
+
   if (!isLoggedIn) {
     return (
-      <SafeAreaView style={styles.safe}>
-        <StatusBar style="dark" />
+      <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+        <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
         {authRoute === 'login' ? (
           <LoginScreen
             onLogin={() => setIsLoggedIn(true)}
@@ -51,61 +32,24 @@ export default function App() {
     );
   }
 
-  let screen;
-  if (selectedEvent) {
-    screen = (
-      <EventDetailsScreen
-        event={selectedEvent}
-        interested={interestedIds.includes(selectedEvent.id)}
-        onToggleInterested={() => toggleInterested(selectedEvent.id)}
-        onBack={() => setSelectedEvent(null)}
-      />
-    );
-  } else {
-    switch (tab) {
-      case 'Home': ``
-        screen = <HomeScreen events={sampleEvents} onOpenEvent={setSelectedEvent} onSeeAll={() => setTab('Search')} />;
-        break;
-      case 'Search':
-        screen = <SearchScreen events={sampleEvents} onOpenEvent={setSelectedEvent} />;
-        break;
-      case 'Plans':
-        screen = <MyEventsScreen events={sampleEvents.filter(event => interestedIds.includes(event.id))} onOpenEvent={setSelectedEvent} />;
-        break;
-      case 'Host':
-        if (hostRoute === 'Home') {
-          screen = (
-            <EventHostScreen
-              events={sampleEvents.filter(event => interestedIds.includes(event.id))}
-              onOpenEvent={setSelectedEvent}
-              onCreateEvent={() => setHostRoute('CreateEvent')}
-              onCreateStore={() => setHostRoute('CreateStore')}
-            />
-          );
-        } else if (hostRoute === 'CreateEvent') {
-          screen = <CreateEventScreen onBack={() => setHostRoute('Home')} />;
-        } else {
-          screen = <CreateStoreScreen onBack={() => setHostRoute('Home')} />;
-        }
-        break;
-      default:
-        screen = <SettingsScreen />;
-    }
-  }
-
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar style="dark" />
-      <View style={styles.app}>
-        <View style={styles.content}>{screen}</View>
-        {!selectedEvent && <BottomTabBar active={tab} onChange={setTab} />}
-      </View>
-    </SafeAreaView>
+    <NavigationContainer>
+      <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
+        <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
+        <AppNavigator />
+      </SafeAreaView>
+    </NavigationContainer>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <MainApp />
+    </ThemeProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
-  app: { flex: 1, backgroundColor: colors.background },
-  content: { flex: 1 },
+  safe: { flex: 1 },
 });
