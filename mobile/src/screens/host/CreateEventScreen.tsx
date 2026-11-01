@@ -1,185 +1,254 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View, KeyboardAvoidingView, Platform, Alert, Image, TouchableOpacity } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { isAxiosError } from 'axios';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { AppButton } from '../../components/AppButton';
 import { DatePickerField } from '../../components/DatePickerField';
 import { TimePickerField } from '../../components/TimePickerField';
 import { PriceInputField } from '../../components/PriceInputField';
 import { LocationComponent } from '../../components/LocationInputField';
-import { EventPlace } from '../../api/maps';
-import { categories, sampleEvents, EventItem } from '../../data/events';
+import type { EventPlace } from '../../api/maps';
+import { createEvent } from '../../api/events';
+import type { CreateEventRequest } from '../../api/events';
+import { categories } from '../../data/events';
+import type { EventItem } from '../../data/events';
 import { useTheme } from '../../context/ThemeContext';
 
-// Filter out 'All' so hosts assign a specific category
-const eventCategories = categories.filter(c => c !== 'All');
+// All is a browsing filter; new events must use a specific category.
+const eventCategories = categories.filter(category => category !== 'All');
+const MINUTE_INTERVAL: 15 | 30 = 15;
+const MAX_IMAGE_BYTES = 1024 * 1024;
+// Keep the date picker value in local YYYY-MM-DD form, without converting it to UTC.
+const formatDateString = (value: Date) =>
+  `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
 
-const MINUTE_INTERVAL: 15 | 30 = 15; // <--- Single source of truth for the picker step
-
-// Rounds a Date to the nearest interval so the state always matches the picker wheels
-const snapToInterval = (d: Date, interval: number = MINUTE_INTERVAL) => {
-  const r = new Date(d);
-  r.setMinutes(Math.round(r.getMinutes() / interval) * interval, 0, 0);
-  return r;
+// Initialize once with a future start on a 15-minute boundary and a one-hour duration.
+const initialSchedule = () => {
+  const start = new Date(Date.now() + 30 * 60 * 1000);
+  start.setMinutes(Math.ceil(start.getMinutes() / MINUTE_INTERVAL) * MINUTE_INTERVAL, 0, 0);
+  return { date: formatDateString(start), start, end: new Date(start.getTime() + 60 * 60 * 1000) };
 };
 
-export function CreateEventScreen({ onBack }: { onBack: () => void }) {
+// Blank means free. Validate up to two decimal places and calculate in integer cents
+// before returning the dollar amount, so a price such as 12.50 keeps its cents.
+const priceToAmount = (value: string): number | null => {
+  const text = value.trim();
+  if (!text) return 0;
+  if (!/^(?:\d{1,7}(?:\.\d{0,2})?|\.\d{1,2})$/.test(text)) return null;
+  const [whole, fractional = ''] = text.split('.');
+  const cents = Number(whole || '0') * 100 + Number(fractional.padEnd(2, '0'));
+  return Number.isSafeInteger(cents) && cents >= 0 ? cents / 100 : null;
+};
+// Base64 text is larger than the image bytes; apply the 1 MiB limit to decoded bytes.
+const decodedBase64Bytes = (value: string) =>
+  (value.length * 3) / 4 - (value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0);
+
+// Normalize any selected image to a centered 16:9 JPEG, up to 1280 pixels wide.
+// Return a local URI for preview and Base64 for upload; release native image objects
+// in finally blocks even if conversion or size validation fails.
+async function prepareBanner(uri: string) {
+  const context = ImageManipulator.manipulate(uri);
+  try {
+    const original = await context.renderAsync();
+    try {
+      const { width, height } = original;
+      if (width < 1 || height < 1) throw new Error('The selected image could not be read.');
+      const cropWidth = Math.min(width, Math.floor(height * 16 / 9));
+      const cropHeight = Math.min(height, Math.floor(cropWidth * 9 / 16));
+      if (cropWidth < 1 || cropHeight < 1) throw new Error('Choose an image with larger dimensions.');
+      context.crop({ originX: Math.floor((width - cropWidth) / 2), originY: Math.floor((height - cropHeight) / 2), width: cropWidth, height: cropHeight });
+      context.resize({ width: Math.min(1280, cropWidth) });
+      const rendered = await context.renderAsync();
+      try {
+        const result = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.72, base64: true });
+        if (!result.base64) throw new Error('The selected image could not be prepared.');
+        if (decodedBase64Bytes(result.base64) > MAX_IMAGE_BYTES) {
+          throw new Error('This banner is still larger than 1 MiB. Please choose a simpler or smaller image.');
+        }
+        return { uri: result.uri, base64: result.base64 };
+      } finally { rendered.release(); }
+    } finally { original.release(); }
+  } finally { context.release(); }
+}
+
+type Props = { onBack: () => void; onCreated: (event: EventItem) => void };
+
+export function CreateEventScreen({ onBack, onCreated }: Props) {
   const { colors } = useTheme();
+  // Form values stay local until the backend successfully creates the event.
+  const [initial] = useState(initialSchedule);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState(eventCategories[0] || 'Music');
-  
-  // Helpers to format dates and initialize dates/times as native Date objects
-  const formatDateString = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  const today = new Date();
-  const todayString = formatDateString(today);
-
-  // State managed as strings for dates and Date objects for times to support pickers & validation
-  const [date, setDate] = useState(todayString);
-  const [startTime, setStartTime] = useState(snapToInterval(new Date(today.getTime() + 10 * 60 * 1000)));
-  const [endTime, setEndTime] = useState(snapToInterval(new Date(today.getTime() + 70 * 60 * 1000)));
-  
+  // Start empty so the host must choose a category rather than accept a default.
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [date, setDate] = useState(initial.date);
+  const [startTime, setStartTime] = useState(initial.start);
+  const [endTime, setEndTime] = useState(initial.end);
   const [price, setPrice] = useState('');
   const [selectedVenue, setSelectedVenue] = useState<EventPlace | null>(null);
+  // The device-local preview URI is never sent as a shared image URL.
   const [bannerImage, setBannerImage] = useState<string | null>(null);
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
+  // State updates the button/loading UI; refs below guard repeat taps immediately,
+  // before React has rendered the updated disabled state.
+  const [isSaving, setIsSaving] = useState(false);
+  const [imageBusy, setImageBusy] = useState(false);
+  const savingRef = useRef(false);
+  const imageBusyRef = useRef(false);
+  // A successful save stays locked while its success alert is open.
+  const completedRef = useRef(false);
+  const mountedRef = useRef(true);
+  // The pickers use device-local clock times; save the matching IANA time zone too.
+  const [timeZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone || '');
+  const todayString = formatDateString(new Date());
 
-  // Helper to calculate total minutes from midnight for robust 24-hour comparisons
-  const getMinutesFromMidnight = (d: Date) => d.getHours() * 60 + d.getMinutes();
-
-  // Helper to calculate total duration in minutes (handles both same-day and overnight)
-  const getEventDurationMinutes = (start: Date, end: Date) => {
-    const startMins = getMinutesFromMidnight(start);
-    const endMins = getMinutesFromMidnight(end);
-
-    if (endMins < startMins) {
-      // Overnight event (adds 24 hours / 1440 mins)
-      return (1440 - startMins) + endMins;
-    }
-    return endMins - startMins;
-  };
-
-  // --- Dynamic UI State Computations ---
+  // Async work may finish after leaving the screen; avoid local updates and alerts then.
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+  // Combine the chosen date with each clock time. An earlier end means the next
+  // calendar day; subtracting timestamps measures real elapsed time across DST.
+  const getMinutesFromMidnight = (value: Date) => value.getHours() * 60 + value.getMinutes();
   const startMins = getMinutesFromMidnight(startTime);
   const endMins = getMinutesFromMidnight(endTime);
-  const durationMins = getEventDurationMinutes(startTime, endTime);
-
-  // Catch-all invalid check: covers 0-minute duration (identical times) and anything under 30 mins
-  const isInvalidDuration = durationMins < 30;
   const isOvernight = endMins < startMins;
-
-  // Helper to format the next morning's date for clarity in the badge
-  const getNextDayFormatted = (currentDateStr: string) => {
-    const d = new Date(currentDateStr + 'T00:00:00');
-    d.setDate(d.getDate() + 1);
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const previewStart = new Date(`${date}T00:00:00`);
+  const previewEnd = new Date(previewStart);
+  if (isOvernight) previewEnd.setDate(previewEnd.getDate() + 1);
+  previewStart.setHours(startTime.getHours(), startTime.getMinutes(), 0, 0);
+  previewEnd.setHours(endTime.getHours(), endTime.getMinutes(), 0, 0);
+  const durationMins = (previewEnd.getTime() - previewStart.getTime()) / (60 * 1000);
+  const isInvalidDuration = !Number.isFinite(durationMins) || durationMins < 30;
+  const getNextDayFormatted = (value: string) => {
+    const next = new Date(`${value}T00:00:00`);
+    next.setDate(next.getDate() + 1);
+    return next.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
-
-  // --- Validation & Event Logic ---
-
+  // Block past calendar days here; submission also checks the complete start time.
   const handleDateChange = (newDate: string) => {
-    if (newDate < todayString) {
-      Alert.alert("Invalid Date", "Event date cannot be in the past.");
-      return;
+    if (newDate < formatDateString(new Date())) {
+      Alert.alert('Invalid Date', 'Event date cannot be in the past.'); return;
     }
     setDate(newDate);
   };
+  const handleStartTimeChange = (value: Date) => setStartTime(value);
+  const handleEndTimeChange = (value: Date) => setEndTime(value);
+  // Keep the form's Back link from interrupting its image preparation or save flow.
+  const handleBack = () => { if (!savingRef.current && !imageBusyRef.current) onBack(); };
 
-  const handleStartTimeChange = (newTime: Date) => {
-    setStartTime(newTime);
-  };
-
-  const handleEndTimeChange = (newTime: Date) => {
-    setEndTime(newTime);
-  };
-
+  // Request library access, let the host crop, then prepare both preview and upload
+  // data. Canceling or failing leaves the previously selected banner unchanged.
   const handlePickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'Permission to access the media library is required.');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true, // Re-enables repositioning, zoom, and cropping
-      aspect: [16, 9],    // Enforces a fixed banner frame with standard confirmation buttons
-      quality: 0.8,
-    });
-
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      setBannerImage(result.assets[0].uri);
+    if (savingRef.current || imageBusyRef.current || completedRef.current) return;
+    imageBusyRef.current = true;
+    setImageBusy(true);
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission Denied', 'Permission to access the media library is required.'); return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [16, 9], quality: 1 });
+      if (result.canceled || !result.assets?.length) return;
+      const prepared = await prepareBanner(result.assets[0].uri);
+      if (mountedRef.current) { setBannerImage(prepared.uri); setImageBase64(prepared.base64); }
+    } catch (error) {
+      if (mountedRef.current) Alert.alert('Image Error', error instanceof Error ? error.message : 'The selected image could not be prepared.');
+    } finally {
+      imageBusyRef.current = false;
+      if (mountedRef.current) setImageBusy(false);
     }
   };
-
+  // Clear both representations so a removed preview is also omitted from the request.
   const handleRemoveImage = () => {
-    setBannerImage(null);
+    if (savingRef.current || imageBusyRef.current || completedRef.current) return;
+    setBannerImage(null); setImageBase64(null);
   };
 
-  const handleSubmit = () => {
-    // Validation for Mandatory Fields
-    if (!title.trim()) {
-      Alert.alert("Missing Title", "Please enter an event title.");
-      return;
+  // Validate the complete draft before making a request. The ref guards also prevent
+  // another submission while image preparation, saving, or the success alert is active.
+  const handleSubmit = async () => {
+    if (savingRef.current || imageBusyRef.current || completedRef.current) return;
+    if (!title.trim()) { Alert.alert('Missing Title', 'Please enter an event title.'); return; }
+    if (!description.trim()) { Alert.alert('Missing Description', 'Please enter an event description.'); return; }
+    if (!eventCategories.includes(selectedCategory)) { Alert.alert('Missing Category', 'Please select an event category.'); return; }
+    if (!selectedVenue?.name.trim() || !selectedVenue.address.trim()) {
+      Alert.alert('Missing Location', 'Please search and select a venue with an address.'); return;
     }
-
-    if (!description.trim()) {
-      Alert.alert("Missing Description", "Please enter an event description.");
-      return;
+    const priceAmount = priceToAmount(price);
+    if (priceAmount === null) { Alert.alert('Invalid Price', 'Enter a valid price with up to two decimal places, or leave it blank for free.'); return; }
+    if (!timeZone) { Alert.alert('Missing Time Zone', 'Set a time zone in your device settings before creating an event.'); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { Alert.alert('Invalid Date', 'Choose a valid event date.'); return; }
+    // Build local date/time values, preserving the overnight end date. Round-trip
+    // checks catch invalid calendar dates before converting valid instants to ISO.
+    const start = new Date(`${date}T00:00:00`);
+    if (!Number.isFinite(start.getTime()) || formatDateString(start) !== date) { Alert.alert('Invalid Date', 'Choose a valid event date.'); return; }
+    const end = new Date(start);
+    if (isOvernight) end.setDate(end.getDate() + 1);
+    const expectedEndDate = formatDateString(end);
+    start.setHours(startTime.getHours(), startTime.getMinutes(), 0, 0);
+    end.setHours(endTime.getHours(), endTime.getMinutes(), 0, 0);
+    // During the spring DST jump, JavaScript moves a nonexistent time forward;
+    // reject that silent change. A repeated autumn time uses its earlier occurrence.
+    if (formatDateString(start) !== date || formatDateString(end) !== expectedEndDate ||
+        start.getHours() !== startTime.getHours() || start.getMinutes() !== startTime.getMinutes() ||
+        end.getHours() !== endTime.getHours() || end.getMinutes() !== endTime.getMinutes()) {
+      Alert.alert('Invalid Time', 'That time does not exist on this date in your device time zone. Choose another time.'); return;
     }
-
-    // Catch-all hard block on submit
-    if (isInvalidDuration) {
-      Alert.alert("Invalid Schedule", "Event duration must be at least 30 minutes.");
-      return;
+    if (start.getTime() <= Date.now()) { Alert.alert('Invalid Start Time', 'The event must start in the future.'); return; }
+    if (isInvalidDuration || end.getTime() - start.getTime() < 30 * 60 * 1000) {
+      Alert.alert('Invalid Schedule', 'Event duration must be at least 30 minutes.'); return;
     }
-
-    if (!selectedVenue) {
-      Alert.alert("Missing Location", "Please search and select a venue location.");
-      return;
-    }
-
-    // Helper to format 12-hour time (e.g. 4:00 PM)
-    const format12Hour = (d: Date) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-
-    // Format display date (e.g. "Fri, Jun 12")
-    const dateObj = new Date(`${date}T00:00:00`);
-    const formattedDate = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-
-    // Build EventItem matching events.ts structure
-    const newEvent: EventItem = {
-      id: String(Date.now()),
-      title: title.trim(),
-      category: selectedCategory,
-      date: formattedDate,
-      time: `${format12Hour(startTime)} – ${format12Hour(endTime)}`,
-      venue: selectedVenue.name,
-      price: !price || parseFloat(price) === 0 ? 'Free' : `$${parseFloat(price).toFixed(0)}`,
-      description: description.trim(),
-      emoji: '🎆',
-      accent: colors.primary,
-      location: selectedVenue.address || selectedVenue.name,
-      bannerImage: bannerImage || undefined,
+    // Send real UTC instants plus the display time zone, venue details and optional
+    // image bytes. The backend derives hostId from the authenticated session.
+    const payload: CreateEventRequest = {
+      title: title.trim(), category: selectedCategory, description: description.trim(), price: priceAmount,
+      startsAt: start.toISOString(), endsAt: end.toISOString(), timeZone,
+      address: selectedVenue.address.trim(), place: selectedVenue.name.trim(),
+      placeId: selectedVenue.placeId || undefined, latitude: selectedVenue.latitude, longitude: selectedVenue.longitude,
+      ...(imageBase64 ? { imageBase64 } : {}),
     };
-
-    // Save temporarily in memory to sampleEvents
-    sampleEvents.unshift(newEvent);
-
-    Alert.alert('Success', 'Event Created!', [
-      { text: 'OK', onPress: onBack }
-    ]);
+    savingRef.current = true;
+    setIsSaving(true);
+    let savedEvent: EventItem;
+    try {
+      // Wait for the saved document, including its database ID and durable image URL.
+      savedEvent = await createEvent(payload);
+      completedRef.current = true;
+    } catch (error) {
+      // Prefer a useful backend validation message; report a missing response as a
+      // connection problem. Failure keeps the draft available and skips success.
+      let message = 'Unable to create your event. Please try again.';
+      if (isAxiosError<{ message?: string }>(error)) {
+        const serverMessage = error.response?.data?.message;
+        if (typeof serverMessage === 'string') message = serverMessage;
+        else if (!error.response) message = 'No response from the server. Check your connection.';
+      } else if (error instanceof Error) {
+        message = error.message;
+      }
+      if (mountedRef.current) Alert.alert('Could Not Create Event', message);
+      return;
+    } finally {
+      savingRef.current = false;
+      if (mountedRef.current) setIsSaving(false);
+    }
+    // Refresh the shared event list from the server response before announcing success.
+    onCreated(savedEvent);
+    if (mountedRef.current) Alert.alert('Success', 'Event Created!', [{ text: 'OK', onPress: onBack }]);
   };
 
   return (
     <KeyboardAvoidingView style={[styles.container, { backgroundColor: colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <Text onPress={onBack} style={[styles.backLink, { color: colors.primary }]}>‹  Back</Text>
+        <Text onPress={handleBack} style={[styles.backLink, { color: colors.primary }]}>‹  Back</Text>
         <ScreenHeader eyebrow="Event Blueprint" title="Create Event" subtitle="Tell us about your event details and entry rules." />
         
         {/* Title Field (Mandatory) */}
         <View style={styles.formGroup}>
           <Text style={[styles.fieldLabel, { color: colors.text }]}>Event Title*</Text>
-          <TextInput value={title} onChangeText={setTitle} placeholder="e.g., Hardcore Synthwave Experience" placeholderTextColor={colors.muted} style={[styles.fieldInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} />
+          <TextInput value={title} onChangeText={setTitle} maxLength={150} placeholder="e.g., Hardcore Synthwave Experience" placeholderTextColor={colors.muted} style={[styles.fieldInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} />
         </View>
 
         {/* Description Field (Mandatory) */}
@@ -188,6 +257,7 @@ export function CreateEventScreen({ onBack }: { onBack: () => void }) {
           <TextInput
             value={description}
             onChangeText={setDescription}
+            maxLength={10000}
             placeholder="Tell attendees what to expect, dress codes, age limits..."
             placeholderTextColor={colors.muted}
             multiline
@@ -198,7 +268,7 @@ export function CreateEventScreen({ onBack }: { onBack: () => void }) {
 
         {/* Category Selection (Wrapped) */}
         <View style={styles.formGroup}>
-          <Text style={[styles.fieldLabel, { color: colors.text }]}>Category</Text>
+          <Text style={[styles.fieldLabel, { color: colors.text }]}>Category*</Text>
           <View style={styles.chipsContainer}>
             {eventCategories.map(cat => (
               <TouchableOpacity
@@ -214,6 +284,7 @@ export function CreateEventScreen({ onBack }: { onBack: () => void }) {
         </View>
 
         {/* Modular Date Picker Component with Validation */}
+        <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 10 }}>Times use your device time zone: {timeZone || "Unavailable"}</Text>
         <DatePickerField label="Event Date*" date={date} onDateChange={handleDateChange} minimumDate={todayString} />
 
         {/* Modular Time Picker Components with Validation & Contextual Guidance */}
@@ -243,32 +314,33 @@ export function CreateEventScreen({ onBack }: { onBack: () => void }) {
         <PriceInputField label="Ticket Price" price={price} onPriceChange={setPrice} />
 
         {/* Secure typeahead autocomplete proxy search drop-down location field */}
-        <LocationComponent onVenueSelected={setSelectedVenue} />
+        <LocationComponent onVenueSelected={setSelectedVenue} onSelectionCleared={() => setSelectedVenue(null)} />
 
         {/* Upload Banner Image */}
         <View style={styles.formGroup}>
           <Text style={[styles.fieldLabel, { color: colors.text }]}>Upload Banner Image</Text>
+          {imageBusy && <Text style={{ color: colors.muted, marginBottom: 8 }}>Preparing banner...</Text>}
           {bannerImage ? (
             <View style={[styles.imagePreviewContainer, { borderColor: colors.border }]}>
               <Image source={{ uri: bannerImage }} style={styles.bannerImagePreview} />
               <View style={styles.actionRow}>
-                <TouchableOpacity onPress={handlePickImage} activeOpacity={0.8} style={styles.changeBtn}>
+                <TouchableOpacity onPress={handlePickImage} disabled={isSaving || imageBusy || completedRef.current} activeOpacity={0.8} style={styles.changeBtn}>
                   <Text style={styles.actionBtnText}>Change</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={handleRemoveImage} activeOpacity={0.8} style={styles.removeBtn}>
+                <TouchableOpacity onPress={handleRemoveImage} disabled={isSaving || imageBusy || completedRef.current} activeOpacity={0.8} style={styles.removeBtn}>
                   <Text style={styles.removeBtnText}>Remove</Text>
                 </TouchableOpacity>
               </View>
             </View>
           ) : (
-            <TouchableOpacity onPress={handlePickImage} activeOpacity={0.8} style={[styles.imagePlaceholderFrame, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <TouchableOpacity onPress={handlePickImage} disabled={isSaving || imageBusy || completedRef.current} activeOpacity={0.8} style={[styles.imagePlaceholderFrame, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={styles.placeholderGlyph}>🖼️</Text>
-              <Text style={[styles.placeholderText, { color: colors.muted }]}>Tap to select and crop image</Text>
+              <Text style={[styles.placeholderText, { color: colors.muted }]}>Tap to select and crop image (optional)</Text>
             </TouchableOpacity>
           )}
         </View>
 
-        <AppButton title="Create Event" onPress={handleSubmit} style={styles.submitButton} />
+        <AppButton title={isSaving ? "Creating Event..." : "Create Event"} onPress={handleSubmit} disabled={isSaving || imageBusy || completedRef.current} style={styles.submitButton} />
       </ScrollView>
     </KeyboardAvoidingView>
   );

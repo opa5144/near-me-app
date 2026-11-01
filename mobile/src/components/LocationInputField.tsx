@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react'; // 1. Added useEffect
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { StyleSheet, Text, TextInput, View, TouchableOpacity, ActivityIndicator, Keyboard } from 'react-native';
 import debounce from 'lodash.debounce';
 import { fetchPlaceSuggestions, fetchPlaceDetails, createSessionToken, PlaceSuggestion, EventPlace } from '../api/maps';
@@ -6,67 +6,78 @@ import { useTheme } from '../context/ThemeContext';
 
 interface LocationComponentProps {
   onVenueSelected: (venue: EventPlace) => void;
+  // Let a parent discard its old venue as soon as the search text changes.
+  onSelectionCleared?: () => void;
 }
 
-export function LocationComponent({ onVenueSelected }: LocationComponentProps) {
+export function LocationComponent({ onVenueSelected, onSelectionCleared }: LocationComponentProps) {
   const { colors } = useTheme();
+  // State controls the search field, suggestion list and loading indicator.
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  
+  // Keep one Maps session token for a search/selection cycle without rerendering.
   const sessionTokenRef = useRef(createSessionToken());
+  // Abort cancels old autocomplete work; a revision number also ignores late results
+  // from searches or place-detail requests that are no longer current.
   const abortControllerRef = useRef<AbortController | null>(null);
-
+  const revisionRef = useRef(0);
+  // Wait for a pause in typing to reduce requests. Only the latest revision may
+  // replace suggestions or clear its loading indicator.
   const debouncedFetch = useCallback(
-    debounce(async (text: string, token: string) => {
-      if (text.trim().length < 3) {
-        setSuggestions([]);
-        setIsLoading(false);
-        return;
-      }
-
-      if (abortControllerRef.current) abortControllerRef.current.abort();
-      abortControllerRef.current = new AbortController();
-
+    debounce(async (text: string, token: string, revision: number) => {
+      if (revision !== revisionRef.current) return;
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
       try {
-        const results = await fetchPlaceSuggestions(text, token, abortControllerRef.current.signal);
-        setSuggestions(results);
+        const results = await fetchPlaceSuggestions(text, token, controller.signal);
+        if (revision === revisionRef.current) setSuggestions(results);
       } catch (error: any) {
-        if (error?.name !== 'AbortError' && error?.message !== 'canceled') {
-          console.error("Autocomplete fetch error:", error);
+        if (revision === revisionRef.current && error?.name !== 'AbortError' && error?.message !== 'canceled') {
+          console.error('Autocomplete fetch error:', error);
         }
       } finally {
-        setIsLoading(false);
+        if (revision === revisionRef.current) setIsLoading(false);
       }
-    }, 350),
-    []
+    }, 350), []
   );
-
-  // 2. MINIMAL ADDITION: Cancels pending debounce triggers if the user leaves the screen
-  useEffect(() => {
-    return () => {
-      debouncedFetch.cancel();
-    };
+  // Invalidate late responses and cancel queued/in-flight autocomplete on unmount.
+  useEffect(() => () => {
+    revisionRef.current += 1;
+    debouncedFetch.cancel();
+    abortControllerRef.current?.abort();
   }, [debouncedFetch]);
-
+  // Changing even one character invalidates the parent's previously selected venue;
+  // the host must select a fresh result before that venue can be used to save.
   const handleTextChange = (text: string) => {
+    const revision = ++revisionRef.current;
+    debouncedFetch.cancel();
+    abortControllerRef.current?.abort();
     setQuery(text);
+    setSuggestions([]);
+    onSelectionCleared?.();
+    if (text.trim().length < 3) { setIsLoading(false); return; }
     setIsLoading(true);
-    debouncedFetch(text, sessionTokenRef.current);
+    debouncedFetch(text, sessionTokenRef.current, revision);
   };
-
+  // Suggestions contain labels; fetch full address/coordinates before notifying
+  // the parent. Ignore those details if the user starts another search meanwhile.
   const handleSelectVenue = async (item: PlaceSuggestion) => {
+    const revision = ++revisionRef.current;
+    debouncedFetch.cancel();
+    abortControllerRef.current?.abort();
+    onSelectionCleared?.();
     setQuery(item.full);
     setSuggestions([]);
     setIsLoading(true);
-    Keyboard.dismiss(); 
-
+    Keyboard.dismiss();
     const details = await fetchPlaceDetails(item.placeId, sessionTokenRef.current);
+    if (revision !== revisionRef.current) return;
     setIsLoading(false);
-
     if (details) {
       onVenueSelected(details);
-      sessionTokenRef.current = createSessionToken(); 
+      // A completed selection ends this Maps session; later searches use a new token.
+      sessionTokenRef.current = createSessionToken();
     }
   };
 

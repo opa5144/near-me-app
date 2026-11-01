@@ -1,24 +1,27 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { EventItem } from '../../data/events';
 import { AppButton } from '../../components/AppButton';
 import { useTheme } from '../../context/ThemeContext';
 
+// AppNavigator fetches the event by ID and handles loading/missing states first.
+// This display component receives a valid record and callbacks for user actions.
 export function EventDetailsScreen({ event, interested, onToggleInterested, onBack }: { event: EventItem; interested: boolean; onToggleInterested: () => void; onBack: () => void }) {
   const { colors } = useTheme();
   
-  // Track Page View automatically when the screen mounts/opens
-  useEffect(() => {
-      console.log(`[Analytics] Page view recorded for event: ${event.id}`);
-      // fetch(`https://your-api.com/events/${event.id}/view`, { method: 'POST' }).catch(() => {});
-  }, [event.id]);
+  // Display the uploaded image URL when available, with the emoji as a fallback.
+  const [imageFailed, setImageFailed] = useState(false);
+  // Try again when a different event image URL is supplied.
+  useEffect(() => setImageFailed(false), [event.bannerImage]);
+  // Views/attendance are not tracked by this template.
   
   return (
     <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]}>
       <Text onPress={onBack} style={[styles.back, { color: colors.primary }]}>‹  Back to events</Text>
       <View style={[styles.hero, { backgroundColor: event.accent }]}>
-        {event.bannerImage ? (
-          <Image source={{ uri: event.bannerImage }} style={styles.heroImage} />
+        {event.bannerImage && !imageFailed ? (
+          <Image source={{ uri: event.bannerImage }} style={styles.heroImage}
+            accessibilityLabel={event.title} onError={() => setImageFailed(true)} />
         ) : (
           <Text style={styles.heroEmoji}>{event.emoji}</Text>
         )}
@@ -51,8 +54,6 @@ export function EventDetailsScreen({ event, interested, onToggleInterested, onBa
         <Text style={[styles.mapLabel, { color: colors.text }]}>{event.venue}</Text>
         <Text style={[styles.mapSub, { color: colors.muted }]}>Map preview placeholder</Text>
       </View>
-      <Text style={[styles.section, { color: colors.text }]}>FAQ</Text>
-      <Text style={[styles.description, { color: colors.muted }]}>This is sample event content for the UI prototype. More details will be added later.</Text>
     </ScrollView>
   );
 }

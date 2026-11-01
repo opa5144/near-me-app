@@ -1,15 +1,22 @@
+import { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { EventItem } from '../data/events';
 import { useTheme } from '../context/ThemeContext';
 
+// Reused by event lists. The parent supplies the record and decides where a tap navigates.
 export function EventCard({ event, onPress, horizontal = false }: { event: EventItem; onPress: () => void; horizontal?: boolean }) {
   const { colors } = useTheme();
+  // Use the persisted image URL, falling back to the event emoji if loading fails.
+  const [imageFailed, setImageFailed] = useState(false);
+  // Reset a previous failure when this card is given a different image URL.
+  useEffect(() => setImageFailed(false), [event.bannerImage]);
 
   return (
     <Pressable onPress={onPress} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, horizontal && styles.horizontal]}>
       <View style={[styles.art, { backgroundColor: event.accent }, horizontal && styles.horizontalArt]}>
-        {event.bannerImage ? (
-          <Image source={{ uri: event.bannerImage }} style={styles.bannerImage} />
+        {event.bannerImage && !imageFailed ? (
+          <Image source={{ uri: event.bannerImage }} style={styles.bannerImage}
+            accessibilityLabel={event.title} onError={() => setImageFailed(true)} />
         ) : (
           <Text style={styles.emoji}>{event.emoji}</Text>
         )}
