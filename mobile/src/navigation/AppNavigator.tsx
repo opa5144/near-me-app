@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { BottomTabBar, TabName } from '../components/BottomTabBar';
+import { ScreenContainer } from '../components/ScreenContainer';
 import { useTheme } from '../context/ThemeContext';
 
 import { HomeScreen } from '../screens/event/HomeScreen';
@@ -128,18 +129,20 @@ export function AppNavigator() {
           const isInterested = interestedEventIds.includes(selectedEvent.id);
 
           return (
-            <EventDetailsScreen
-              event={selectedEvent}
-              interested={isInterested}
-              onToggleInterested={() => {
-                setInterestedEventIds(prev => 
-                  prev.includes(selectedEvent.id) 
-                    ? prev.filter(id => id !== selectedEvent.id) 
-                    : [...prev, selectedEvent.id]
-                );
-              }}
-              onBack={() => navigation.goBack()}
-            />
+            <ScreenContainer>
+              <EventDetailsScreen
+                event={selectedEvent}
+                interested={isInterested}
+                onToggleInterested={() => {
+                  setInterestedEventIds(prev => 
+                    prev.includes(selectedEvent.id) 
+                      ? prev.filter(id => id !== selectedEvent.id) 
+                      : [...prev, selectedEvent.id]
+                  );
+                }}
+                onBack={() => navigation.goBack()}
+              />
+            </ScreenContainer>
           );
         }}
       </RootStack.Screen>
