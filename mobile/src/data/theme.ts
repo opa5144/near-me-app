@@ -1,3 +1,4 @@
+// Global Colors
 export const lightColors = {
   background: '#FAF7FC',
   surface: '#FFFFFF',
@@ -31,3 +32,32 @@ export const getThemeColors = (mode: 'light' | 'dark' | 'system') => {
   else
     return lightColors;
 };
+
+// Global Typography
+export const typography = {
+  headerLarge: {
+    fontSize: 28,
+    lineHeight: 36,
+    fontWeight: '700' as const,
+  },
+  headerMedium: {
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: '600' as const,
+  },
+  bodyLarge: {
+    fontSize: 16,
+    lineHeight: 24,
+    fontWeight: '400' as const,
+  },
+  bodyMedium: {
+    fontSize: 14,
+    lineHeight: 22,
+    fontWeight: '400' as const,
+  },
+  caption: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '400' as const,
+  },
+} as const;
