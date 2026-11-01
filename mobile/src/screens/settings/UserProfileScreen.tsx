@@ -1,9 +1,25 @@
+import { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image, ScrollView } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { AppButton } from '../../components/AppButton';
+import { fetchUserProfile } from '../../api/client';
 
 export function UserProfileScreen({ navigation }: any) {
   const { colors } = useTheme();
+
+  // Store user info fetched from backend GET /auth/me
+  const [user, setUser] = useState<{ firstName?: string; lastName?: string; username?: string; email?: string } | null>(null);
+
+  useEffect(() => {
+    fetchUserProfile()
+      .then(res => setUser(res.user))
+      .catch(() => {});
+  }, []);
+
+  // Compute full display name falling back to username or default loading text
+  const displayName = user 
+    ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username
+    : 'Loading...';
 
   return (
     <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
@@ -31,12 +47,12 @@ export function UserProfileScreen({ navigation }: any) {
       <View style={styles.profileHeader}>
         <View style={[styles.avatarFrame, { borderColor: colors.border }]}>
           <Image 
-            source={{ uri: 'https://cdn.wikirby.com/thumb/1/1e/SKC_Kracko_Art.png/450px-SKC_Kracko_Art.png' }} 
+            source={{ uri: 'https://static.vecteezy.com/system/resources/previews/077/167/094/non_2x/simple-icon-of-a-person-with-a-round-head-and-rounded-body-vector.jpg' }} 
             style={styles.avatarImage} 
           />
         </View>
-        <Text style={[styles.userName, { color: colors.text }]}>Demi Adenubi</Text>
-        <Text style={[styles.userLocation, { color: colors.muted }]}>Erie, United States</Text>
+        <Text style={[styles.userName, { color: colors.text }]}>{displayName}</Text>
+        <Text style={[styles.userLocation, { color: colors.muted }]}>{user?.username ? `@${user.username}` : 'Erie, United States'}</Text>
       </View>
 
       {/* 3 Quick Navigation Cards (Tickets, Friends, Inbox) */}

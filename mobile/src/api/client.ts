@@ -76,6 +76,22 @@ export interface LoginResponse {
   accessToken: string;
   expiresAt: string;
 }
+
+// Responses contain safe account details loaded from the current session.
+export interface UserProfileResponse {
+  user: {
+    _id: string;
+    firstName: string;
+    lastName: string;
+    username: string;
+    email: string;
+  };
+}
+
+export async function fetchUserProfile(): Promise<UserProfileResponse> {
+  const response = await api.get<UserProfileResponse>('/auth/me');
+  return response.data;
+}
 // Install the session token before the screen opens the authenticated navigator,
 // so its initial event-list requests already include Authorization.
 export async function loginUser(form: LoginRequest): Promise<LoginResponse> {
