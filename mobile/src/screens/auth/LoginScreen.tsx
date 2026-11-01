@@ -1,9 +1,11 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text,} from 'react-native';
+import { useState, useRef } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, Alert} from 'react-native';
 import { AppButton } from '../../components/AppButton';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { useTheme } from '../../context/ThemeContext';
 import { AppTextInput } from '../../components/AppTextInput';
+import axios from 'axios';
+import { loginUser } from '../../api/client';
 
 const fields = [
   { key: 'email', label: 'Email' },
@@ -22,9 +24,40 @@ export function LoginScreen({ onLogin, onNavigateToSignup }: LoginScreenProps) {
     password: '',
   });
 
-  function handleLogin() {
+  const [isLoggingIn, setIsLoggingIn] = useState(false);//updates the UI
+  const loginInFlight = useRef(false);//when in flight it stops retyping
+
+  async function handleLogin() {
     // Send credentials to auth endpoint.
-    onLogin();
+    if(loginInFlight.current) return; // Prevent multiple submissions
+    if(!form.email.trim() || !form.password) {
+      Alert.alert('Missing details', 'Please fill in all fields.');
+      return;
+    } // Basic validation to ensure all fields are filled
+
+    loginInFlight.current = true;
+    setIsLoggingIn(true);
+
+    try{
+      await loginUser(form); //sends form to backend
+    } catch (error){
+      let message = 'Unable to login. Please try again later.';
+      if(axios.isAxiosError<{message?: string}>(error)){
+        const serverMessage = error.response?.data?.message;
+        if(typeof serverMessage === 'string'){
+          message = serverMessage;
+        } else if (!error.response){
+          message = 'no response from server. Please check your internet connection.';
+        }
+      }
+
+      Alert.alert('Login Failed', message);
+      return; 
+    } finally { // Reset the in-flight state regardless of success or failure
+      loginInFlight.current = false;
+      setIsLoggingIn(false);
+    }
+    onLogin(); //opens app after successful login
   }
 
   return (
@@ -34,7 +67,7 @@ export function LoginScreen({ onLogin, onNavigateToSignup }: LoginScreenProps) {
     >
       <ScreenHeader title="Login" subtitle="Login to your account." />
 
-      {fields.map(({ key, label }) => (
+      {fields.map(({ key, label }) => (//renders input fields for each field in the form
         <AppTextInput
           key={key}
           label={label}
@@ -44,15 +77,16 @@ export function LoginScreen({ onLogin, onNavigateToSignup }: LoginScreenProps) {
           }
           autoCapitalize="none"
           keyboardType={key === 'email' ? 'email-address' : 'default'}
-          autoComplete={key === 'password' ? 'password' : undefined}
           isPassword={key === 'password'}
+          editable={!isLoggingIn}
+          autoComplete={key === 'password' ? 'current-password': 'email'}
         />
       ))}
 
       <AppButton
-        title="Login"
+        title={isLoggingIn ? 'Logging in...' : 'Login'}
         onPress={handleLogin}
-        disabled={Object.values(form).some(value => value.length === 0)}
+        disabled={isLoggingIn || !form.email.trim() || !form.password}
       />
 
       {/* Link to switch to Signup Screen */}
@@ -60,6 +94,7 @@ export function LoginScreen({ onLogin, onNavigateToSignup }: LoginScreenProps) {
         onPress={onNavigateToSignup}
         accessibilityRole="link"
         style={styles.link}
+        disabled={isLoggingIn}
       >
         <Text style={[styles.linkText, { color: colors.primary }]}>
           Don't have an account? Sign up

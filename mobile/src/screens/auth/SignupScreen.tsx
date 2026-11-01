@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState,useRef } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, } from 'react-native';
 import { AppButton } from '../../components/AppButton';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { useTheme } from '../../context/ThemeContext';
 import { AppTextInput } from '../../components/AppTextInput';
+import axios from 'axios';
+import {signupUser} from '../../api/client';
 
 const fields = [
   { key: 'firstName', label: 'First name' },
@@ -27,9 +29,51 @@ export function SignupScreen({ onBackToLogin }: SignupScreenProps) {
     password: '',
   });
 
-  function handleSignup() {
+  const [isSubmitting, setIsSubmitting] = useState(false);//updates the UI
+  const signupInFlight = useRef(false);//when in flight it stops retyping
+
+  async function handleSignup() {
     //Validate and send the form to your backend signup endpoint.
-    Alert.alert('Sign up', 'Account creation is not implemented yet.');
+    if (signupInFlight.current) return; // Prevent multiple submissions
+
+    if(!form.firstName.trim() || !form.lastName.trim() || !form.username.trim() || !form.email.trim() || !form.password) {
+      Alert.alert('Missing details', 'Please fill in all fields.');
+      return;
+    } // Basic validation to ensure all fields are filled
+
+    const passwordLength = Array.from(form.password).length;
+    if(passwordLength < 15 || passwordLength > 128){
+      Alert.alert('Password', 'Password must be between 15 and 128 characters.');
+      return;
+    }// Password length validation, matches backend validation 
+
+    signupInFlight.current = true;
+    setIsSubmitting(true);
+    
+    try{ //sends form to backend 
+      const result = await signupUser(form);
+      Alert.alert(
+        'Account created',
+        result.message,
+        [{text: 'Back to Login', onPress: onBackToLogin}],
+        {cancelable: false},
+      );
+    } catch (error){ //catches account creation errors  
+      let message = 'Unable to create account. Please try again.';
+      if(axios.isAxiosError<{message?: string}>(error)){
+        const serverMessage = error.response?.data?.message; 
+        if(typeof serverMessage === 'string'){
+          message = serverMessage;
+        } else if (!error.response){
+          message = 'No response from server. Check connection.';
+        }
+      }
+      Alert.alert('Signup failed', message); 
+    } finally{ //reset state after submission attempt
+      signupInFlight.current = false;
+      setIsSubmitting(false);
+    }
+
   }
 
   return (
@@ -39,11 +83,12 @@ export function SignupScreen({ onBackToLogin }: SignupScreenProps) {
     >
       <ScreenHeader title="Sign up" subtitle="Create your account." />
 
-      {fields.map(({ key, label }) => (
+      {fields.map(({ key, label }) => (//renders input fields for each field in the form
         <AppTextInput
           key={key}
           label={label}
           value={form[key]}
+          editable={!isSubmitting}
           onChangeText={value =>
             setForm(current => ({ ...current, [key]: value }))
           }
@@ -59,15 +104,23 @@ export function SignupScreen({ onBackToLogin }: SignupScreenProps) {
       ))}
 
       <AppButton
-        title="Sign up"
+        title={isSubmitting ? 'Creating account...' : 'Sign up'}
         onPress={handleSignup}
-        disabled={Object.values(form).some(value => value.length === 0)}
+        disabled={
+          isSubmitting ||
+          !form.firstName.trim() ||
+          !form.lastName.trim() ||
+          !form.username.trim() ||
+          !form.email.trim() ||
+          !form.password
+        }
       />
 
       <Pressable
         onPress={onBackToLogin}
         accessibilityRole="link"
         style={styles.link}
+        disabled={isSubmitting}
       >
         <Text style={[styles.linkText, { color: colors.primary }]}>
           Already have an account? Log in
