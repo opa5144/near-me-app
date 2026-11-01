@@ -41,24 +41,52 @@ export function AppNavigator() {
 
   // Profile -> Settings -> Specific Settings Flow
   function ProfileNavigator() {
-    return (
-      <ProfileStack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background }, animation: 'fade' }}>
-        <ProfileStack.Screen name="ProfileMain" component={UserProfileScreen} />
-        <ProfileStack.Screen name="Settings" component={SettingsScreen} />
-        <ProfileStack.Screen name="Account" component={AccountScreen} />
-        <ProfileStack.Screen name="Security" component={SecurityScreen} />
-        <ProfileStack.Screen name="BookingHistory" component={BookingHistoryScreen} />
-        <ProfileStack.Screen name="Preferences" component={PreferencesScreen} />
-        <ProfileStack.Screen name="Location" component={LocationScreen} />
-        <ProfileStack.Screen name="Notifications" component={NotificationsScreen} />
-        <ProfileStack.Screen name="Display" component={DisplayScreen} />
-        <ProfileStack.Screen name="About" component={AboutScreen} />
-        <ProfileStack.Screen name="CreateEvent">
-          {(props) => <CreateEventScreen {...props} onBack={() => props.navigation.goBack()} />}
-        </ProfileStack.Screen>
-      </ProfileStack.Navigator>
-    );
-  }
+  return (
+    <ProfileStack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background }, animation: 'fade' }}>
+      <ProfileStack.Screen name="ProfileMain" component={UserProfileScreen} />
+
+      <ProfileStack.Screen name="Settings">
+        {(props) => <ScreenContainer style={{ paddingHorizontal: 0 }}><SettingsScreen {...props} /></ScreenContainer>}
+      </ProfileStack.Screen>
+
+      <ProfileStack.Screen name="Account">
+        {(props) => <ScreenContainer style={{ paddingHorizontal: 0 }}><AccountScreen {...props} /></ScreenContainer>}
+      </ProfileStack.Screen>
+
+      <ProfileStack.Screen name="Security">
+        {(props) => <ScreenContainer style={{ paddingHorizontal: 0 }}><SecurityScreen {...props} /></ScreenContainer>}
+      </ProfileStack.Screen>
+
+      <ProfileStack.Screen name="BookingHistory">
+        {(props) => <ScreenContainer style={{ paddingHorizontal: 0 }}><BookingHistoryScreen {...props} /></ScreenContainer>}
+      </ProfileStack.Screen>
+
+      <ProfileStack.Screen name="Preferences">
+        {(props) => <ScreenContainer style={{ paddingHorizontal: 0 }}><PreferencesScreen {...props} /></ScreenContainer>}
+      </ProfileStack.Screen>
+
+      <ProfileStack.Screen name="Location">
+        {(props) => <ScreenContainer style={{ paddingHorizontal: 0 }}><LocationScreen {...props} /></ScreenContainer>}
+      </ProfileStack.Screen>
+
+      <ProfileStack.Screen name="Notifications">
+        {(props) => <ScreenContainer style={{ paddingHorizontal: 0 }}><NotificationsScreen {...props} /></ScreenContainer>}
+      </ProfileStack.Screen>
+
+      <ProfileStack.Screen name="Display">
+        {(props) => <ScreenContainer style={{ paddingHorizontal: 0 }}><DisplayScreen {...props} /></ScreenContainer>}
+      </ProfileStack.Screen>
+
+      <ProfileStack.Screen name="About">
+        {(props) => <ScreenContainer style={{ paddingHorizontal: 0 }}><AboutScreen {...props} /></ScreenContainer>}
+      </ProfileStack.Screen>
+
+      <ProfileStack.Screen name="CreateEvent">
+        {(props) => <CreateEventScreen {...props} onBack={() => props.navigation.goBack()} />}
+      </ProfileStack.Screen>
+    </ProfileStack.Navigator>
+  );
+}
 
   // Host Flow
   function HostNavigator({ navigation: rootNavigation }: any) {

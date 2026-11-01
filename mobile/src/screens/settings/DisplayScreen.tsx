@@ -1,6 +1,8 @@
+
 import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ScreenHeader } from '../../components/ScreenHeader';
+import { AppButton } from '../../components/AppButton';
 import { useTheme } from '../../context/ThemeContext';
 
 const themeOptions = [
@@ -14,7 +16,7 @@ export function DisplayScreen({ navigation }: any) {
 
   return (
     <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
-      <Text onPress={() => navigation.goBack()} style={[styles.backLink, { color: colors.primary }]}>‹  Back to Settings</Text>
+      <AppButton title="‹  Back to Settings" variant="quiet" alignment="left" minHeight={44} onPress={() => navigation.goBack()} style={styles.backButton} textStyle={styles.backText} />
       <ScreenHeader title="Display & Theme" subtitle="Customize how Near Me looks on your device." />
 
       <View style={styles.sectionContainer}>
@@ -59,8 +61,9 @@ export function DisplayScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingBottom: 32, flexGrow: 1 },
-  backLink: { fontWeight: '800', fontSize: 13, marginBottom: 12 },
+  content: { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 32, flexGrow: 1 },
+  backButton: { paddingHorizontal: 8, marginLeft: -8, marginBottom: 8 },
+  backText: { fontWeight: '800', fontSize: 14 },
   sectionContainer: { marginBottom: 20 },
   sectionHeader: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', marginBottom: 8, marginLeft: 4, letterSpacing: 0.5 },
   item: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, borderWidth: 1, padding: 15, marginBottom: 10 },

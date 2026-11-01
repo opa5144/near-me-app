@@ -1,6 +1,8 @@
+
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { ScreenHeader } from '../../components/ScreenHeader';
+import { AppButton } from '../../components/AppButton';
 import { useTheme } from '../../context/ThemeContext';
 
 export function AccountScreen({ navigation }: any) {
@@ -13,7 +15,7 @@ export function AccountScreen({ navigation }: any) {
 
   return (
     <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]}>
-      <Text onPress={() => navigation.goBack()} style={[styles.backLink, { color: colors.primary }]}>‹  Back to Settings</Text>
+      <AppButton title="‹  Back to Settings" variant="quiet" alignment="left" minHeight={44} onPress={() => navigation.goBack()} style={styles.backButton} textStyle={styles.backText} />
       <ScreenHeader title="Account Information" subtitle="View and update your personal details." />
 
       <View style={styles.avatarContainer}>
@@ -44,8 +46,9 @@ export function AccountScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, flexGrow: 1 },
-  backLink: { fontWeight: '800', fontSize: 13, marginBottom: 12 },
+  content: { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 32, flexGrow: 1 },
+  backButton: { paddingHorizontal: 8, marginLeft: -8, marginBottom: 8 },
+  backText: { fontWeight: '800', fontSize: 14 },
   avatarContainer: { alignItems: 'center', marginVertical: 16 },
   avatarPlaceholder: { width: 70, height: 70, borderRadius: 35, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
   avatarText: { fontWeight: 'bold', fontSize: 22 },

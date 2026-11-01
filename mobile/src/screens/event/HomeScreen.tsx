@@ -1,7 +1,10 @@
-import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { EventItem, categories } from '../../data/events';
 import { EventCard } from '../../components/EventCard';
 import { ScreenHeader } from '../../components/ScreenHeader';
+import { CategoryFilter } from '../../components/CategoryFilter';
+import { SearchBar } from '../../components/SearchBar';
 import { useTheme } from '../../context/ThemeContext';
 
 export function HomeScreen({ events, onOpenEvent, onSeeAll }: { events: EventItem[]; onOpenEvent: (event: EventItem) => void; onSeeAll: () => void }) {
@@ -11,21 +14,8 @@ export function HomeScreen({ events, onOpenEvent, onSeeAll }: { events: EventIte
     <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
       <Text style={[styles.welcome, { color: colors.muted }]}>Welcome back, Demi 👋</Text>
       <ScreenHeader title="Discover Events" subtitle="Find something great to do nearby." />
-      <TextInput placeholder="⌕  Search artists, venues, or vibes..." placeholderTextColor={colors.muted} style={[styles.search, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} editable={false} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-        {categories.slice(1).map((category, index) => (
-          <View 
-            key={category} 
-            style={[
-              styles.chip, 
-              { backgroundColor: colors.surface, borderColor: colors.border }, 
-              index === 0 && { backgroundColor: colors.primary, borderColor: colors.primary }
-            ]}
-          >
-            <Text style={[styles.chipText, { color: colors.text }, index === 0 && styles.selectedText]}>{category}</Text>
-          </View>
-        ))}
-      </ScrollView>
+      <SearchBar value="" onChangeText={() => {}} placeholder="⌕  Search artists, venues, or vibes..." editable={false} />
+      <CategoryFilter categories={categories.slice(1)} selectedCategory={categories[1]} onSelectCategory={() => {}} />
       <View style={styles.sectionTitle}>
         <Text style={[styles.section, { color: colors.text, marginBottom: 0 }]}>Top Picks</Text>
         <Text onPress={onSeeAll} style={[styles.seeAll, { color: colors.primary }]}>See All</Text>
@@ -45,14 +35,10 @@ export function HomeScreen({ events, onOpenEvent, onSeeAll }: { events: EventIte
     </ScrollView>
   );
 }
+
 const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 24, flexGrow: 1 },
   welcome: { fontSize: 11, marginBottom: 5 },
-  search: { height: 44, borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, fontSize: 12, marginBottom: 14 },
-  chips: { gap: 8, paddingBottom: 20 },
-  chip: { borderWidth: 1, paddingVertical: 9, paddingHorizontal: 13, borderRadius: 20 },
-  chipText: { fontSize: 11, fontWeight: '700' },
-  selectedText: { color: '#FFFFFF' },
   sectionTitle: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   section: { fontSize: 16, fontWeight: '900', marginBottom: 10 },
   seeAll: { fontSize: 11, fontWeight: '700' },

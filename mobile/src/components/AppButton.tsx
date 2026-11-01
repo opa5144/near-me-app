@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, Text, ViewStyle, TextStyle } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 
 type Props = {
@@ -6,10 +6,13 @@ type Props = {
   onPress: () => void;
   variant?: 'primary' | 'secondary' | 'quiet';
   style?: ViewStyle;
+  textStyle?: TextStyle;
   disabled?: boolean;
+  alignment?: 'center' | 'left';
+  minHeight?: number;
 };
 
-export function AppButton({ title, onPress, variant = 'primary', style, disabled = false }: Props) {
+export function AppButton({ title, onPress, variant = 'primary', style, textStyle, disabled = false, alignment = 'center', minHeight = 46 }: Props) {
   const { colors } = useTheme();
 
   return (
@@ -19,22 +22,25 @@ export function AppButton({ title, onPress, variant = 'primary', style, disabled
       onPress={onPress}
       style={[
         styles.button,
-        variant === 'primary' 
-          ? { backgroundColor: colors.primary } 
-          : variant === 'secondary' 
-          ? { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border } 
-          : { backgroundColor: colors.primaryLight },
+        { minHeight, alignItems: alignment === 'left' ? 'flex-start' : 'center' },
+        variant === 'primary'
+          ? { backgroundColor: colors.primary }
+          : variant === 'secondary'
+          ? { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }
+          : { backgroundColor: 'transparent' },
         disabled && styles.disabled,
         style,
       ]}
     >
-      <Text style={[styles.text, variant !== 'primary' && { color: colors.primary }]}>{title}</Text>
+      <Text style={[styles.text, { color: variant === 'primary' ? '#FFFFFF' : colors.primary }, textStyle]}>
+        {title}
+      </Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  button: { minHeight: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
-  text: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  button: { borderRadius: 14, justifyContent: 'center', paddingHorizontal: 18 },
+  text: { fontSize: 14, fontWeight: '700' },
   disabled: { opacity: 0.5 },
 });

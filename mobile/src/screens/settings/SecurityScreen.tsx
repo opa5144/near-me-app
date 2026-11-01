@@ -1,6 +1,8 @@
+
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { ScreenHeader } from '../../components/ScreenHeader';
+import { AppButton } from '../../components/AppButton';
 import { useTheme } from '../../context/ThemeContext';
 
 export function SecurityScreen({ navigation }: any) {
@@ -9,7 +11,7 @@ export function SecurityScreen({ navigation }: any) {
 
   return (
     <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]}>
-      <Text onPress={() => navigation.goBack()} style={[styles.backLink, { color: colors.primary }]}>‹  Back to Settings</Text>
+      <AppButton title="‹  Back to Settings" variant="quiet" alignment="left" minHeight={44} onPress={() => navigation.goBack()} style={styles.backButton} textStyle={styles.backText} />
       <ScreenHeader title="Security & Login" subtitle="Manage passwords, MFA, and account removal." />
 
       <Text style={[styles.sectionTitle, { color: colors.text }]}>Change Password</Text>
@@ -41,8 +43,9 @@ export function SecurityScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, flexGrow: 1 },
-  backLink: { fontWeight: '800', fontSize: 13, marginBottom: 12 },
+  content: { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 32, flexGrow: 1 },
+  backButton: { paddingHorizontal: 8, marginLeft: -8, marginBottom: 8 },
+  backText: { fontWeight: '800', fontSize: 14 },
   sectionTitle: { fontSize: 13, fontWeight: '700', marginBottom: 10, marginTop: 10 },
   input: { borderWidth: 1, borderRadius: 10, padding: 12, fontSize: 13, marginBottom: 10 },
   saveBtn: { padding: 12, borderRadius: 10, alignItems: 'center', marginTop: 6 },
