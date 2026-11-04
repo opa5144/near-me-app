@@ -35,6 +35,16 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
           <AppText variant="bodyMedium" style={styles.topIconText}>✏️  Edit</AppText>
         </TouchableOpacity>
         <View style={styles.rightActionIcons}>
+          {/* Settings Button */}
+          <TouchableOpacity
+            style={[styles.topIconButtonCircle, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('Settings')}
+          >
+            <AppText variant="bodyMedium">⚙️</AppText>
+          </TouchableOpacity>
+
+          {/* Share Button */}
           <TouchableOpacity
             style={[styles.topIconButtonCircle, { backgroundColor: colors.surface, borderColor: colors.border }]}
             activeOpacity={0.8}
