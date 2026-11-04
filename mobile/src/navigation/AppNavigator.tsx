@@ -46,11 +46,18 @@ const RootStack = createNativeStackNavigator<RootStackParamList>();
 function ProfileNavigator() {
   const { colors } = useTheme();
   // Successful creates update the shared lists before returning from the form.
-  const { addCreatedEvent } = useEvents();
+  const { events, interestedEventIds, addCreatedEvent } = useEvents();
+  const interestedEvents = events.filter(event => interestedEventIds.includes(event.id));
   return (
     <ProfileStack.Navigator screenOptions={{ headerShown: false,
       contentStyle: { backgroundColor: colors.background }, animation: 'fade' }}>
-      <ProfileStack.Screen name="ProfileMain" component={UserProfileScreen} />
+      <ProfileStack.Screen name="ProfileMain">
+        {props => <UserProfileScreen 
+          events={interestedEvents} 
+          onOpenEvent={event => props.navigation.navigate('EventDetails', { eventId: event.id })} 
+          {...props} 
+        />}
+      </ProfileStack.Screen>
       <ProfileStack.Screen name="Settings">
         {props => <ScreenContainer style={{ paddingHorizontal: 0 }}><SettingsScreen {...props} /></ScreenContainer>}
       </ProfileStack.Screen>

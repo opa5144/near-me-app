@@ -1,11 +1,16 @@
 import { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image, ScrollView } from 'react-native';
+import { View, Share, TouchableOpacity, StyleSheet, Image, ScrollView } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { AppButton } from '../../components/AppButton';
+import { AppText } from '../../components/AppText';
 import { fetchUserProfile } from '../../api/client';
+import { EventItem } from '../../data/events';
+import { EventCard } from '../../components/EventCard';
 
-export function UserProfileScreen({ navigation }: any) {
+export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigation: any; events: EventItem[]; onOpenEvent: (event: EventItem) => void }) {
   const { colors } = useTheme();
+
+  const [activeTab, setActiveTab] = useState<'interested' | 'attended'>('interested');
 
   // Store user info fetched from backend GET /auth/me
   const [user, setUser] = useState<{ firstName?: string; lastName?: string; username?: string; email?: string } | null>(null);
@@ -13,32 +18,44 @@ export function UserProfileScreen({ navigation }: any) {
   useEffect(() => {
     fetchUserProfile()
       .then(res => setUser(res.user))
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // Compute full display name falling back to username or default loading text
-  const displayName = user 
+  const displayName = user
     ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username
     : 'Loading...';
 
   return (
     <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
-      
+
       {/* Top Action Buttons (Edit, Settings, Share) */}
       <View style={styles.topActionsRow}>
         <TouchableOpacity style={[styles.topIconButton, { backgroundColor: colors.surface, borderColor: colors.border }]} activeOpacity={0.8} onPress={() => alert('Edit Profile')}>
-          <Text style={[styles.topIconText, { color: colors.text }]}>✏️  Edit</Text>
+          <AppText variant="bodyMedium" style={styles.topIconText}>✏️  Edit</AppText>
         </TouchableOpacity>
         <View style={styles.rightActionIcons}>
-          <TouchableOpacity 
-            style={[styles.topIconButtonCircle, { backgroundColor: colors.surface, borderColor: colors.border }]} 
-            activeOpacity={0.8} 
-            onPress={() => navigation.navigate('Settings')}
+          <TouchableOpacity
+            style={[styles.topIconButtonCircle, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            activeOpacity={0.8}
+            onPress={async () => {
+              try {
+              // Get the dynamic profile ID
+              const profileId = user?.username || 'me';
+
+              // Construct the development URL with profile ID
+              const developmentUrl = `exp://75.102.74.154:8081/--/profile/${profileId}`;
+
+              await Share.share({
+                message: `Check out this profile on NearMe: ${developmentUrl}`,
+              });
+              }
+            catch (error: any) {
+                console.error(error.message);
+              }
+            }}
           >
-            <Text style={styles.topIconText}>⚙️</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.topIconButtonCircle, { backgroundColor: colors.surface, borderColor: colors.border }]} activeOpacity={0.8} onPress={() => alert('Share Profile')}>
-            <Text style={styles.topIconText}>↗️</Text>
+            <AppText variant="bodyMedium">↗️</AppText>
           </TouchableOpacity>
         </View>
       </View>
@@ -46,57 +63,60 @@ export function UserProfileScreen({ navigation }: any) {
       {/* Profile Avatar and Info */}
       <View style={styles.profileHeader}>
         <View style={[styles.avatarFrame, { borderColor: colors.border }]}>
-          <Image 
-            source={{ uri: 'https://static.vecteezy.com/system/resources/previews/077/167/094/non_2x/simple-icon-of-a-person-with-a-round-head-and-rounded-body-vector.jpg' }} 
-            style={styles.avatarImage} 
+          <Image
+            source={{ uri: 'https://static.vecteezy.com/system/resources/previews/077/167/094/non_2x/simple-icon-of-a-person-with-a-round-head-and-rounded-body-vector.jpg' }}
+            style={styles.avatarImage}
           />
         </View>
-        <Text style={[styles.userName, { color: colors.text }]}>{displayName}</Text>
-        <Text style={[styles.userLocation, { color: colors.muted }]}>{user?.username ? `@${user.username}` : 'Erie, United States'}</Text>
+        <AppText variant="headerMedium" style={styles.userName}>{displayName}</AppText>
+        <AppText variant="bodyMedium" color={colors.muted} style={styles.userLocation}>{user?.username ? `@${user.username}` : 'Erie, United States'}</AppText>
       </View>
 
       {/* 3 Quick Navigation Cards (Tickets, Friends, Inbox) */}
       <View style={styles.tripleCardRow}>
         <TouchableOpacity style={[styles.miniCard, { backgroundColor: colors.surface, borderColor: colors.border }]} activeOpacity={0.7} onPress={() => alert('Tickets')}>
-          <Text style={styles.miniCardEmoji}>🎟️</Text>
-          <Text style={[styles.miniCardTitle, { color: colors.text }]}>Tickets</Text>
+          <AppText variant="headerLarge" style={styles.miniCardEmoji}>🎟️</AppText>
+          <AppText variant="bodyMedium" style={styles.miniCardTitle}>Tickets</AppText>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.miniCard, { backgroundColor: colors.surface, borderColor: colors.border }]} activeOpacity={0.7} onPress={() => alert('No Friends 🥀')}>
-          <Text style={styles.miniCardEmoji}>👥</Text>
-          <Text style={[styles.miniCardTitle, { color: colors.text }]}>Friends</Text>
+          <AppText variant="headerLarge" style={styles.miniCardEmoji}>👥</AppText>
+          <AppText variant="bodyMedium" style={styles.miniCardTitle}>Friends</AppText>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.miniCard, { backgroundColor: colors.surface, borderColor: colors.border }]} activeOpacity={0.7} onPress={() => alert('Inbox')}>
-          <Text style={styles.miniCardEmoji}>💬</Text>
-          <Text style={[styles.miniCardTitle, { color: colors.text }]}>Inbox</Text>
+          <AppText variant="headerLarge" style={styles.miniCardEmoji}>💬</AppText>
+          <AppText variant="bodyMedium" style={styles.miniCardTitle}>Inbox</AppText>
         </TouchableOpacity>
       </View>
 
       {/* Host / Create Event Button matching Host Dashboard */}
       <View style={styles.bannerContainer}>
-        <AppButton 
-          title="+  Create Event" 
-          onPress={() => navigation.navigate('CreateEvent')} 
+        <AppButton
+          title="+  Create Event"
+          onPress={() => navigation.navigate('CreateEvent')}
         />
       </View>
 
       {/* Tabs Row (Interested Events vs Attended Events) */}
       <View style={[styles.tabsRow, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity style={styles.activeTabButton} activeOpacity={0.8}>
-          <Text style={[styles.activeTabText, { color: colors.text }]}>Interested Events</Text>
-          <View style={[styles.activeIndicator, { backgroundColor: colors.text }]} />
+        <TouchableOpacity style={styles.tabButton} activeOpacity={0.8} onPress={() => setActiveTab('interested')}>
+          <AppText variant="bodyLarge" color={activeTab === 'interested' ? colors.text : colors.muted} style={activeTab === 'interested' ? styles.activeTabText : styles.inactiveTabText}>Interested Events</AppText>
+          {activeTab === 'interested' && <View style={[styles.activeIndicator, { backgroundColor: colors.text }]} />}
         </TouchableOpacity>
-        <TouchableOpacity style={styles.inactiveTabButton} activeOpacity={0.8}>
-          <Text style={[styles.inactiveTabText, { color: colors.muted }]}>Attended Events</Text>
+        <TouchableOpacity style={styles.tabButton} activeOpacity={0.8} onPress={() => setActiveTab('attended')}>
+          <AppText variant="bodyLarge" color={activeTab === 'attended' ? colors.text : colors.muted} style={activeTab === 'attended' ? styles.activeTabText : styles.inactiveTabText}>Attended Events</AppText>
+          {activeTab === 'attended' && <View style={[styles.activeIndicator, { backgroundColor: colors.text }]} />}
         </TouchableOpacity>
       </View>
 
-      {/* Empty State Section */}
-      <View style={styles.emptyContainer}>
-        <View style={[styles.starCardWrapper, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={styles.emptyGlyph}>✨</Text>
-        </View>
-        <Text style={[styles.emptyText, { color: colors.text }]}>You have no interested events</Text>
-      </View>
+      {/* Interested/Attended Events Section using MyEventsScreen logic */}
+      {activeTab === 'interested' ? (
+        <>
+          <AppText variant="bodyMedium" color={colors.primary} style={styles.section}>♥  Interested · {events?.length || 0} events</AppText>
+          {events?.length ? events.map(event => <EventCard key={event.id} event={event} horizontal onPress={() => onOpenEvent(event)} />) : <AppText variant="bodyMedium" color={colors.muted} style={styles.empty}>No saved events yet. Explore events and tap “I’m interested” to add one here.</AppText>}
+        </>
+      ) : (
+        <AppText variant="bodyMedium" color={colors.muted} style={styles.empty}>No attended events yet.</AppText>
+      )}
 
     </ScrollView>
   );
@@ -108,25 +128,22 @@ const styles = StyleSheet.create({
   topIconButton: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 24, borderWidth: 1, flexDirection: 'row', alignItems: 'center' },
   rightActionIcons: { flexDirection: 'row', gap: 10 },
   topIconButtonCircle: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  topIconText: { fontSize: 13, fontWeight: '700' },
+  topIconText: { fontWeight: '700' },
   profileHeader: { alignItems: 'center', marginBottom: 24 },
   avatarImage: { width: 94, height: 94, borderRadius: 47 },
   avatarFrame: { borderWidth: 2, borderRadius: 51, padding: 3, marginBottom: 12 },
-  userName: { fontSize: 22, fontWeight: '900', marginBottom: 4, letterSpacing: 0.2 },
-  userLocation: { fontSize: 13, fontWeight: '500' },
+  userName: { fontWeight: '900', marginBottom: 4, letterSpacing: 0.2 },
+  userLocation: { fontWeight: '500' },
   tripleCardRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
   miniCard: { flex: 1, height: 105, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
   miniCardEmoji: { fontSize: 26 },
-  miniCardTitle: { fontSize: 13, fontWeight: '800' },
+  miniCardTitle: { fontWeight: '800' },
   bannerContainer: { marginBottom: 28 },
-  tabsRow: { flexDirection: 'row', borderBottomWidth: 1, marginBottom: 40, gap: 32 },
-  activeTabButton: { paddingBottom: 12, position: 'relative' },
-  activeTabText: { fontSize: 15, fontWeight: '800' },
+  tabsRow: { flexDirection: 'row', borderBottomWidth: 1, marginBottom: 20, gap: 32 },
+  tabButton: { paddingBottom: 12, position: 'relative' },
+  activeTabText: { fontWeight: '800' },
   activeIndicator: { position: 'absolute', bottom: -1, left: 0, right: 0, height: 3, borderRadius: 2 },
-  inactiveTabButton: { paddingBottom: 12 },
-  inactiveTabText: { fontSize: 15, fontWeight: '700' },
-  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 10, gap: 16 },
-  starCardWrapper: { width: 76, height: 76, borderRadius: 38, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  emptyGlyph: { fontSize: 32 },
-  emptyText: { fontSize: 16, fontWeight: '800' },
+  inactiveTabText: { fontWeight: '700' },
+  section: { fontWeight: '800', marginBottom: 12 },
+  empty: { lineHeight: 19, marginTop: 12 },
 });

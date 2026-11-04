@@ -10,6 +10,24 @@ import { SignupScreen } from './src/screens/auth/SignupScreen';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 
+// App Linking Map
+const linkingConfig: any = {
+  prefixes: ['https://nearme.com', 'nearme://'], 
+  config: {
+    screens: {
+      // If the app is authenticated, links fall through to AppNavigator.
+      // We map 'profile/:id' directly to whatever screen name you used inside AppNavigator.
+      AppNavigator: {
+        screens: {
+          Profile: 'profile/:id', // Matches: ://myapp.com
+          EventDetails: 'event/:id', // Optional extra: matches ://myapp.com
+        }
+      }
+    }
+  }
+};
+
+
 function MainApp() {
   // This controls the login/signup flow versus the authenticated event screens.
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -33,7 +51,7 @@ function MainApp() {
   };
 
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer theme={navTheme} linking={linkingConfig}>
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
         <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
         {!isLoggedIn ? (
