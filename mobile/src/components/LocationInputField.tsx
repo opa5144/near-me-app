@@ -5,15 +5,16 @@ import { fetchPlaceSuggestions, fetchPlaceDetails, createSessionToken, PlaceSugg
 import { useTheme } from '../context/ThemeContext';
 
 interface LocationComponentProps {
+  initialValue?: string;
   onVenueSelected: (venue: EventPlace) => void;
   // Let a parent discard its old venue as soon as the search text changes.
   onSelectionCleared?: () => void;
 }
 
-export function LocationComponent({ onVenueSelected, onSelectionCleared }: LocationComponentProps) {
+export function LocationComponent({ initialValue, onVenueSelected, onSelectionCleared }: LocationComponentProps) {
   const { colors } = useTheme();
   // State controls the search field, suggestion list and loading indicator.
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialValue || '');
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   // Keep one Maps session token for a search/selection cycle without rerendering.

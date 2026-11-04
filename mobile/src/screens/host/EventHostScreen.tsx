@@ -1,16 +1,21 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { EventItem } from '../../data/events';
+import { EventCard } from '../../components/EventCard';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { AppButton } from '../../components/AppButton';
+import { AppText } from '../../components/AppText';
 import { useTheme } from '../../context/ThemeContext';
+import { useEvents } from '../../context/EventsContext';
 
-// AppNavigator supplies only events owned by the signed-in host from /events/mine.
-// Navigation and creation stay in the parent so every tab shares the same saved data.
 export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateStore }: { events: EventItem[]; onOpenEvent: (event: EventItem) => void; onCreateEvent: () => void; onCreateStore: () => void }) {
   const { colors } = useTheme();
-  // This count comes from real owned records; attendance and page views are not tracked.
+  const { viewedEventIds, interestedEventIds } = useEvents();
+
   const totalEvents = events.length;
+  const hostEventIds = events.map(e => e.id);
+  const totalUniqueViews = viewedEventIds.filter(id => hostEventIds.includes(id)).length;
+  const totalInterested = interestedEventIds.filter(id => hostEventIds.includes(id)).length;
   
   return (
     <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
@@ -21,39 +26,50 @@ export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateSt
         <AppButton title="+  Create Store" onPress={onCreateStore} style={styles.halfButton} />
       </View>
 
-    {/* Only server-confirmed owned events; audience/views are not tracked. */}
-      <Text style={[styles.section, { color: colors.text }]}>Overview</Text>
+      <AppText variant="bodyLarge" style={[styles.section, { color: colors.text }]}>Overview</AppText>
       <View style={styles.metricsGrid}>
         <View style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={[styles.valueToken, { color: colors.text }]}>{totalEvents}</Text>
-          <Text style={[styles.labelToken, { color: colors.muted }]}>TOTAL EVENTS</Text>
+          <AppText variant="headerMedium" style={styles.valueToken}>{totalEvents}</AppText>
+          <AppText variant="bodyMedium" color={colors.muted} style={styles.labelToken}>TOTAL EVENTS</AppText>
+        </View>
+        <View style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <AppText variant="headerMedium" style={styles.valueToken}>{totalUniqueViews}</AppText>
+          <AppText variant="bodyMedium" color={colors.muted} style={styles.labelToken}>UNIQUE VIEWS</AppText>
+        </View>
+        <View style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <AppText variant="headerMedium" style={styles.valueToken}>{totalInterested}</AppText>
+          <AppText variant="bodyMedium" color={colors.muted} style={styles.labelToken}>INTERESTED</AppText>
         </View>
       </View>
 
-    {/* Your Events Section */}
-      <Text style={[styles.section, { color: colors.text }]}>Your Events</Text>
-      {events.length ? events.map(event => (
-        <TouchableOpacity key={event.id} style={[styles.eventRow, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => onOpenEvent(event)} activeOpacity={0.7}>
-          <View style={styles.rowMetadata}><Text style={[styles.rowTitle, { color: colors.text }]} numberOfLines={1}>{event.title}</Text><Text style={[styles.rowSub, { color: colors.muted }]}>📆 {event.date || 'Upcoming'}</Text></View>
-        </TouchableOpacity>
-      )) : <Text style={[styles.empty, { color: colors.muted }]}>You have no events to display.</Text>}
+      <AppText variant="bodyLarge" style={[styles.section, { color: colors.text }]}>Your Events</AppText>
+      {events.length ? events.map(event => {
+        const viewCount = viewedEventIds.includes(event.id) ? 1 : 0;
+        const interestedCount = interestedEventIds.includes(event.id) ? 1 : 0;
+
+        return (
+          <EventCard
+            key={event.id}
+            event={event}
+            horizontal
+            views={viewCount}
+            interested={interestedCount}
+            onPress={() => onOpenEvent(event)}
+          />
+        );
+      }) : <AppText variant="bodyMedium" color={colors.muted} style={styles.empty}>You have no events to display.</AppText>}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 24, flexGrow: 1 },
-  metricsGrid: { flexDirection: 'row', gap: 12, marginBottom: 16 },
-  metricCard: { flex: 1, borderRadius: 16, borderWidth: 1, padding: 14 },
-  valueToken: { fontSize: 22, fontWeight: '900' },
-  labelToken: { fontSize: 10, fontWeight: '700', marginTop: 2 },
+  metricsGrid: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  metricCard: { flex: 1, borderRadius: 16, borderWidth: 1, padding: 12, alignItems: 'center' },
+  valueToken: { fontWeight: '900', fontSize: 18 },
+  labelToken: { fontSize: 9, fontWeight: '700', marginTop: 2, textAlign: 'center' },
   actionRow: { flexDirection: 'row', gap: 10, marginBottom: 22 },
   halfButton: { flex: 1 },
-  section: { fontSize: 14, fontWeight: '900', marginBottom: 12 },
-  eventRow: { flexDirection: 'row', borderRadius: 16, padding: 14, alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, marginBottom: 10 },
-  rowMetadata: { flex: 1, marginRight: 12 },
-  rowTitle: { fontSize: 13, fontWeight: '800' },
-  rowSub: { fontSize: 11, marginTop: 4 },
-  liveBadge: { fontSize: 10, fontWeight: '900', color: '#10B981', backgroundColor: '#10B98115', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, overflow: 'hidden' },
-  empty: { fontSize: 12, lineHeight: 19, marginTop: 4 },
+  section: { fontWeight: '900', marginBottom: 12, marginTop: 4 },
+  empty: { lineHeight: 19, marginTop: 4 },
 });

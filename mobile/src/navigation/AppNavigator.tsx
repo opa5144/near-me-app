@@ -16,7 +16,9 @@ import { SearchScreen } from '../screens/event/SearchScreen';
 import { MyEventsScreen } from '../screens/event/MyEventsScreen';
 import { EventDetailsScreen } from '../screens/event/EventDetailsScreen';
 import { EventHostScreen } from '../screens/host/EventHostScreen';
+import { EventHostDetailsScreen } from '../screens/host/EventHostDetailsScreen';
 import { CreateEventScreen } from '../screens/host/CreateEventScreen';
+import { EditEventScreen } from '../screens/host/EditEventScreen';
 import { CreateStoreScreen } from '../screens/host/CreateStoreScreen';
 import { UserProfileScreen } from '../screens/settings/UserProfileScreen';
 import { SettingsScreen } from '../screens/settings/SettingsScreen';
@@ -33,6 +35,8 @@ import { AboutScreen } from '../screens/settings/AboutScreen';
 export type RootStackParamList = {
   MainTabs: undefined;
   EventDetails: { eventId: string };
+  EventHostDetail: { eventId: string };
+  EditEvent: { eventId: string };
 };
 
 const Tab = createBottomTabNavigator();
@@ -118,20 +122,33 @@ function HostNavigator() {
   const { colors } = useTheme();
   // The protected /events/mine endpoint uses the signed-in session to select this
   // host's events. It is a different list from the public Home/Search events.
-  const { myEvents, addCreatedEvent } = useEvents();
+  const { myEvents, addCreatedEvent, refreshEvents } = useEvents();
   return (
     <HostStack.Navigator screenOptions={{ headerShown: false,
       contentStyle: { backgroundColor: colors.background }, animation: 'fade' }}>
       <HostStack.Screen name="HostHome">
         {props => <EventsStatus><EventHostScreen
           events={myEvents}
-          onOpenEvent={event => props.navigation.navigate('EventDetails', { eventId: event.id })}
+          onOpenEvent={event => props.navigation.navigate('EventHostDetail', { eventId: event.id })}
           onCreateEvent={() => props.navigation.navigate('CreateEvent')}
           onCreateStore={() => props.navigation.navigate('CreateStore')}
         /></EventsStatus>}
       </HostStack.Screen>
       <HostStack.Screen name="CreateEvent">
         {props => <CreateEventScreen onCreated={addCreatedEvent} onBack={() => props.navigation.goBack()} />}
+      </HostStack.Screen>
+      <HostStack.Screen name="EditEvent">
+        {props => {
+          const route = props.route as { params?: { eventId: string } };
+          const eventId = route.params?.eventId ?? '';
+          return (
+            <EditEventScreen
+              eventId={eventId}
+              onUpdated={() => { void refreshEvents(); }}
+              onBack={() => props.navigation.goBack()}
+            />
+          );
+        }}
       </HostStack.Screen>
       <HostStack.Screen name="CreateStore">
         {props => <CreateStoreScreen {...props} onBack={() => props.navigation.goBack()} />}
@@ -172,7 +189,7 @@ function TabNavigator() {
 // This route handles fetching and errors so EventDetailsScreen only displays a valid event.
 function EventDetailsRoute({ route, navigation }: NativeStackScreenProps<RootStackParamList, 'EventDetails'>) {
   const { colors } = useTheme();
-  const { interestedEventIds, toggleInterested } = useEvents();
+  const { interestedEventIds, toggleInterested, recordView } = useEvents();
   const eventId = route.params?.eventId;
   const [event, setEvent] = useState<EventItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -194,7 +211,13 @@ function EventDetailsRoute({ route, navigation }: NativeStackScreenProps<RootSta
     }
     // Load the latest saved record rather than trusting a copy passed from a list.
     void fetchEvent(eventId)
-      .then(found => { if (active) setEvent(found); })
+      .then(found => {
+        if (active) {
+          setEvent(found);
+          // Log unique view for host analytics when screen successfully loads
+          if (recordView) void recordView(found.id);
+        }
+      })
       .catch((reason: unknown) => {
         if (!active) return;
         // Invalid/removed IDs get a missing-event message; other failures can be retried.
@@ -205,7 +228,7 @@ function EventDetailsRoute({ route, navigation }: NativeStackScreenProps<RootSta
       })
       .finally(() => { if (active) setIsLoading(false); });
     return () => { active = false; };
-  }, [eventId, attempt]);
+  }, [eventId, attempt, recordView]);
 
   const goBack = () => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MainTabs');
   // Do not render fields such as title/category until the request provides an event.
@@ -227,6 +250,71 @@ function EventDetailsRoute({ route, navigation }: NativeStackScreenProps<RootSta
     onToggleInterested={() => toggleInterested(event.id)} onBack={goBack} /></ScreenContainer>;
 }
 
+// EventHostDetailsRoute for managing host events
+function EventHostDetailsRoute({ route, navigation }: NativeStackScreenProps<RootStackParamList, 'EventHostDetail'>) {
+  const { colors } = useTheme();
+  const eventId = route.params?.eventId;
+  const [event, setEvent] = useState<EventItem | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    setEvent(null);
+    setError(null);
+    setIsLoading(true);
+    if (!eventId) {
+      setError('Event not found.');
+      setIsLoading(false);
+      return () => { active = false; };
+    }
+    void fetchEvent(eventId)
+      .then(found => { if (active) setEvent(found); })
+      .catch((reason: unknown) => {
+        if (!active) return;
+        const status = isAxiosError(reason) ? reason.response?.status : undefined;
+        setError(status === 400 || status === 404
+          ? 'Event not found. It may have been removed.'
+          : 'Could not load this event. Check your connection and try again.');
+      })
+      .finally(() => { if (active) setIsLoading(false); });
+    return () => { active = false; };
+  }, [eventId, attempt]);
+
+  const goBack = () => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MainTabs');
+
+  if (isLoading || !event) {
+    return (
+      <ScreenContainer>
+        <View style={styles.empty}>
+          {isLoading ? (
+            <ActivityIndicator size="large" color={colors.primary} />
+          ) : (
+            <>
+              <Text accessibilityRole="alert" style={[styles.message, { color: colors.text }]}>{error || 'Event not found.'}</Text>
+              <Pressable onPress={() => setAttempt(current => current + 1)} style={styles.retry}>
+                <Text style={{ color: colors.primary }}>Retry</Text>
+              </Pressable>
+            </>
+          )}
+          <Pressable onPress={goBack} style={styles.retry}>
+            <Text style={{ color: colors.primary }}>Back to Dashboard</Text>
+          </Pressable>
+        </View>
+      </ScreenContainer>
+    );
+  }
+
+  return (
+    <EventHostDetailsScreen
+      event={event}
+      onEditEvent={() => navigation.navigate('EditEvent', { eventId: event.id })}
+      onBack={goBack}
+    />
+  );
+}
+
 // Details sits above the tab navigator so it can open from Home, Search, Plans, or Host.
 function RootNavigator() {
   const { colors } = useTheme();
@@ -235,6 +323,20 @@ function RootNavigator() {
       contentStyle: { backgroundColor: colors.background }, animation: 'fade' }}>
       <RootStack.Screen name="MainTabs" component={TabNavigator} />
       <RootStack.Screen name="EventDetails" component={EventDetailsRoute} />
+      <RootStack.Screen name="EventHostDetail" component={EventHostDetailsRoute} />
+      <RootStack.Screen name="EditEvent">
+        {props => {
+          const route = props.route as { params?: { eventId: string } };
+          const eventId = route.params?.eventId ?? '';
+          return (
+            <EditEventScreen
+              eventId={eventId}
+              onUpdated={() => {}}
+              onBack={() => props.navigation.goBack()}
+            />
+          );
+        }}
+      </RootStack.Screen>
     </RootStack.Navigator>
   );
 }

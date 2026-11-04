@@ -1,10 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { EventItem } from '../data/events';
+import { AppText } from './AppText';
 import { useTheme } from '../context/ThemeContext';
 
 // Reused by event lists. The parent supplies the record and decides where a tap navigates.
-export function EventCard({ event, onPress, horizontal = false }: { event: EventItem; onPress: () => void; horizontal?: boolean }) {
+export function EventCard({ event, onPress, horizontal = false, views,interested }: { 
+  event: EventItem; 
+  onPress: () => void; 
+  horizontal?: boolean;
+  views?: number;
+  interested?: number;
+}) {
   const { colors } = useTheme();
   // Use the persisted image URL, falling back to the event emoji if loading fails.
   const [imageFailed, setImageFailed] = useState(false);
@@ -20,17 +27,27 @@ export function EventCard({ event, onPress, horizontal = false }: { event: Event
         ) : (
           <Text style={styles.emoji}>{event.emoji}</Text>
         )}
-        <View style={[styles.artBadge, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.artBadgeText, { color: colors.text }]}>{event.category}</Text>
-        </View>
+        {!horizontal && (
+          <View style={[styles.artBadge, { backgroundColor: colors.surface }]}>
+            <AppText variant="bodyMedium" style={[styles.artBadgeText, { color: colors.text }]}>{event.category}</AppText>
+          </View>
+        )}
       </View>
       <View style={styles.details}>
         <View style={styles.titleRow}>
-          <Text style={[styles.title, { color: colors.text }]} numberOfLines={2}>{event.title}</Text>
-          <Text style={[styles.price, { color: colors.primary }]}>{event.price}</Text>
+          <AppText variant="bodyLarge" style={[styles.title, { color: colors.text }]} numberOfLines={horizontal ? 1 : 2}>{event.title}</AppText>
+          {event.price ? <AppText variant="bodyMedium" style={[styles.price, { color: colors.primary }]}>{event.price}</AppText> : null}
         </View>
-        <Text style={[styles.meta, { color: colors.primary }]}>{event.date} · {event.time}</Text>
-        <Text style={[styles.venue, { color: colors.muted }]} numberOfLines={1}>⌖ {event.venue}</Text>
+        <AppText variant="bodyMedium" style={[styles.meta, { color: colors.primary }]}>{event.date} · {event.time}</AppText>
+        <AppText variant="bodyMedium" style={[styles.venue, { color: colors.muted }]} numberOfLines={1}>⌖ {event.venue}</AppText>
+        
+        {/* Host dashboard metrics indicators */}
+        {(views !== undefined || interested !== undefined) && (
+          <View style={styles.metricsRow}>
+            {views !== undefined && <AppText variant="bodyMedium" color={colors.muted} style={styles.metricText}>👁️ {views} views</AppText>}
+            {interested !== undefined && <AppText variant="bodyMedium" color={colors.muted} style={styles.metricText}>♥ {interested} interested</AppText>}
+          </View>
+        )}
       </View>
     </Pressable>
   );
@@ -51,4 +68,6 @@ const styles = StyleSheet.create({
   price: { fontSize: 10, fontWeight: '800' },
   meta: { fontSize: 10, marginTop: 5 },
   venue: { fontSize: 10, marginTop: 4 },
+  metricsRow: { flexDirection: 'row', gap: 10, marginTop: 6 },
+  metricText: { fontSize: 10 },
 });

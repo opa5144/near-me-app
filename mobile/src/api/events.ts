@@ -1,5 +1,6 @@
 import { api } from './client';
 import type { EventItem } from '../data/events';
+export type { EventItem };
 
 // Creation sends canonical values, not the formatted strings shown in event cards.
 // hostId is deliberately absent: the backend derives it from the Bearer session.
@@ -18,6 +19,8 @@ export interface CreateEventRequest {
   longitude?: number;
   imageBase64?: string; // Raw JPEG base64; the device-local preview URI is not uploaded.
 }
+
+export type UpdateEventRequest = Partial<CreateEventRequest>;
 
 // Home/Search share this public list; the backend formats each EventItem response.
 export async function fetchEvents(): Promise<EventItem[]> {
@@ -39,4 +42,11 @@ export async function fetchEvent(id: string): Promise<EventItem> {
 export async function createEvent(input: CreateEventRequest): Promise<EventItem> {
   const response = await api.post<{ event: EventItem }>('/events', input, { timeout: 30000 });
   return response.data.event;
+}
+
+// Update an existing event record by ID with optional payload fields.
+export async function updateEvent(id: string, input: UpdateEventRequest): Promise<EventItem> {
+  const response = await api.patch<{ event?: EventItem } | EventItem>('/events/' + encodeURIComponent(id), input, { timeout: 30000 });
+  const data = response.data;
+  return ('event' in data && data.event) ? data.event : (data as EventItem);
 }

@@ -14,6 +14,8 @@ interface EventsContextValue {
   addCreatedEvent: (event: EventItem) => void;
   interestedEventIds: string[];
   toggleInterested: (id: string) => void;
+  viewedEventIds: string[];
+  recordView: (id: string) => Promise<void>;
 }
 
 const EventsContext = createContext<EventsContextValue | undefined>(undefined);
@@ -33,6 +35,7 @@ export function EventsProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [interestedEventIds, setInterestedEventIds] = useState<string[]>([]);
+  const [viewedEventIds, setViewedEventIds] = useState<string[]>([]);
   const mounted = useRef(false);
   // requestId rejects older refreshes; mutationVersion rejects reads that began
   // before a successful creation changed the local lists.
@@ -96,9 +99,14 @@ export function EventsProvider({ children }: { children: ReactNode }) {
       : [...current, id]);
   }, []);
 
+  // Track unique views per session
+  const recordView = useCallback(async (id: string) => {
+    setViewedEventIds(current => current.includes(id) ? current : [...current, id]);
+  }, []);
+
   return (
     <EventsContext.Provider value={{ events, myEvents, isLoading, error, refreshEvents,
-      addCreatedEvent, interestedEventIds, toggleInterested }}>
+      addCreatedEvent, interestedEventIds, toggleInterested, viewedEventIds, recordView }}>
       {children}
     </EventsContext.Provider>
   );
