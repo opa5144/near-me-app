@@ -82,4 +82,39 @@ router.post('/', requireAuth, async (req, res) => {
   }
 });
 
+// ─── ADDED: PATCH endpoint to update existing events ─────────────────────────
+router.patch('/:id', requireAuth, async (req, res) => {
+  if (!validId(req.params.id)) return res.status(400).json({ message: 'Invalid event ID.' });
+  try {
+    const event = await Event.findById(req.params.id);
+    if (!event) return res.status(404).json({ message: 'Event not found.' });
+    if (String(event.hostId) !== String(req.userId)) {
+      return res.status(403).json({ message: 'Unauthorized to edit this event.' });
+    }
+
+    const fields = parseCreateEvent(req.body);
+    const updateData = { ...fields, hostId: req.userId };
+    
+    if (!req.body.imageBase64 && !updateData.imageData) {
+      delete updateData.imageData;
+      delete updateData.imageMimeType;
+    }
+
+    const updated = await Event.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
+    
+    // Updated to include a confirmation message:
+    return res.json({ 
+      message: 'Event updated successfully!', 
+      event: toEventItem(updated, apiBase(req)) 
+    });
+  } catch (err) {
+    if (err instanceof EventInputError) return res.status(err.status).json({ message: err.message });
+    if (err.name === 'ValidationError') {
+      return res.status(400).json({ message: 'Please check your event details.' });
+    }
+    console.error('Event update failed:', err.name, err);
+    return res.status(500).json({ message: 'Unable to update your event. Please try again.' });
+  }
+});
+
 module.exports = router;
