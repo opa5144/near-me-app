@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, View, KeyboardAvoidingView, Platform, Alert, Image, TouchableOpacity } from 'react-native';
+import { ScrollView, StyleSheet, TextInput, View, KeyboardAvoidingView, Platform, Alert, Image, TouchableOpacity } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { isAxiosError } from 'axios';
+import { Ionicons } from '@expo/vector-icons';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { AppButton } from '../../components/AppButton';
+import { AppText } from '../../components/AppText';
 import { DatePickerField } from '../../components/DatePickerField';
 import { TimePickerField } from '../../components/TimePickerField';
 import { PriceInputField } from '../../components/PriceInputField';
@@ -242,18 +244,18 @@ export function CreateEventScreen({ onBack, onCreated }: Props) {
   return (
     <KeyboardAvoidingView style={[styles.container, { backgroundColor: colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <Text onPress={handleBack} style={[styles.backLink, { color: colors.primary }]}>‹  Back</Text>
+        <AppText onPress={handleBack} style={[styles.backLink, { color: colors.primary }]}>‹  Back</AppText>
         <ScreenHeader eyebrow="Event Blueprint" title="Create Event" subtitle="Tell us about your event details and entry rules." />
         
         {/* Title Field (Mandatory) */}
         <View style={styles.formGroup}>
-          <Text style={[styles.fieldLabel, { color: colors.text }]}>Event Title*</Text>
+          <AppText style={[styles.fieldLabel, { color: colors.text }]}>Event Title*</AppText>
           <TextInput value={title} onChangeText={setTitle} maxLength={150} placeholder="e.g., Hardcore Synthwave Experience" placeholderTextColor={colors.muted} style={[styles.fieldInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} />
         </View>
 
         {/* Description Field (Mandatory) */}
         <View style={styles.formGroup}>
-          <Text style={[styles.fieldLabel, { color: colors.text }]}>Description*</Text>
+          <AppText style={[styles.fieldLabel, { color: colors.text }]}>Description*</AppText>
           <TextInput
             value={description}
             onChangeText={setDescription}
@@ -268,7 +270,7 @@ export function CreateEventScreen({ onBack, onCreated }: Props) {
 
         {/* Category Selection (Wrapped) */}
         <View style={styles.formGroup}>
-          <Text style={[styles.fieldLabel, { color: colors.text }]}>Category*</Text>
+          <AppText style={[styles.fieldLabel, { color: colors.text }]}>Category*</AppText>
           <View style={styles.chipsContainer}>
             {eventCategories.map(cat => (
               <TouchableOpacity
@@ -277,14 +279,14 @@ export function CreateEventScreen({ onBack, onCreated }: Props) {
                 activeOpacity={0.7}
                 style={[styles.chip, { backgroundColor: colors.surface, borderColor: colors.border }, selectedCategory === cat && { backgroundColor: colors.primary, borderColor: colors.primary }]}
               >
-                <Text style={[styles.chipText, { color: colors.text }, selectedCategory === cat && styles.activeChipText]}>{cat}</Text>
+                <AppText style={[styles.chipText, { color: colors.text }, selectedCategory === cat && styles.activeChipText]}>{cat}</AppText>
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
         {/* Modular Date Picker Component with Validation */}
-        <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 10 }}>Times use your device time zone: {timeZone || "Unavailable"}</Text>
+        <AppText style={{ color: colors.muted, fontSize: 12, marginBottom: 10 }}>Times use your device time zone: {timeZone || "Unavailable"}</AppText>
         <DatePickerField label="Event Date*" date={date} onDateChange={handleDateChange} minimumDate={todayString} />
 
         {/* Modular Time Picker Components with Validation & Contextual Guidance */}
@@ -297,15 +299,15 @@ export function CreateEventScreen({ onBack, onCreated }: Props) {
           {/* Contextual Visual Badges */}
           {isInvalidDuration ? (
             <View style={styles.badgeContainer}>
-              <Text style={styles.warningBadgeText}>
+              <AppText style={styles.warningBadgeText}>
                 ⚠️ Event duration must be at least 30 minutes.
-              </Text>
+              </AppText>
             </View>
           ) : isOvernight ? (
             <View style={styles.badgeContainer}>
-              <Text style={[styles.overnightBadgeText, { color: colors.primary }]}>
+              <AppText style={[styles.overnightBadgeText, { color: colors.primary }]}>
                 🌙 Ends the following day ({getNextDayFormatted(date)})
-              </Text>
+              </AppText>
             </View>
           ) : null}
         </View>
@@ -318,24 +320,24 @@ export function CreateEventScreen({ onBack, onCreated }: Props) {
 
         {/* Upload Banner Image */}
         <View style={styles.formGroup}>
-          <Text style={[styles.fieldLabel, { color: colors.text }]}>Upload Banner Image</Text>
-          {imageBusy && <Text style={{ color: colors.muted, marginBottom: 8 }}>Preparing banner...</Text>}
+          <AppText style={[styles.fieldLabel, { color: colors.text }]}>Upload Banner Image</AppText>
+          {imageBusy && <AppText style={{ color: colors.muted, marginBottom: 8 }}>Preparing banner...</AppText>}
           {bannerImage ? (
             <View style={[styles.imagePreviewContainer, { borderColor: colors.border }]}>
               <Image source={{ uri: bannerImage }} style={styles.bannerImagePreview} />
               <View style={styles.actionRow}>
                 <TouchableOpacity onPress={handlePickImage} disabled={isSaving || imageBusy || completedRef.current} activeOpacity={0.8} style={styles.changeBtn}>
-                  <Text style={styles.actionBtnText}>Change</Text>
+                  <AppText style={styles.actionBtnText}>Change</AppText>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={handleRemoveImage} disabled={isSaving || imageBusy || completedRef.current} activeOpacity={0.8} style={styles.removeBtn}>
-                  <Text style={styles.removeBtnText}>Remove</Text>
+                  <AppText style={styles.removeBtnText}>Remove</AppText>
                 </TouchableOpacity>
               </View>
             </View>
           ) : (
             <TouchableOpacity onPress={handlePickImage} disabled={isSaving || imageBusy || completedRef.current} activeOpacity={0.8} style={[styles.imagePlaceholderFrame, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Text style={styles.placeholderGlyph}>🖼️</Text>
-              <Text style={[styles.placeholderText, { color: colors.muted }]}>Tap to select and crop image (optional)</Text>
+              <Ionicons name="image-outline" size={26} color={colors.muted} style={{ marginBottom: 4 }} />
+              <AppText style={[styles.placeholderText, { color: colors.muted }]}>Tap to select and crop image (optional)</AppText>
             </TouchableOpacity>
           )}
         </View>
@@ -364,7 +366,6 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 11, fontWeight: '700' },
   activeChipText: { color: '#FFFFFF' },
   imagePlaceholderFrame: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 8, height: 100, alignItems: 'center', justifyContent: 'center' },
-  placeholderGlyph: { fontSize: 24, marginBottom: 4 },
   placeholderText: { fontSize: 12, fontWeight: '600' },
   imagePreviewContainer: { position: 'relative', height: 140, borderRadius: 12, overflow: 'hidden', borderWidth: 1, backgroundColor: '#000' },
   bannerImagePreview: { width: '100%', height: '100%', resizeMode: 'cover', opacity: 0.9 },

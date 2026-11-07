@@ -120,7 +120,14 @@ function toEventItem(event, apiBaseUrl) {
   const priceAmount = Number(event.price);
   return {
     id: String(event._id),
-    hostId: String(event.hostId),
+    // For hostId, return an object with user details if populated, otherwise just the ID string. 
+    hostId: event.hostId && typeof event.hostId === 'object' ? {
+      _id: String(event.hostId._id),
+      username: event.hostId.username,
+      firstName: event.hostId.firstName,
+      lastName: event.hostId.lastName,
+    } : String(event.hostId),
+
     title: event.title,
     category: event.category,
     date: dateFormat.format(start),

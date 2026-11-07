@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View, Share, TouchableOpacity, StyleSheet, Image, ScrollView } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { AppButton } from '../../components/AppButton';
 import { AppText } from '../../components/AppText';
@@ -32,7 +33,8 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
       {/* Top Action Buttons (Edit, Settings, Share) */}
       <View style={styles.topActionsRow}>
         <TouchableOpacity style={[styles.topIconButton, { backgroundColor: colors.surface, borderColor: colors.border }]} activeOpacity={0.8} onPress={() => alert('Edit Profile')}>
-          <AppText variant="bodyMedium" style={styles.topIconText}>✏️  Edit</AppText>
+          <Ionicons name="create-outline" size={16} color={colors.text} style={styles.editIcon} />
+          <AppText variant="bodyMedium" style={styles.topIconText}>Edit</AppText>
         </TouchableOpacity>
         <View style={styles.rightActionIcons}>
           {/* Settings Button */}
@@ -41,7 +43,7 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
             activeOpacity={0.8}
             onPress={() => navigation.navigate('Settings')}
           >
-            <AppText variant="bodyMedium">⚙️</AppText>
+            <Ionicons name="settings-outline" size={19} color={colors.text} />
           </TouchableOpacity>
 
           {/* Share Button */}
@@ -50,22 +52,22 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
             activeOpacity={0.8}
             onPress={async () => {
               try {
-              // Get the dynamic profile ID
-              const profileId = user?.username || 'me';
+                // Get the dynamic profile ID
+                const profileId = user?.username || 'me';
 
-              // Construct the development URL with profile ID
-              const developmentUrl = `exp://75.102.74.154:8081/--/profile/${profileId}`;
+                // Construct the development URL with profile ID
+                const developmentUrl = `exp://75.102.74.154:8081/--/profile/${profileId}`;
 
-              await Share.share({
-                message: `Check out this profile on NearMe: ${developmentUrl}`,
-              });
+                await Share.share({
+                  message: `Check out this profile on NearMe: ${developmentUrl}`,
+                });
               }
-            catch (error: any) {
+              catch (error: any) {
                 console.error(error.message);
               }
             }}
           >
-            <AppText variant="bodyMedium">↗️</AppText>
+            <Ionicons name="share-outline" size={19} color={colors.text} />
           </TouchableOpacity>
         </View>
       </View>
@@ -85,15 +87,15 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
       {/* 3 Quick Navigation Cards (Tickets, Friends, Inbox) */}
       <View style={styles.tripleCardRow}>
         <TouchableOpacity style={[styles.miniCard, { backgroundColor: colors.surface, borderColor: colors.border }]} activeOpacity={0.7} onPress={() => alert('Tickets')}>
-          <AppText variant="headerLarge" style={styles.miniCardEmoji}>🎟️</AppText>
+          <Ionicons name="ticket-outline" size={26} color={colors.primary} />
           <AppText variant="bodyMedium" style={styles.miniCardTitle}>Tickets</AppText>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.miniCard, { backgroundColor: colors.surface, borderColor: colors.border }]} activeOpacity={0.7} onPress={() => alert('No Friends 🥀')}>
-          <AppText variant="headerLarge" style={styles.miniCardEmoji}>👥</AppText>
+          <Ionicons name="people-outline" size={26} color={colors.primary} />
           <AppText variant="bodyMedium" style={styles.miniCardTitle}>Friends</AppText>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.miniCard, { backgroundColor: colors.surface, borderColor: colors.border }]} activeOpacity={0.7} onPress={() => alert('Inbox')}>
-          <AppText variant="headerLarge" style={styles.miniCardEmoji}>💬</AppText>
+          <Ionicons name="chatbubble-ellipses-outline" size={26} color={colors.primary} />
           <AppText variant="bodyMedium" style={styles.miniCardTitle}>Inbox</AppText>
         </TouchableOpacity>
       </View>
@@ -121,7 +123,12 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
       {/* Interested/Attended Events Section using MyEventsScreen logic */}
       {activeTab === 'interested' ? (
         <>
-          <AppText variant="bodyMedium" color={colors.primary} style={styles.section}>♥  Interested · {events?.length || 0} events</AppText>
+          <View style={styles.sectionHeaderRow}>
+            <Ionicons name="heart" size={16} color="#E53935" />
+            <AppText variant="bodyMedium" color={colors.primary} style={styles.section}>
+              Interested · {events?.length || 0} events
+            </AppText>
+          </View>
           {events?.length ? events.map(event => <EventCard key={event.id} event={event} horizontal onPress={() => onOpenEvent(event)} />) : <AppText variant="bodyMedium" color={colors.muted} style={styles.empty}>No saved events yet. Explore events and tap “I’m interested” to add one here.</AppText>}
         </>
       ) : (
@@ -135,7 +142,8 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
 const styles = StyleSheet.create({
   container: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40, flexGrow: 1 },
   topActionsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  topIconButton: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 24, borderWidth: 1, flexDirection: 'row', alignItems: 'center' },
+  topIconButton: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 24, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  editIcon: { marginRight: 2 },
   rightActionIcons: { flexDirection: 'row', gap: 10 },
   topIconButtonCircle: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   topIconText: { fontWeight: '700' },
@@ -146,7 +154,6 @@ const styles = StyleSheet.create({
   userLocation: { fontWeight: '500' },
   tripleCardRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
   miniCard: { flex: 1, height: 105, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
-  miniCardEmoji: { fontSize: 26 },
   miniCardTitle: { fontWeight: '800' },
   bannerContainer: { marginBottom: 28 },
   tabsRow: { flexDirection: 'row', borderBottomWidth: 1, marginBottom: 20, gap: 32 },
@@ -154,6 +161,7 @@ const styles = StyleSheet.create({
   activeTabText: { fontWeight: '800' },
   activeIndicator: { position: 'absolute', bottom: -1, left: 0, right: 0, height: 3, borderRadius: 2 },
   inactiveTabText: { fontWeight: '700' },
-  section: { fontWeight: '800', marginBottom: 12 },
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+  section: { fontWeight: '800' },
   empty: { lineHeight: 19, marginTop: 12 },
 });

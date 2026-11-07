@@ -18,7 +18,7 @@ function validId(id) {
 // Public discovery returns newest records first, formatted to the mobile EventItem shape.
 router.get('/', async (req, res) => {
   try {
-    const events = await Event.find({}).sort({ createdAt: -1, _id: -1 }).lean();
+    const events = await Event.find({}).populate('hostId', 'firstName lastName username').sort({ createdAt: -1, _id: -1 }).lean();
     return res.json({ events: events.map(event => toEventItem(event, apiBase(req))) });
   } catch (err) {
     console.error('Event list failed:', err.name);
@@ -29,8 +29,7 @@ router.get('/', async (req, res) => {
 // Register this before /:id so "mine" is never treated as a MongoDB ID.
 router.get('/mine', requireAuth, async (req, res) => {
   try {
-    // The authenticated session determines whose host list is returned.
-    const events = await Event.find({ hostId: req.userId }).sort({ createdAt: -1, _id: -1 }).lean();
+    const events = await Event.find({ hostId: req.userId }).populate('hostId', 'firstName lastName username').sort({ createdAt: -1, _id: -1 }).lean();
     return res.json({ events: events.map(event => toEventItem(event, apiBase(req))) });
   } catch (err) {
     return res.status(500).json({ message: 'Unable to load your events.' });
@@ -56,7 +55,7 @@ router.get('/:id/image', async (req, res) => {
 router.get('/:id', async (req, res) => {
   if (!validId(req.params.id)) return res.status(400).json({ message: 'Invalid event ID.' });
   try {
-    const event = await Event.findById(req.params.id).lean();
+    const event = await Event.findById(req.params.id).populate('hostId', 'firstName lastName username').lean();
     if (!event) return res.status(404).json({ message: 'Event not found.' });
     return res.json({ event: toEventItem(event, apiBase(req)) });
   } catch (err) {
@@ -71,7 +70,8 @@ router.post('/', requireAuth, async (req, res) => {
     // Ownership always comes from the verified server session.
     // req.body.hostId, seedKey, imageMimeType, etc. are not accepted.
     const event = await Event.create({ ...fields, hostId: req.userId });
-    return res.status(201).json({ event: toEventItem(event, apiBase(req)) });
+    const populatedEvent = await Event.findById(event._id).populate('hostId', 'firstName lastName username').lean();
+    return res.status(201).json({ event: toEventItem(populatedEvent, apiBase(req)) });
   } catch (err) {
     if (err instanceof EventInputError) return res.status(err.status).json({ message: err.message });
     if (err.name === 'ValidationError') {
@@ -82,7 +82,7 @@ router.post('/', requireAuth, async (req, res) => {
   }
 });
 
-// ─── ADDED: PATCH endpoint to update existing events ─────────────────────────
+// PATCH endpoint to update existing events 
 router.patch('/:id', requireAuth, async (req, res) => {
   if (!validId(req.params.id)) return res.status(400).json({ message: 'Invalid event ID.' });
   try {
@@ -100,9 +100,9 @@ router.patch('/:id', requireAuth, async (req, res) => {
       delete updateData.imageMimeType;
     }
 
-    const updated = await Event.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
+    await Event.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
+    const updated = await Event.findById(req.params.id).populate('hostId', 'firstName lastName username').lean();
     
-    // Updated to include a confirmation message:
     return res.json({ 
       message: 'Event updated successfully!', 
       event: toEventItem(updated, apiBase(req)) 

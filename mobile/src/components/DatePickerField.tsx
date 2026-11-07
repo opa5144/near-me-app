@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, TouchableOpacity } from 'react-native';
 import { Calendar } from 'react-native-calendars';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { AppText } from './AppText';
 
 interface DatePickerFieldProps {
   label: string;
@@ -66,9 +68,17 @@ export function DatePickerField({ label, date, onDateChange, minimumDate, open, 
 
   return (
     <View style={styles.formGroup}>
-      <Text style={[styles.fieldLabel, { color: colors.text }]}>{label}</Text>
-      <TouchableOpacity style={[styles.fieldInputButton, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => setShowDatePicker(!showDatePicker)}>
-        <Text style={[styles.fieldInputText, { color: colors.text }]}>📅 {formatDisplayDate(date)}</Text>
+      <AppText style={[styles.fieldLabel, { color: colors.text }]}>{label}</AppText>
+      <TouchableOpacity 
+        style={[styles.fieldInputButton, styles.rowButton, { backgroundColor: colors.surface, borderColor: colors.border }]} 
+        onPress={() => setShowDatePicker(!showDatePicker)}
+        activeOpacity={0.8}
+      >
+        <View style={styles.leftContent}>
+          <Ionicons name="calendar-outline" size={16} color={colors.text} style={styles.iconStyle} />
+          <AppText style={[styles.fieldInputText, { color: colors.text }]}>{formatDisplayDate(date)}</AppText>
+        </View>
+        <Ionicons name={showDatePicker ? "chevron-up" : "chevron-down"} size={14} color={colors.muted} />
       </TouchableOpacity>
       {showDatePicker && (
         <View style={[styles.calendarDropdownContainer, { borderColor: colors.border, backgroundColor: colors.surface }]}>
@@ -94,6 +104,9 @@ const styles = StyleSheet.create({
   formGroup: { marginBottom: 14 },
   fieldLabel: { fontSize: 11, fontWeight: '800', marginBottom: 6 },
   fieldInputButton: { height: 44, borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, justifyContent: 'center' },
+  rowButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  leftContent: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  iconStyle: { marginRight: 2 },
   fieldInputText: { fontSize: 12, fontWeight: '600' },
   calendarDropdownContainer: { marginTop: 6, borderRadius: 14, overflow: 'hidden', borderWidth: 1 },
 });

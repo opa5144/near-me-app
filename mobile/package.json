@@ -10,6 +10,7 @@
     "reset-project": "expo start -c"
   },
   "dependencies": {
+    "@expo/vector-icons": "^15.0.2",
     "@nozbe/watermelondb": "^0.28.0",
     "@react-native-community/datetimepicker": "9.2.1",
     "@react-navigation/bottom-tabs": "^7.21.0",

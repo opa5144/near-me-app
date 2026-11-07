@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Linking, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { EventItem } from '../../data/events';
 import { AppButton } from '../../components/AppButton';
+import { AppText } from '../../components/AppText';
 import { useTheme } from '../../context/ThemeContext';
 
 // AppNavigator fetches the event by ID and handles loading/missing states first.
@@ -11,52 +13,117 @@ export function EventDetailsScreen({ event, interested, onToggleInterested, onBa
   
   // Display the uploaded image URL when available, with the emoji as a fallback.
   const [imageFailed, setImageFailed] = useState(false);
+
   // Try again when a different event image URL is supplied.
   useEffect(() => setImageFailed(false), [event.bannerImage]);
   // Views/attendance are not tracked by this template.
+
+  // Function to jump out of your app directly into native Maps (Google Maps app / Apple Maps app / browser fallback)
+  const handleOpenMaps = async () => {
+    const query = encodeURIComponent(`${event.venue}, ${event.address || event.location}`);
+    const googleMapsAppUrl = `comgooglemaps://?q=${query}`;
+    const appleMapsUrl = `maps:0,0?q=${query}`;
+    const webMapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`;
+
+    try {
+      if (await Linking.canOpenURL(googleMapsAppUrl)) {
+        await Linking.openURL(googleMapsAppUrl);
+        return;
+      }
+      if (Platform.OS === 'ios' && (await Linking.canOpenURL(appleMapsUrl))) {
+        await Linking.openURL(appleMapsUrl);
+        return;
+      }
+      await Linking.openURL(webMapsUrl);
+    } catch (err) {
+      console.error('An error occurred opening maps', err);
+    }
+  };
+
+  // Function to open the device's native calendar app directly via system intents
+  const handleAddToCalendar = async () => {
+    const nativeCalendarUrl = Platform.select({
+      ios: 'calshow:',
+      android: 'content://com.android.calendar/time/',
+    });
+
+    try {
+      if (nativeCalendarUrl && (await Linking.canOpenURL(nativeCalendarUrl))) {
+        await Linking.openURL(nativeCalendarUrl);
+      } else {
+        const title = encodeURIComponent(event.title);
+        const details = encodeURIComponent(event.description);
+        const location = encodeURIComponent(`${event.venue}, ${event.address || event.location}`);
+        const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&details=${details}&location=${location}`;
+        await Linking.openURL(url);
+      }
+    } catch (err) {
+      console.error('An error occurred opening calendar', err);
+    }
+  };
   
   return (
     <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]}>
-      <Text onPress={onBack} style={[styles.back, { color: colors.primary }]}>‹  Back to events</Text>
+      <AppText onPress={onBack} style={[styles.back, { color: colors.primary }]}>‹  Back to events</AppText>
+      
       <View style={[styles.hero, { backgroundColor: event.accent }]}>
         {event.bannerImage && !imageFailed ? (
           <Image source={{ uri: event.bannerImage }} style={styles.heroImage}
             accessibilityLabel={event.title} onError={() => setImageFailed(true)} />
         ) : (
-          <Text style={styles.heroEmoji}>{event.emoji}</Text>
+          <AppText style={styles.heroEmoji}>{event.emoji}</AppText>
         )}
-        <Text style={styles.heroTag}>{event.category.toUpperCase()} EVENT</Text>
+        <AppText style={styles.heroTag}>{event.category.toUpperCase()} EVENT</AppText>
       </View>
+
       <View style={styles.titleRow}>
-        <Text style={[styles.title, { color: colors.text }]}>{event.title}</Text>
-        <Text style={[styles.price, { color: colors.primary }]}>{event.price}</Text>
+        <AppText style={[styles.title, { color: colors.text }]}>{event.title}</AppText>
+        <AppText style={[styles.price, { color: colors.primary }]}>{event.price}</AppText>
       </View>
+
+      {/* See event host */}
+      {event.hostId && typeof event.hostId === 'object' && event.hostId.username && (
+        <AppText style={[styles.infoSub, { color: colors.muted, marginBottom: 8, fontWeight: '700' }]}>
+          👤 Hosted by @{event.hostId.username}
+        </AppText>
+      )}
+
       <View style={[styles.info, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.infoIcon, { color: colors.primary }]}>▦</Text>
+        <Ionicons name="calendar-outline" size={20} color={colors.primary} style={styles.infoIcon} />
         <View style={styles.infoText}>
-          <Text style={[styles.infoMain, { color: colors.text }]}>{event.date}</Text>
-          <Text style={[styles.infoSub, { color: colors.muted }]}>{event.time}</Text>
+          <AppText style={[styles.infoMain, { color: colors.text }]}>{event.date}</AppText>
+          <AppText style={[styles.infoSub, { color: colors.muted }]}>{event.time}</AppText>
         </View>
+        <Pressable 
+          onPress={handleAddToCalendar}
+          style={[styles.mapButton, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Ionicons name="calendar" size={14} color={colors.primary} />
+          <AppText style={[styles.mapButtonText, { color: colors.primary }]}>Add to Calendar</AppText>
+        </Pressable>
       </View>
+
       <View style={[styles.info, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.infoIcon, { color: colors.primary }]}>⌖</Text>
+        <Ionicons name="location-outline" size={20} color={colors.primary} style={styles.infoIcon} />
         <View style={styles.infoText}>
-          <Text style={[styles.infoMain, { color: colors.text }]}>{event.venue}</Text>
-          <Text style={[styles.infoSub, { color: colors.muted }]}>{event.location}</Text>
+          <AppText style={[styles.infoMain, { color: colors.text }]}>{event.venue}</AppText>
+          <AppText style={[styles.infoSub, { color: colors.muted }]}>{event.address || event.location}</AppText>
         </View>
+        <Pressable 
+          onPress={handleOpenMaps}
+          style={[styles.mapButton, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Ionicons name="navigate-outline" size={13} color={colors.primary} />
+          <AppText style={[styles.mapButtonText, { color: colors.primary }]}>Map</AppText>
+        </Pressable>
       </View>
-      <AppButton title={interested ? '♥  Interested' : '♡  I’m interested'} onPress={onToggleInterested} style={styles.button} />
-      <Text style={[styles.section, { color: colors.text }]}>About event</Text>
-      <Text style={[styles.description, { color: colors.muted }]}>{event.description}</Text>
-      <Text style={[styles.section, { color: colors.text }]}>Location</Text>
-      <View style={[styles.map, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]}>
-        <Text style={styles.mapEmoji}>📍</Text>
-        <Text style={[styles.mapLabel, { color: colors.text }]}>{event.venue}</Text>
-        <Text style={[styles.mapSub, { color: colors.muted }]}>Map preview placeholder</Text>
-      </View>
+
+      <AppButton title={interested ? '♥  Interested' : '♡  I’m Interested'} onPress={onToggleInterested} style={styles.button} />
+      
+      <AppText style={[styles.section, { color: colors.text }]}>About Event</AppText>
+      <AppText style={[styles.description, { color: colors.muted }]}>{event.description}</AppText>
     </ScrollView>
   );
 }
+
 const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 28, flexGrow: 1 },
   back: { fontWeight: '800', fontSize: 13, marginBottom: 13 },
@@ -68,15 +135,13 @@ const styles = StyleSheet.create({
   title: { flex: 1, fontSize: 23, fontWeight: '900', lineHeight: 28 },
   price: { fontSize: 15, fontWeight: '900', marginTop: 4 },
   info: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1 },
-  infoIcon: { fontSize: 21, width: 28, textAlign: 'center' },
+  infoIcon: { width: 24, textAlign: 'center' },
   infoText: { flex: 1 },
   infoMain: { fontSize: 12, fontWeight: '800' },
   infoSub: { fontSize: 11, marginTop: 3 },
   button: { marginTop: 17, marginBottom: 22 },
   section: { fontSize: 16, fontWeight: '900', marginTop: 6, marginBottom: 9 },
   description: { fontSize: 12, lineHeight: 19, marginBottom: 20 },
-  map: { height: 130, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
-  mapEmoji: { fontSize: 25 },
-  mapLabel: { fontWeight: '800', fontSize: 11, marginTop: 5 },
-  mapSub: { fontSize: 10, marginTop: 3 },
+  mapButton: { flexDirection: 'row', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  mapButtonText: { fontSize: 11, fontWeight: '800' },
 });

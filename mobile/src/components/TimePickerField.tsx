@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Keyboard, ScrollView, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, Keyboard, ScrollView, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { AppText } from './AppText';
 
 interface TimePickerFieldProps {
   label: string;
@@ -68,7 +70,7 @@ function Wheel({ data, initialIndex, onChange, textColor, activeColor }: { data:
             style={styles.wheelItem}
             onPress={() => scrollRef.current?.scrollTo({ y: idx * ITEM_HEIGHT, animated: true })}
           >
-            <Text style={[styles.wheelText, { color: textColor }, idx === activeIndex ? [styles.wheelTextActive, { color: activeColor }] : styles.wheelTextDim]}>{item}</Text>
+            <AppText style={[styles.wheelText, { color: textColor }, idx === activeIndex ? [styles.wheelTextActive, { color: activeColor }] : styles.wheelTextDim]}>{item}</AppText>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -119,15 +121,20 @@ export function TimePickerField({ label, time, onTimeChange, minuteInterval = 15
 
   return (
     <View style={styles.splitInput}>
-      <Text style={[styles.fieldLabel, { color: colors.text }]}>{label}</Text>
+      <AppText style={[styles.fieldLabel, { color: colors.text }]}>{label}</AppText>
       <TouchableOpacity
-        style={[styles.fieldInputButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        style={[styles.fieldInputButton, styles.rowButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
         onPress={() => {
           Keyboard.dismiss(); // Force-closes any software keyboard
           setIsPickerVisible(!isPickerVisible);
         }}
+        activeOpacity={0.8}
       >
-        <Text style={[styles.fieldInputText, { color: colors.text }]}>🕒 {formatTime(snapped)}</Text>
+        <View style={styles.leftContent}>
+          <Ionicons name="time-outline" size={16} color={colors.text} style={styles.iconStyle} />
+          <AppText style={[styles.fieldInputText, { color: colors.text }]}>{formatTime(snapped)}</AppText>
+        </View>
+        <Ionicons name={isPickerVisible ? "chevron-up" : "chevron-down"} size={14} color={colors.muted} />
       </TouchableOpacity>
       {isPickerVisible && (
         <View style={[styles.timeDropdownContainer, { borderColor: colors.border, backgroundColor: colors.surface }]}>
@@ -135,7 +142,7 @@ export function TimePickerField({ label, time, onTimeChange, minuteInterval = 15
             <View pointerEvents="none" style={[styles.selectionBand, { backgroundColor: colors.primary }]} />
             <Wheel data={hours} initialIndex={hourIndex} onChange={(i) => updateTime(i, minuteIndex, periodIndex)} textColor={colors.text} activeColor={colors.primary} />
             <View style={styles.colonWrap} pointerEvents="none">
-              <Text style={[styles.colon, { color: colors.primary }]}>:</Text>
+              <AppText style={[styles.colon, { color: colors.primary }]}>:</AppText>
             </View>
             <Wheel data={minutes} initialIndex={minuteIndex} onChange={(i) => updateTime(hourIndex, i, periodIndex)} textColor={colors.text} activeColor={colors.primary} />
             <Wheel data={periods} initialIndex={periodIndex} onChange={(i) => updateTime(hourIndex, minuteIndex, i)} textColor={colors.text} activeColor={colors.primary} />
@@ -150,6 +157,9 @@ const styles = StyleSheet.create({
   splitInput: { flex: 1 },
   fieldLabel: { fontSize: 11, fontWeight: '800', marginBottom: 6 },
   fieldInputButton: { height: 44, borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, justifyContent: 'center' },
+  rowButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  leftContent: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  iconStyle: { marginRight: 2 },
   fieldInputText: { fontSize: 12, fontWeight: '600' },
   timeDropdownContainer: { marginTop: 6, borderRadius: 14, overflow: 'hidden', borderWidth: 1 },
   wheelsRow: { flexDirection: 'row', alignItems: 'center', height: WHEEL_HEIGHT, paddingHorizontal: 8 },
