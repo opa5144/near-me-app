@@ -10,7 +10,7 @@ router.use(requireAuth);
 // GET /api/friends - Fetch accepted friends and pending incoming requests
 router.get('/', async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.userId;
 
     // Fetch accepted friendships
     const friendships = await Friendship.find({
@@ -52,7 +52,7 @@ router.get('/', async (req, res) => {
 router.post('/request', async (req, res) => {
   try {
     const { recipientId } = req.body;
-    const requesterId = req.user.id;
+    const requesterId = req.userId;
 
     if (recipientId === requesterId) {
       return res.status(400).json({ message: 'You cannot send a friend request to yourself.' });
@@ -83,7 +83,7 @@ router.patch('/request/:requestId', async (req, res) => {
     const status = action === 'accept' ? 'accepted' : 'rejected';
 
     const friendship = await Friendship.findOneAndUpdate(
-      { _id: req.params.requestId, recipient: req.user.id, status: 'pending' },
+      { _id: req.params.requestId, recipient: req.userId, status: 'pending' },
       { status },
       { new: true }
     );
