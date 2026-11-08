@@ -246,6 +246,7 @@ function EventDetailsRoute({ route, navigation }: NativeStackScreenProps<RootSta
     </View></ScreenContainer>;
   }
   return <ScreenContainer><EventDetailsScreen event={event}
+    navigation={navigation}
     interested={interestedEventIds.includes(event.id)}
     onToggleInterested={() => toggleInterested(event.id)} onBack={goBack} /></ScreenContainer>;
 }

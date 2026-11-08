@@ -1,5 +1,6 @@
 import axios from 'axios';
 import Constants from 'expo-constants';
+import * as FileSystem from 'expo-file-system/legacy';
 
 // Use Expo's development-server host to reach the backend on the same computer.
 // Every helper below uses this shared /api base URL and the same session header.
@@ -32,6 +33,8 @@ export const fetchSchedule = async (params: ScheduleRequest) => {
   return response.data;
 };
 
+// --- Authentication
+
 // Signup sends the original password; hashing happens only in the backend.
 export interface SignupRequest { // Account fields accepted by the signup route.
   firstName: string;
@@ -50,6 +53,7 @@ export interface SignupResponse {
     lastName: string;
     username: string;
     email: string;
+    avatarUrl?: string;
   };
 }
 
@@ -60,7 +64,7 @@ export async function signupUser(
   const response = await api.post<SignupResponse>(
       '/auth/signup',
       form,
-    );
+  );
 
   return response.data;
 }
@@ -77,21 +81,18 @@ export interface LoginResponse {
   expiresAt: string;
 }
 
+// --- Profile
+
 // Responses contain safe account details loaded from the current session.
 export interface UserProfileResponse {
-  user: {
-    _id: string;
-    firstName: string;
-    lastName: string;
-    username: string;
-    email: string;
-  };
+  user: SignupResponse['user'];
 }
 
 export async function fetchUserProfile(): Promise<UserProfileResponse> {
   const response = await api.get<UserProfileResponse>('/auth/me');
   return response.data;
 }
+
 // Install the session token before the screen opens the authenticated navigator,
 // so its initial event-list requests already include Authorization.
 export async function loginUser(form: LoginRequest): Promise<LoginResponse> {
@@ -139,4 +140,36 @@ export async function logoutUser(): Promise<void> {
     delete api.defaults.headers.common.Authorization;
     sessionExpiredHandler?.();
   }
+}
+
+// Update ProfilePicture (converts local file URI to base64 for persistent binary storage)
+export const updateUserAvatar = async (localUri: string) => {
+  const base64 = await FileSystem.readAsStringAsync(localUri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  const response = await api.put('/users/profile', { 
+    avatarBase64: base64,
+    imageMimeType: 'image/jpeg' 
+  });
+  return response.data;
+};
+
+// --- Friends
+
+// Fetch current user's friends list and pending incoming requests using Axios `api`
+export async function fetchFriendsNetwork() {
+  const response = await api.get('/friends');
+  return response.data; // returns { friends: [], pendingRequests: [] }
+}
+
+// Send a friend request to a user ID using Axios `api`
+export async function sendFriendRequest(recipientId: string) {
+  const response = await api.post('/friends/request', { recipientId });
+  return response.data;
+}
+
+// Accept or reject an incoming friend request using Axios `api`
+export async function respondToFriendRequest(requestId: string, action: 'accept' | 'reject') {
+  const response = await api.patch(`/friends/request/${requestId}`, { action });
+  return response.data;
 }
