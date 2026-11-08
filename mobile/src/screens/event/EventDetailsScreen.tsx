@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Image, Linking, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Image, Linking, Platform, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { EventItem } from '../../data/events';
 import { AppButton } from '../../components/AppButton';
@@ -16,7 +16,17 @@ export function EventDetailsScreen({ event, interested, onToggleInterested, onBa
 
   // Try again when a different event image URL is supplied.
   useEffect(() => setImageFailed(false), [event.bannerImage]);
-  // Views/attendance are not tracked by this template.
+
+  // Function to share event details via native share sheet
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: `Check out ${event.title} event on NearMe! Happening at ${event.venue} on ${event.date} at ${event.time}.`,
+      });
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    }
+  };
 
   // Function to jump out of your app directly into native Maps (Google Maps app / Apple Maps app / browser fallback)
   const handleOpenMaps = async () => {
@@ -64,7 +74,13 @@ export function EventDetailsScreen({ event, interested, onToggleInterested, onBa
   
   return (
     <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]}>
-      <AppText onPress={onBack} style={[styles.back, { color: colors.primary }]}>‹  Back to events</AppText>
+      {/* Top Header Bar with Back Link & Share Button */}
+      <View style={styles.topBar}>
+        <AppText onPress={onBack} style={[styles.back, { color: colors.primary }]}>‹  Back to events</AppText>
+        <Pressable onPress={handleShare} style={[styles.shareButton, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Ionicons name="share-social-outline" size={16} color={colors.primary} />
+        </Pressable>
+      </View>
       
       <View style={[styles.hero, { backgroundColor: event.accent }]}>
         {event.bannerImage && !imageFailed ? (
@@ -126,7 +142,9 @@ export function EventDetailsScreen({ event, interested, onToggleInterested, onBa
 
 const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 28, flexGrow: 1 },
-  back: { fontWeight: '800', fontSize: 13, marginBottom: 13 },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 13 },
+  back: { fontWeight: '800', fontSize: 13 },
+  shareButton: { width: 34, height: 34, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   hero: { height: 210, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginBottom: 18, overflow: 'hidden', position: 'relative' },
   heroImage: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', resizeMode: 'cover' },
   heroEmoji: { fontSize: 78 },
