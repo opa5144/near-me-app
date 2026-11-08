@@ -121,7 +121,7 @@ router.post('/login', async (req, res) => {
 // Restore the signed-in profile from the session instead of trusting a client-supplied user ID.
 router.get('/me', requireAuth, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select('_id firstName lastName username email');
+    const user = await User.findById(req.userId).select('_id firstName lastName username email avatarUrl');
     if (!user) return res.status(401).json({ message: 'Please log in again.' });
     return res.json({ user });
   } catch (err) {

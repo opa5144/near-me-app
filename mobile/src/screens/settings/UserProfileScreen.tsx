@@ -50,7 +50,8 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
         
         const savedAvatar = profileData?.avatarUrl || profileData?.avatar || profileData?.profilePicture;
         if (savedAvatar && typeof savedAvatar === 'string' && savedAvatar.trim() !== '') {
-          setAvatarUri(savedAvatar);
+          // 👈 Cache-buster added here to prevent image caching on load
+          setAvatarUri(`${savedAvatar}?t=${Date.now()}`);
         } else {
           setAvatarUri(DEFAULT_AVATAR);
         }
@@ -109,7 +110,8 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
       try {
         const response = await updateUserAvatar(newUri);
         if (response && response.user && response.user.avatarUrl) {
-          setAvatarUri(response.user.avatarUrl);
+          // 👈 Cache-buster added here so updates bypass React Native caching instantly
+          setAvatarUri(`${response.user.avatarUrl}?t=${Date.now()}`);
         }
       } catch (error: any) {
         const errorMsg = error.response?.data?.message || error.message || 'Unknown error';
