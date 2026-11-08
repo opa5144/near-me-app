@@ -81,6 +81,27 @@ export interface LoginResponse {
   expiresAt: string;
 }
 
+
+// Password verification may require a second proof before a session is issued.
+export interface LoginMfaChallengeResponse {
+  mfaRequired: true;
+  challengeToken: string;
+  expiresAt: string;
+}
+
+export interface LoginMfaRequest {
+  challengeToken: string;
+  code?: string;
+  recoveryCode?: string;
+}
+
+export interface LoginErrorResponse {
+  message?: string;
+  errors?: Partial<Record<'email' | 'password' | 'code' | 'recoveryCode', string>>;
+  retryAfterSeconds?: number;
+  lockedUntil?: string;
+}
+
 // --- Profile
 
 // Responses contain safe account details loaded from the current session.
@@ -118,15 +139,87 @@ export async function updateUserProfile(form: UpdateUserProfileRequest): Promise
   return response.data;
 }
 
-// Install the session token before the screen opens the authenticated navigator,
-// so its initial event-list requests already include Authorization.
-export async function loginUser(form: LoginRequest): Promise<LoginResponse> {
-  const response = await api.post<LoginResponse>('/auth/login', form);
-  if (typeof response.data.accessToken !== 'string' || !/^[a-f0-9]{64}$/i.test(response.data.accessToken)) {
-    throw new Error('The backend login response did not include a session token.');
+// Session changes from login or Security Settings use the same validated token path.
+export function installSession(session: { accessToken: string; expiresAt: string }): void {
+  if (typeof session.accessToken !== 'string' || !/^[a-f0-9]{64}$/i.test(session.accessToken) ||
+      typeof session.expiresAt !== 'string' || !Number.isFinite(Date.parse(session.expiresAt))) {
+    throw new Error('The backend response did not include a valid session.');
   }
   // Memory only: this does not implement Remember me or local storage.
-  api.defaults.headers.common.Authorization = 'Bearer ' + response.data.accessToken;
+  api.defaults.headers.common.Authorization = 'Bearer ' + session.accessToken;
+}
+
+type PendingSessionRotation = { count: number; deferred401: boolean };
+const pendingSessionRotations = new Map<string, PendingSessionRotation>();
+
+// Security writes replace the token on the server before their HTTP response
+// arrives. Hold old-token 401s until every overlapping rotation has settled.
+export async function withSessionRotation<T extends { accessToken: string; expiresAt: string }>(
+  request: () => Promise<T>,
+): Promise<T> {
+  const originalAuthorization = api.defaults.headers.common.Authorization;
+  if (typeof originalAuthorization !== 'string' || !originalAuthorization) {
+    throw new Error('Please sign in again.');
+  }
+  const pending = pendingSessionRotations.get(originalAuthorization) ?? { count: 0, deferred401: false };
+  ++pending.count;
+  pendingSessionRotations.set(originalAuthorization, pending);
+
+  try {
+    const result = await request();
+    // Logout or a different login must win over a late security response.
+    if (api.defaults.headers.common.Authorization === originalAuthorization) installSession(result);
+    return result;
+  } finally {
+    --pending.count;
+    if (pending.count === 0) {
+      if (pendingSessionRotations.get(originalAuthorization) === pending) {
+        pendingSessionRotations.delete(originalAuthorization);
+      }
+      // A successful rotation has already installed a different token. If all
+      // attempts failed, honor the deferred rejection of the still-current one.
+      if (pending.deferred401 && api.defaults.headers.common.Authorization === originalAuthorization) {
+        clearSession();
+      }
+    }
+  }
+}
+
+// Only a completed login installs Authorization. A challenge cannot open protected screens.
+export async function loginUser(form: LoginRequest): Promise<LoginResponse | LoginMfaChallengeResponse> {
+  const response = await api.post<LoginResponse | LoginMfaChallengeResponse>('/auth/login', form);
+  const data = response.data;
+  if ('mfaRequired' in data) {
+    if (data.mfaRequired !== true || typeof data.challengeToken !== 'string' ||
+        !data.challengeToken || data.challengeToken.length > 512 ||
+        typeof data.expiresAt !== 'string' || !Number.isFinite(Date.parse(data.expiresAt))) {
+      throw new Error('The backend response did not include a valid verification request.');
+    }
+    // Do not let an older header masquerade as an authenticated MFA challenge.
+    delete api.defaults.headers.common.Authorization;
+    return data;
+  }
+  installSession(data);
+  return data;
+}
+
+// Accept one proof, never both, and install a session only after server verification.
+export async function verifyLoginMfa(form: LoginMfaRequest): Promise<LoginResponse> {
+  const code = form.code;
+  const recoveryCode = form.recoveryCode?.trim();
+  const hasCode = typeof code === 'string' && code.length > 0;
+  const hasRecoveryCode = typeof recoveryCode === 'string' && recoveryCode.length > 0;
+  if (typeof form.challengeToken !== 'string' || !form.challengeToken || form.challengeToken.length > 512) {
+    throw new Error('Your verification request expired. Log in again.');
+  }
+  if (hasCode === hasRecoveryCode) throw new Error('Enter one authenticator or recovery code.');
+  if (hasCode && !/^\d{6}$/.test(code)) throw new Error('Enter a six-digit authenticator code.');
+  if (hasRecoveryCode && recoveryCode.length > 128) throw new Error('The recovery code is too long.');
+  const response = await api.post<LoginResponse>('/auth/login/mfa', {
+    challengeToken: form.challengeToken,
+    ...(hasCode ? { code } : { recoveryCode }),
+  });
+  installSession(response.data);
   return response.data;
 }
 
@@ -141,16 +234,33 @@ export function registerSessionExpiredHandler(handler: () => void): () => void {
   };
 }
 
+// Revoked or expired sessions must leave the authenticated navigator immediately.
+export function clearSession(): void {
+  delete api.defaults.headers.common.Authorization;
+  sessionExpiredHandler?.();
+}
+
 // Protected requests returning 401 clear the in-memory token and reopen Login.
-// A rejected login is excluded so the login screen can show its own error.
+// Rejected password/MFA proofs are excluded so Login can show the matching field error.
 api.interceptors.response.use(
   response => response,
   (error: unknown) => {
     if (axios.isAxiosError(error) &&
         error.response?.status === 401 &&
-        error.config?.url !== '/auth/login') {
-      delete api.defaults.headers.common.Authorization;
-      sessionExpiredHandler?.();
+        error.config?.url !== '/auth/login' &&
+        error.config?.url !== '/auth/login/mfa') {
+      // Security actions can rotate the token while older requests are still in
+      // flight. An old token's 401 must not discard the newer valid session.
+      const currentAuthorization = api.defaults.headers.common.Authorization;
+      const requestAuthorization = error.config?.headers?.get('Authorization');
+      if (!currentAuthorization) {
+        clearSession();
+      } else if (requestAuthorization === currentAuthorization) {
+        const pending = typeof currentAuthorization === 'string'
+          ? pendingSessionRotations.get(currentAuthorization) : undefined;
+        if (pending && pending.count > 0) pending.deferred401 = true;
+        else clearSession();
+      }
     }
     return Promise.reject(error);
   },
@@ -162,8 +272,7 @@ export async function logoutUser(): Promise<void> {
   try {
     await api.post('/auth/logout');
   } finally {
-    delete api.defaults.headers.common.Authorization;
-    sessionExpiredHandler?.();
+    clearSession();
   }
 }
 

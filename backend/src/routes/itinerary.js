@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Activity = require('../models/Activity');
+const User = require('../models/User');
 
 router.post('/generate', async (req, res) => {
   try {
@@ -16,6 +17,9 @@ router.post('/generate', async (req, res) => {
       query.category = { $in: interests };
     }
 
+    // Legacy activities are archived with their host too; retain records but hide them.
+    const closedHostIds = await User.distinct('_id', { deletedAt: { $ne: null } });
+    query.hostId = { $nin: closedHostIds };
     const availableActivities = await Activity.find(query);
 
     let accumulatedCost = 0;

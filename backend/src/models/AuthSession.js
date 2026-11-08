@@ -5,6 +5,8 @@ const mongoose = require('mongoose');
 const authSessionSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   tokenHash: { type: String, required: true, unique: true, select: false },
+  // Incrementing the account version invalidates older tokens even before cleanup finishes.
+  authVersion: { type: Number, default: 0, min: 0 },
   expiresAt: { type: Date, required: true },
 }, { timestamps: true, collection: 'AuthSessions' });
 

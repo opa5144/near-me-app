@@ -1,0 +1,444 @@
+const {
+  randomBytes, createHash, createCipheriv, createDecipheriv,
+} = require('node:crypto');
+const argon2 = require('argon2');
+const OTPAuth = require('otpauth');
+const QRCode = require('qrcode');
+const User = require('../models/User');
+const AuthSession = require('../models/AuthSession');
+const AuthChallenge = require('../models/AuthChallenge');
+const { createSession, authVersionFilter, SessionStateError } = require('../middleware/requireAuth');
+
+const MAX_FAILURES = 5;
+const COOLDOWN_MS = 5 * 60 * 1000;
+const LOGIN_CHALLENGE_MS = 5 * 60 * 1000;
+const SETUP_CHALLENGE_MS = 10 * 60 * 1000;
+const SECURITY_FIELDS = [
+  '_id firstName lastName username email avatarUrl deletedAt',
+  '+passwordHash +authVersion +mfaEnabled +mfaSecretEncrypted +mfaRecoveryCodeHashes',
+  '+mfaLastUsedStep +mfaFailedAttempts +mfaLockedUntil',
+  '+securityPasswordFailedAttempts +securityPasswordLockedUntil',
+].join(' ');
+
+class SecurityError extends Error {
+  constructor(status, message, errors = {}, extras = {}) {
+    super(message);
+    this.name = 'SecurityError';
+    this.status = status;
+    this.errors = errors;
+    this.retryAfterSeconds = extras.retryAfterSeconds;
+    this.lockedUntil = extras.lockedUntil;
+  }
+}
+
+function sendSecurityError(res, error) {
+  if (!(error instanceof SecurityError) && !(error instanceof SessionStateError)) return false;
+  const body = { message: error.message, errors: error.errors || {} };
+  if (error.retryAfterSeconds) {
+    body.retryAfterSeconds = error.retryAfterSeconds;
+    res.set('Retry-After', String(error.retryAfterSeconds));
+  }
+  if (error.lockedUntil) body.lockedUntil = error.lockedUntil;
+  res.status(error.status).json(body);
+  return true;
+}
+
+function versionOf(user) { return user.authVersion ?? 0; }
+
+function activeQuery(user, conditions = []) {
+  return {
+    _id: user._id, deletedAt: null,
+    $and: [authVersionFilter(versionOf(user)), ...conditions],
+  };
+}
+
+function unlocked(field, now = new Date()) {
+  return { $or: [{ [field]: null }, { [field]: { $lte: now } }] };
+}
+
+async function loadAccount(userId, authVersion) {
+  const user = await User.findOne({
+    _id: userId, deletedAt: null, ...authVersionFilter(authVersion),
+  }).select(SECURITY_FIELDS);
+  if (!user) throw new SecurityError(403, 'Your account security changed. Please sign in again.');
+  return user;
+}
+
+function requestBody(req) {
+  if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+    throw new SecurityError(400, 'Please submit your security details.');
+  }
+  return req.body;
+}
+
+function publicUser(user) {
+  return {
+    _id: user._id, firstName: user.firstName, lastName: user.lastName,
+    username: user.username, email: user.email, avatarUrl: user.avatarUrl ?? '',
+  };
+}
+
+function throwIfLocked(user, kind) {
+  const field = kind === 'mfa' ? 'mfaLockedUntil' : 'securityPasswordLockedUntil';
+  const until = user[field] ? new Date(user[field]) : null;
+  if (until && until.getTime() > Date.now()) {
+    throw new SecurityError(429, 'Too many verification attempts. Please try again after the cooldown.', {}, {
+      retryAfterSeconds: Math.max(1, Math.ceil((until.getTime() - Date.now()) / 1000)),
+      lockedUntil: until.toISOString(),
+    });
+  }
+}
+
+async function rejectProof(user, field, message, kind = 'mfa') {
+  const counter = kind === 'mfa' ? 'mfaFailedAttempts' : 'securityPasswordFailedAttempts';
+  const lock = kind === 'mfa' ? 'mfaLockedUntil' : 'securityPasswordLockedUntil';
+  const now = new Date();
+  const expiredLock = {
+    $and: [{ $ne: [{ $ifNull: ['$' + lock, null] }, null] }, { $lte: ['$' + lock, now] }],
+  };
+  const nextCount = {
+    $cond: [expiredLock, 1, { $add: [{ $ifNull: ['$' + counter, 0] }, 1] }],
+  };
+  const reachesLimit = { $gte: [nextCount, MAX_FAILURES] };
+  // One atomic pipeline increments the shared counter and activates the cooldown at attempt five.
+  const updated = await User.findOneAndUpdate(activeQuery(user, [unlocked(lock, now)]), [{
+    $set: {
+      [counter]: { $cond: [reachesLimit, 0, nextCount] },
+      [lock]: { $cond: [reachesLimit, new Date(now.getTime() + COOLDOWN_MS), null] },
+    },
+  }], { new: true, updatePipeline: true }).select(SECURITY_FIELDS);
+  if (!updated) {
+    const current = await loadAccount(user._id, versionOf(user));
+    throwIfLocked(current, kind);
+    throw new SecurityError(403, 'Your account security changed. Please sign in again.');
+  }
+  throwIfLocked(updated, kind);
+  throw new SecurityError(400, 'Please correct the highlighted field.', { [field]: message });
+}
+
+async function verifyCurrentPassword(user, currentPassword) {
+  throwIfLocked(user, 'password');
+  if (typeof currentPassword !== 'string' || !currentPassword) {
+    throw new SecurityError(400, 'Enter your current password.', { currentPassword: 'Current password is required.' });
+  }
+  if (Array.from(currentPassword).length > 128 || !(await argon2.verify(user.passwordHash, currentPassword))) {
+    return rejectProof(user, 'currentPassword', 'Current password is incorrect.', 'password');
+  }
+  const updated = await User.findOneAndUpdate(activeQuery(user, [
+    unlocked('securityPasswordLockedUntil'),
+  ]), { $set: { securityPasswordFailedAttempts: 0, securityPasswordLockedUntil: null } }, {
+    new: true,
+  }).select(SECURITY_FIELDS);
+  if (!updated) {
+    const current = await loadAccount(user._id, versionOf(user));
+    throwIfLocked(current, 'password');
+    throw new SecurityError(403, 'Your account security changed. Please sign in again.');
+  }
+  return updated;
+}
+
+function encryptionKey() {
+  const value = process.env.MFA_ENCRYPTION_KEY?.trim();
+  const key = value ? Buffer.from(value, 'base64') : null;
+  if (!key || key.length !== 32 || key.toString('base64') !== value) {
+    throw new SecurityError(503, 'Authenticator security is unavailable. Please contact support.');
+  }
+  return key;
+}
+
+function encryptSecret(secret, userId) {
+  const nonce = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', encryptionKey(), nonce);
+  cipher.setAAD(Buffer.from('NearMe MFA v1:' + String(userId)));
+  const encrypted = Buffer.concat([cipher.update(secret, 'utf8'), cipher.final()]);
+  return ['v1', nonce.toString('base64'), cipher.getAuthTag().toString('base64'), encrypted.toString('base64')].join(':');
+}
+
+function decryptSecret(encrypted, userId) {
+  const key = encryptionKey();
+  try {
+    const [format, nonce, tag, data, extra] = (encrypted || '').split(':');
+    if (format !== 'v1' || !nonce || !tag || !data || extra !== undefined) throw new Error('Invalid encrypted seed');
+    const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(nonce, 'base64'));
+    decipher.setAAD(Buffer.from('NearMe MFA v1:' + String(userId)));
+    decipher.setAuthTag(Buffer.from(tag, 'base64'));
+    return Buffer.concat([decipher.update(Buffer.from(data, 'base64')), decipher.final()]).toString('utf8');
+  } catch {
+    throw new SecurityError(503, 'Authenticator verification is unavailable. Please contact support.');
+  }
+}
+
+function authenticator(secret, user) {
+  return new OTPAuth.TOTP({
+    issuer: 'NearMe', label: user.email, algorithm: 'SHA1', digits: 6, period: 30,
+    secret: OTPAuth.Secret.fromBase32(secret),
+  });
+}
+
+function matchingStep(secret, user, code) {
+  if (typeof code !== 'string' || !/^\d{6}$/.test(code.trim())) return null;
+  const totp = authenticator(secret, user);
+  const timestamp = Date.now();
+  const delta = totp.validate({ token: code.trim(), timestamp, window: 1 });
+  return Number.isInteger(delta) ? totp.counter({ timestamp }) + delta : null;
+}
+
+function normalizeRecoveryCode(value) {
+  return typeof value === 'string' ? value.replace(/[\s-]/g, '').toUpperCase() : '';
+}
+
+function recoveryHash(value) {
+  return createHash('sha256').update('NearMe recovery:' + value).digest('hex');
+}
+
+function newRecoveryCodes() {
+  const recoveryCodes = Array.from({ length: 10 }, () => {
+    const value = randomBytes(10).toString('hex').toUpperCase();
+    return value.match(/.{5}/g).join('-');
+  });
+  return {
+    recoveryCodes,
+    hashes: recoveryCodes.map(value => recoveryHash(normalizeRecoveryCode(value))),
+  };
+}
+
+async function verifyMfaProof(user, body) {
+  if (!user.mfaEnabled) return user;
+  throwIfLocked(user, 'mfa');
+  const code = typeof body.code === 'string' ? body.code.trim() : body.code;
+  const recoveryCode = normalizeRecoveryCode(body.recoveryCode);
+  const hasCode = typeof body.code === 'string' ? Boolean(body.code.trim()) : body.code != null;
+  const hasRecovery = typeof body.recoveryCode === 'string'
+    ? Boolean(body.recoveryCode.trim()) : body.recoveryCode != null;
+  if (hasCode && hasRecovery) {
+    throw new SecurityError(400, 'Use an authenticator code or a recovery code, not both.', {
+      code: 'Choose one verification method.', recoveryCode: 'Choose one verification method.',
+    });
+  }
+  if (!hasCode && !hasRecovery) {
+    throw new SecurityError(400, 'Authenticator verification is required.', { code: 'Enter an authenticator or recovery code.' });
+  }
+  const conditions = [unlocked('mfaLockedUntil'), { mfaEnabled: true }];
+  let update;
+  let field;
+  if (hasRecovery) {
+    field = 'recoveryCode';
+    if (!/^[A-F0-9]{20}$/.test(recoveryCode)) {
+      return rejectProof(user, field, 'Recovery code is invalid or has already been used.');
+    }
+    const hash = recoveryHash(recoveryCode);
+    conditions.push({ mfaRecoveryCodeHashes: hash });
+    update = {
+      $pull: { mfaRecoveryCodeHashes: hash },
+      $set: { mfaFailedAttempts: 0, mfaLockedUntil: null },
+    };
+  } else {
+    field = 'code';
+    const step = matchingStep(decryptSecret(user.mfaSecretEncrypted, user._id), user, code);
+    if (step === null) return rejectProof(user, field, 'Authenticator code is incorrect or expired.');
+    conditions.push({ $or: [
+      { mfaLastUsedStep: { $lt: step } }, { mfaLastUsedStep: null },
+    ] });
+    update = { $set: { mfaLastUsedStep: step, mfaFailedAttempts: 0, mfaLockedUntil: null } };
+  }
+  // Conditional updates make each OTP step and each recovery hash usable only once, even concurrently.
+  const updated = await User.findOneAndUpdate(activeQuery(user, conditions), update, { new: true })
+    .select(SECURITY_FIELDS);
+  if (!updated) {
+    return rejectProof(user, field, field === 'code'
+      ? 'Authenticator code is incorrect, expired, or already used.'
+      : 'Recovery code is invalid or has already been used.');
+  }
+  return updated;
+}
+
+async function sensitiveProof(req, body) {
+  const user = await loadAccount(req.userId, req.authVersion ?? 0);
+  const verified = await verifyCurrentPassword(user, body.currentPassword);
+  return verifyMfaProof(verified, body);
+}
+
+function challengeHash(value) { return createHash('sha256').update('NearMe challenge:' + value).digest('hex'); }
+
+async function createChallenge(user, purpose, duration, extra = {}) {
+  const token = randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + duration);
+  await AuthChallenge.init();
+  await AuthChallenge.create({
+    userId: user._id, authVersion: versionOf(user), purpose,
+    tokenHash: challengeHash(token), expiresAt, ...extra,
+  });
+  return { token, expiresAt: expiresAt.toISOString() };
+}
+
+async function readChallenge(token, purpose, extra = {}) {
+  if (typeof token !== 'string' || !/^[a-f0-9]{64}$/i.test(token)) {
+    throw new SecurityError(410, 'This verification request is invalid or expired. Start again.');
+  }
+  const challenge = await AuthChallenge.findOne({
+    tokenHash: challengeHash(token), purpose, expiresAt: { $gt: new Date() }, ...extra,
+  }).select('+secretEncrypted');
+  if (!challenge) throw new SecurityError(410, 'This verification request is invalid or expired. Start again.');
+  return challenge;
+}
+
+async function consumeChallenge(challenge) {
+  const consumed = await AuthChallenge.findOneAndDelete({ _id: challenge._id, expiresAt: { $gt: new Date() } });
+  if (!consumed) throw new SecurityError(410, 'This verification request has expired or has already been used. Start again.');
+}
+
+async function cleanupAuthentication(userId, version, all = false) {
+  // Version checks provide immediate revocation; cleanup is best effort if a later DB request fails.
+  const older = { $or: [{ authVersion: { $lt: version } }, { authVersion: { $exists: false } }] };
+  const results = await Promise.allSettled([
+    AuthSession.deleteMany({ userId, ...(all ? {} : older) }),
+    AuthChallenge.deleteMany({ userId, ...(all ? {} : older) }),
+  ]);
+  for (const result of results) {
+    if (result.status === 'rejected') console.error('Revoked authentication cleanup failed:', result.reason?.name);
+  }
+}
+
+async function rotateAccount(user, changes, unset = {}, conditions = []) {
+  const updated = await User.findOneAndUpdate(activeQuery(user, conditions), {
+    $set: changes, $inc: { authVersion: 1 },
+    ...(Object.keys(unset).length ? { $unset: unset } : {}),
+  }, { new: true, runValidators: true }).select(SECURITY_FIELDS);
+  if (!updated) {
+    const current = await loadAccount(user._id, versionOf(user));
+    throwIfLocked(current, 'mfa');
+    throw new SecurityError(403, 'Your account security changed. Please sign in again.');
+  }
+  await cleanupAuthentication(updated._id, versionOf(updated));
+  const session = await createSession(updated._id, versionOf(updated));
+  return { user: updated, session };
+}
+
+async function getSecurityState(req) {
+  const user = await loadAccount(req.userId, req.authVersion ?? 0);
+  return {
+    mfaEnabled: Boolean(user.mfaEnabled),
+    recoveryCodesRemaining: user.mfaRecoveryCodeHashes?.length ?? 0,
+    mfaLockedUntil: user.mfaLockedUntil && new Date(user.mfaLockedUntil).getTime() > Date.now()
+      ? new Date(user.mfaLockedUntil).toISOString() : null,
+  };
+}
+
+async function changePassword(req) {
+  const body = requestBody(req);
+  const errors = {};
+  if (typeof body.currentPassword !== 'string' || !body.currentPassword) errors.currentPassword = 'Current password is required.';
+  if (typeof body.newPassword !== 'string' || Array.from(body.newPassword).length < 15 || Array.from(body.newPassword).length > 128) {
+    errors.newPassword = 'Password must contain 15 to 128 characters.';
+  }
+  if (typeof body.confirmPassword !== 'string' || !body.confirmPassword) {
+    errors.confirmPassword = 'Confirm your new password.';
+  } else if (body.newPassword !== body.confirmPassword) {
+    errors.confirmPassword = 'New passwords do not match.';
+  }
+  if (Object.keys(errors).length) throw new SecurityError(400, 'Please correct the highlighted fields.', errors);
+  const user = await sensitiveProof(req, body);
+  const passwordHash = await argon2.hash(body.newPassword, { type: argon2.argon2id });
+  const { session } = await rotateAccount(user, { passwordHash });
+  return { message: 'Password updated. Other sessions have been signed out.', ...session };
+}
+
+async function beginMfaSetup(req) {
+  const user = await sensitiveProof(req, requestBody(req));
+  throwIfLocked(user, 'mfa');
+  const secret = OTPAuth.Secret.fromHex(randomBytes(20).toString('hex')).base32;
+  const secretEncrypted = encryptSecret(secret, user._id);
+  const qrCodeDataUrl = await QRCode.toDataURL(authenticator(secret, user).toString(), {
+    errorCorrectionLevel: 'M', width: 256, margin: 2,
+  });
+  const challenge = await createChallenge(user, 'mfa-setup', SETUP_CHALLENGE_MS, {
+    authSessionId: req.authSessionId, secretEncrypted,
+  });
+  return { setupToken: challenge.token, secret, qrCodeDataUrl, expiresAt: challenge.expiresAt };
+}
+
+async function confirmMfaSetup(req) {
+  const body = requestBody(req);
+  const user = await loadAccount(req.userId, req.authVersion ?? 0);
+  throwIfLocked(user, 'mfa');
+  const challenge = await readChallenge(body.setupToken, 'mfa-setup', {
+    userId: req.userId, authSessionId: req.authSessionId, authVersion: versionOf(user),
+  });
+  const secret = decryptSecret(challenge.secretEncrypted, user._id);
+  const step = matchingStep(secret, user, body.code);
+  if (step === null) return rejectProof(user, 'code', 'Authenticator code is incorrect or expired.');
+  await consumeChallenge(challenge);
+  const recovery = newRecoveryCodes();
+  const { session } = await rotateAccount(user, {
+    mfaEnabled: true, mfaSecretEncrypted: challenge.secretEncrypted,
+    mfaRecoveryCodeHashes: recovery.hashes, mfaLastUsedStep: step,
+    mfaFailedAttempts: 0, mfaLockedUntil: null,
+  }, {}, [unlocked('mfaLockedUntil')]);
+  return {
+    message: 'Authenticator enabled. Save your recovery codes now.', mfaEnabled: true,
+    recoveryCodes: recovery.recoveryCodes, ...session,
+  };
+}
+
+async function disableMfa(req) {
+  const user = await sensitiveProof(req, requestBody(req));
+  if (!user.mfaEnabled) throw new SecurityError(400, 'Authenticator verification is already disabled.');
+  const { session } = await rotateAccount(user, {
+    mfaEnabled: false, mfaRecoveryCodeHashes: [], mfaLastUsedStep: -1,
+    mfaFailedAttempts: 0, mfaLockedUntil: null,
+  }, { mfaSecretEncrypted: '' });
+  return { message: 'Authenticator disabled. Other sessions have been signed out.', mfaEnabled: false, ...session };
+}
+
+async function regenerateRecoveryCodes(req) {
+  const user = await sensitiveProof(req, requestBody(req));
+  if (!user.mfaEnabled) throw new SecurityError(400, 'Enable an authenticator before generating recovery codes.');
+  const recovery = newRecoveryCodes();
+  const { session } = await rotateAccount(user, { mfaRecoveryCodeHashes: recovery.hashes });
+  return { message: 'New recovery codes generated. Previous codes no longer work.', recoveryCodes: recovery.recoveryCodes, ...session };
+}
+
+async function closeAccount(req) {
+  const body = requestBody(req);
+  if (body.confirmation !== 'DELETE') {
+    throw new SecurityError(400, 'Confirm permanent account closure.', { confirmation: 'Type DELETE to permanently close your account.' });
+  }
+  const user = await sensitiveProof(req, body);
+  const closed = await User.findOneAndUpdate(activeQuery(user), {
+    $set: { deletedAt: new Date() }, $inc: { authVersion: 1 },
+  }, { new: true }).select('+authVersion');
+  if (!closed) throw new SecurityError(403, 'Your account security changed. Please sign in again.');
+  await cleanupAuthentication(closed._id, versionOf(closed), true);
+}
+
+async function beginLoginMfa(user) {
+  const current = await loadAccount(user._id, versionOf(user));
+  if (!current.mfaEnabled) throw new SecurityError(403, 'Your account security changed. Please sign in again.');
+  throwIfLocked(current, 'mfa');
+  const challenge = await createChallenge(current, 'login-mfa', LOGIN_CHALLENGE_MS);
+  return { mfaRequired: true, challengeToken: challenge.token, expiresAt: challenge.expiresAt };
+}
+
+async function completeLoginMfa({ challengeToken, code, recoveryCode }) {
+  try {
+    const challenge = await readChallenge(challengeToken, 'login-mfa');
+    const user = await loadAccount(challenge.userId, challenge.authVersion);
+    if (!user.mfaEnabled) throw new SecurityError(403, 'Your account security changed. Please sign in again.');
+    const verified = await verifyMfaProof(user, { code, recoveryCode });
+    await consumeChallenge(challenge);
+    const session = await createSession(verified._id, versionOf(verified));
+    return { user: publicUser(verified), session };
+  } catch (error) {
+    // A version change invalidates the whole challenge, so the client must restart its password step.
+    if (error instanceof SessionStateError || (error instanceof SecurityError && error.status === 403)) {
+      throw new SecurityError(410, 'Your sign-in verification is no longer valid. Please start again.');
+    }
+    throw error;
+  }
+}
+
+module.exports = {
+  SecurityError, sendSecurityError, getSecurityState, changePassword,
+  beginMfaSetup, confirmMfaSetup, disableMfa, regenerateRecoveryCodes, closeAccount,
+  beginLoginMfa, completeLoginMfa,
+};

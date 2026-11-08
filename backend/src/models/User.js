@@ -42,7 +42,21 @@ const userSchema = new mongoose.Schema({ //Account data model
     },
     avatarUrl: {type: String, default: ''},
     avatarData: {type: Buffer, select: false},      
-    avatarMimeType: {type: String, select: false}
+    avatarMimeType: {type: String, select: false},
+    // Closure retains the account and related records, but permanently prevents authentication.
+    deletedAt: {type: Date, default: null, index: true},
+    authVersion: {type: Number, default: 0, min: 0, select: false},
+    archiveWriteVersion: {type: Number, default: 0, select: false},
+    mfaEnabled: {type: Boolean, default: false, select: false},
+    mfaSecretEncrypted: {type: String, select: false},
+    mfaRecoveryCodeHashes: {type: [String], default: [], select: false},
+    mfaLastUsedStep: {type: Number, default: -1, select: false},
+    mfaFailedAttempts: {type: Number, default: 0, select: false},
+    mfaLockedUntil: {type: Date, default: null, select: false},
+    securityPasswordFailedAttempts: {type: Number, default: 0, select: false},
+    securityPasswordLockedUntil: {type: Date, default: null, select: false},
+    loginPasswordFailedAttempts: {type: Number, default: 0, select: false},
+    loginPasswordLockedUntil: {type: Date, default: null, select: false},
 }, {timestamps: true, collection: 'AccountList'});
 
 module.exports = mongoose.model('User', userSchema);

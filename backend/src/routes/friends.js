@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const Friendship = require('../models/Friendship');
-const User = require('../models/User'); 
 const { requireAuth } = require('../middleware/requireAuth');
+const { withActiveAccountWrite, ActiveAccountWriteError } = require('../services/activeAccountWrite');
 
 // Apply authentication middleware to all friend routes
 router.use(requireAuth);
@@ -10,15 +10,17 @@ router.use(requireAuth);
 // GET /api/friends - Fetch accepted friends and pending incoming requests
 router.get('/', async (req, res) => {
   try {
-    const userId = req.userId;
+    const userId = String(req.userId);
 
     // Fetch accepted friendships
     const friendships = await Friendship.find({
       $or: [{ requester: userId }, { recipient: userId }],
       status: 'accepted',
-    }).populate('requester recipient', '_id firstName lastName username avatarUrl');
+    }).populate({
+      path: 'requester recipient', select: '_id firstName lastName username avatarUrl', match: { deletedAt: null },
+    });
 
-    const friends = friendships.map((f) => {
+    const friends = friendships.filter(f => f.requester && f.recipient).map((f) => {
       const friendObj = f.requester._id.toString() === userId ? f.recipient : f.requester;
       return {
         id: friendObj._id,
@@ -32,9 +34,9 @@ router.get('/', async (req, res) => {
     const pendingRequestsRaw = await Friendship.find({
       recipient: userId,
       status: 'pending',
-    }).populate('requester', '_id firstName lastName username avatarUrl');
+    }).populate({ path: 'requester', select: '_id firstName lastName username avatarUrl', match: { deletedAt: null } });
 
-    const pendingRequests = pendingRequestsRaw.map((r) => ({
+    const pendingRequests = pendingRequestsRaw.filter(r => r.requester).map((r) => ({
       requestId: r._id,
       id: r.requester._id,
       name: `${r.requester.firstName || ''} ${r.requester.lastName || ''}`.trim() || r.requester.username,
@@ -54,24 +56,29 @@ router.post('/request', async (req, res) => {
     const { recipientId } = req.body;
     const requesterId = req.userId;
 
-    if (recipientId === requesterId) {
+    if (typeof recipientId !== 'string' || !/^[a-f0-9]{24}$/i.test(recipientId)) {
+      return res.status(404).json({ message: 'This account is unavailable.' });
+    }
+
+    if (recipientId.toLowerCase() === String(requesterId).toLowerCase()) {
       return res.status(400).json({ message: 'You cannot send a friend request to yourself.' });
     }
 
-    const existing = await Friendship.findOne({
-      $or: [
-        { requester: requesterId, recipient: recipientId },
-        { requester: recipientId, recipient: requesterId },
-      ],
+    const friendship = await withActiveAccountWrite(req, [recipientId], async session => {
+      const existing = await Friendship.findOne({
+        $or: [
+          { requester: requesterId, recipient: recipientId },
+          { requester: recipientId, recipient: requesterId },
+        ],
+      }).session(session);
+      if (existing) throw new ActiveAccountWriteError(400, 'Relationship or request already exists.');
+
+      const [created] = await Friendship.create([{ requester: requesterId, recipient: recipientId }], { session });
+      return created;
     });
-
-    if (existing) {
-      return res.status(400).json({ message: 'Relationship or request already exists.' });
-    }
-
-    const friendship = await Friendship.create({ requester: requesterId, recipient: recipientId });
     res.status(201).json({ success: true, friendship });
   } catch (err) {
+    if (err instanceof ActiveAccountWriteError) return res.status(err.status).json({ message: err.message });
     res.status(500).json({ message: 'Error sending friend request', error: err.message });
   }
 });
@@ -80,20 +87,29 @@ router.post('/request', async (req, res) => {
 router.patch('/request/:requestId', async (req, res) => {
   try {
     const { action } = req.body; // 'accept' or 'reject'
+    if (action !== 'accept' && action !== 'reject') {
+      return res.status(400).json({ message: 'Choose accept or reject.' });
+    }
     const status = action === 'accept' ? 'accepted' : 'rejected';
 
-    const friendship = await Friendship.findOneAndUpdate(
-      { _id: req.params.requestId, recipient: req.userId, status: 'pending' },
-      { status },
-      { new: true }
-    );
-
-    if (!friendship) {
+    const pending = await Friendship.findOne({ _id: req.params.requestId, recipient: req.userId, status: 'pending' });
+    // Preserve archived relationships without allowing another account to alter them.
+    if (!pending) {
       return res.status(404).json({ message: 'Friend request not found or already processed.' });
     }
+    const friendship = await withActiveAccountWrite(req, [pending.requester], async session => {
+      const updated = await Friendship.findOneAndUpdate(
+        { _id: pending._id, requester: pending.requester, recipient: req.userId, status: 'pending' },
+        { $set: { status } },
+        { new: true, session }
+      );
+      if (!updated) throw new ActiveAccountWriteError(404, 'Friend request not found or already processed.');
+      return updated;
+    });
 
     res.json({ success: true, friendship });
   } catch (err) {
+    if (err instanceof ActiveAccountWriteError) return res.status(err.status).json({ message: err.message });
     res.status(500).json({ message: 'Error updating friend request', error: err.message });
   }
 });

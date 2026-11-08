@@ -26,8 +26,11 @@ router.put('/profile', requireAuth, async (req, res) => {
     }
 
     // Find user by req.userId (set by requireAuth) and update
-    const updatedUser = await User.findByIdAndUpdate(
-      req.userId,
+    const updatedUser = await User.findOneAndUpdate(
+      {
+        _id: req.userId, deletedAt: null,
+        $expr: { $eq: [{ $ifNull: ['$authVersion', 0] }, req.authVersion ?? 0] },
+      },
       { $set: updateData },
       { returnDocument: 'after', runValidators: true } // Ensures schema rules are updated
     );
@@ -50,7 +53,7 @@ router.put('/profile', requireAuth, async (req, res) => {
 // Serve user avatar binary bytes publicly so profile images load across devices and restarts
 router.get('/:id/avatar', async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select('+avatarData +avatarMimeType');
+    const user = await User.findOne({ _id: req.params.id, deletedAt: null }).select('+avatarData +avatarMimeType');
     
     if (!user || !user.avatarData || !user.avatarMimeType) {
       return res.sendStatus(404);
@@ -58,7 +61,7 @@ router.get('/:id/avatar', async (req, res) => {
     
     res.set('Content-Type', user.avatarMimeType);
     res.set('X-Content-Type-Options', 'nosniff');
-    res.set('Cache-Control', 'public, max-age=3600');
+    res.set('Cache-Control', 'no-store');
     return res.send(user.avatarData);
   } catch (err) {
     console.error('Error serving avatar:', err);
@@ -70,7 +73,7 @@ router.get('/:id/avatar', async (req, res) => {
 // GET /api/users/me - Fetch current signed-in user's profile info including avatarUrl
 router.get('/me', requireAuth, async (req, res) => {
   try {
-    const user = await User.findById(req.userId);
+    const user = await User.findOne({ _id: req.userId, deletedAt: null });
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
     }

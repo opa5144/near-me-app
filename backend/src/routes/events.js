@@ -1,8 +1,10 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const Event = require('../models/Event');
+const User = require('../models/User');
 const { requireAuth } = require('../middleware/requireAuth');
 const { parseCreateEvent, toEventItem, EventInputError } = require('../services/eventData');
+const { withActiveAccountWrite, ActiveAccountWriteError } = require('../services/activeAccountWrite');
 
 const router = express.Router();
 
@@ -18,8 +20,12 @@ function validId(id) {
 // Public discovery returns newest records first, formatted to the mobile EventItem shape.
 router.get('/', async (req, res) => {
   try {
-    const events = await Event.find({}).populate('hostId', 'firstName lastName username').sort({ createdAt: -1, _id: -1 }).lean();
-    return res.json({ events: events.map(event => toEventItem(event, apiBase(req))) });
+    const events = await Event.find({}).populate({
+      path: 'hostId', select: 'firstName lastName username', match: { deletedAt: null },
+    }).sort({ createdAt: -1, _id: -1 }).lean();
+    // Closed hosts' events stay archived in Atlas and disappear from public discovery.
+    res.set('Cache-Control', 'no-store');
+    return res.json({ events: events.filter(event => event.hostId).map(event => toEventItem(event, apiBase(req))) });
   } catch (err) {
     console.error('Event list failed:', err.name);
     return res.status(500).json({ message: 'Unable to load events. Please try again.' });
@@ -41,10 +47,12 @@ router.get('/:id/image', async (req, res) => {
   if (!validId(req.params.id)) return res.status(400).json({ message: 'Invalid event ID.' });
   try {
     const event = await Event.findById(req.params.id).select('+imageData');
-    if (!event || !event.imageData || !event.imageMimeType) return res.sendStatus(404);
+    if (!event || !event.imageData || !event.imageMimeType ||
+        !(await User.exists({ _id: event.hostId, deletedAt: null }))) return res.sendStatus(404);
     res.set('Content-Type', event.imageMimeType);
     res.set('X-Content-Type-Options', 'nosniff');
-    res.set('Cache-Control', 'public, max-age=3600');
+    // Recheck host status on every request instead of caching archived images publicly.
+    res.set('Cache-Control', 'no-store');
     return res.send(event.imageData);
   } catch (err) {
     return res.status(500).json({ message: 'Unable to load this image.' });
@@ -55,8 +63,11 @@ router.get('/:id/image', async (req, res) => {
 router.get('/:id', async (req, res) => {
   if (!validId(req.params.id)) return res.status(400).json({ message: 'Invalid event ID.' });
   try {
-    const event = await Event.findById(req.params.id).populate('hostId', 'firstName lastName username').lean();
-    if (!event) return res.status(404).json({ message: 'Event not found.' });
+    const event = await Event.findById(req.params.id).populate({
+      path: 'hostId', select: 'firstName lastName username', match: { deletedAt: null },
+    }).lean();
+    if (!event || !event.hostId) return res.status(404).json({ message: 'Event not found.' });
+    res.set('Cache-Control', 'no-store');
     return res.json({ event: toEventItem(event, apiBase(req)) });
   } catch (err) {
     return res.status(500).json({ message: 'Unable to load this event.' });
@@ -69,10 +80,16 @@ router.post('/', requireAuth, async (req, res) => {
     const fields = parseCreateEvent(req.body);
     // Ownership always comes from the verified server session.
     // req.body.hostId, seedKey, imageMimeType, etc. are not accepted.
-    const event = await Event.create({ ...fields, hostId: req.userId });
-    const populatedEvent = await Event.findById(event._id).populate('hostId', 'firstName lastName username').lean();
-    return res.status(201).json({ event: toEventItem(populatedEvent, apiBase(req)) });
+    const savedEvent = await withActiveAccountWrite(req, [], async session => {
+      const [event] = await Event.create([{ ...fields, hostId: req.userId }], { session });
+      const populatedEvent = await Event.findById(event._id).session(session).populate({
+        path: 'hostId', select: 'firstName lastName username', options: { session },
+      }).lean();
+      return toEventItem(populatedEvent, apiBase(req));
+    });
+    return res.status(201).json({ event: savedEvent });
   } catch (err) {
+    if (err instanceof ActiveAccountWriteError) return res.status(err.status).json({ message: err.message });
     if (err instanceof EventInputError) return res.status(err.status).json({ message: err.message });
     if (err.name === 'ValidationError') {
       return res.status(400).json({ message: 'Please check your event details.' });
@@ -91,7 +108,6 @@ router.patch('/:id', requireAuth, async (req, res) => {
     if (String(event.hostId) !== String(req.userId)) {
       return res.status(403).json({ message: 'Unauthorized to edit this event.' });
     }
-
     const fields = parseCreateEvent(req.body);
     const updateData = { ...fields, hostId: req.userId };
     
@@ -100,14 +116,22 @@ router.patch('/:id', requireAuth, async (req, res) => {
       delete updateData.imageMimeType;
     }
 
-    await Event.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
-    const updated = await Event.findById(req.params.id).populate('hostId', 'firstName lastName username').lean();
+    const savedEvent = await withActiveAccountWrite(req, [event.hostId], async session => {
+      // Recheck ownership on the write itself, inside the account-fenced transaction.
+      const updated = await Event.findOneAndUpdate({ _id: req.params.id, hostId: req.userId },
+        { $set: updateData }, { new: true, runValidators: true, session }).populate({
+          path: 'hostId', select: 'firstName lastName username', options: { session },
+        }).lean();
+      if (!updated) throw new ActiveAccountWriteError(404, 'Event not found.');
+      return toEventItem(updated, apiBase(req));
+    });
     
     return res.json({ 
       message: 'Event updated successfully!', 
-      event: toEventItem(updated, apiBase(req)) 
+      event: savedEvent
     });
   } catch (err) {
+    if (err instanceof ActiveAccountWriteError) return res.status(err.status).json({ message: err.message });
     if (err instanceof EventInputError) return res.status(err.status).json({ message: err.message });
     if (err.name === 'ValidationError') {
       return res.status(400).json({ message: 'Please check your event details.' });

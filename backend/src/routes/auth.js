@@ -3,8 +3,13 @@ const argon2 = require('argon2');
 const User = require('../models/User');
 const AuthSession = require('../models/AuthSession');
 const { createSession, requireAuth } = require('../middleware/requireAuth');
+const securityRoutes = require('./security');
+const { beginLoginMfa, completeLoginMfa, sendSecurityError } = require('../services/accountSecurity');
 
 const router = express.Router(); 
+// Authentication responses can contain session/challenge tokens and must not be cached.
+router.use((req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
+router.use('/security', securityRoutes);
 
 const PROFILE_FIELDS = '_id firstName lastName username email phone dob bio avatarUrl';
 const EDITABLE_PROFILE_FIELDS = ['username', 'email', 'phone', 'dob', 'bio'];
@@ -42,6 +47,52 @@ function toUserProfile(user) {
     bio: user.bio ?? '',
     avatarUrl: user.avatarUrl ?? '',
   };
+}
+
+// A password check must not sign in an account whose credentials changed meanwhile.
+function loginOwner(user) {
+  return {
+    _id: user._id,
+    deletedAt: null,
+    $expr: { $eq: [{ $ifNull: ['$authVersion', 0] }, user.authVersion ?? 0] },
+  };
+}
+
+function sendLoginWait(res, lockedUntil) {
+  if (!lockedUntil || new Date(lockedUntil).getTime() <= Date.now()) return false;
+  const retryAfterSeconds = Math.max(1, Math.ceil((new Date(lockedUntil).getTime() - Date.now()) / 1000));
+  res.set('Retry-After', String(retryAfterSeconds));
+  res.status(429).json({
+    message: 'Too many sign-in attempts. Please wait before trying again.',
+    errors: { password: 'Too many attempts. Please wait.' },
+    retryAfterSeconds,
+    lockedUntil: new Date(lockedUntil).toISOString(),
+  });
+  return true;
+}
+
+async function recordLoginPasswordFailure(user) {
+  const now = new Date();
+  // The database increments the shared counter atomically, even across devices.
+  return User.findOneAndUpdate({
+    ...loginOwner(user),
+    $or: [{ loginPasswordLockedUntil: null }, { loginPasswordLockedUntil: { $lte: now } }],
+  }, [
+    { $set: { loginPasswordFailedAttempts: { $add: [
+      { $cond: [
+        { $and: [
+          { $ne: [{ $ifNull: ['$loginPasswordLockedUntil', null] }, null] },
+          { $lte: ['$loginPasswordLockedUntil', now] },
+        ] },
+        0,
+        { $ifNull: ['$loginPasswordFailedAttempts', 0] },
+      ] },
+      1,
+    ] } } },
+    { $set: { loginPasswordLockedUntil: {
+      $cond: [{ $gte: ['$loginPasswordFailedAttempts', 5] }, new Date(now.getTime() + 5 * 60 * 1000), null],
+    } } },
+  ], { new: true, updatePipeline: true }).select('+loginPasswordLockedUntil');
 }
 
 // Validate and normalize signup fields before saving an account in AccountList.
@@ -132,7 +183,7 @@ router.post('/signup', async (req, res)=>{//signup endpoint for creating new use
 });
 
 
-// Successful password verification creates the session token used by protected event routes.
+// MFA-enabled accounts receive only a short-lived challenge after the password step.
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body ?? {};
@@ -144,13 +195,32 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ message: invalidCredentials });
     }
     // Password hashes are normally hidden; include this one only to verify the password.
-    const user = await User.findOne({ email: email.trim().toLowerCase() }).select('+passwordHash');
-    if (!user || !(await argon2.verify(user.passwordHash, password))) {
+    const user = await User.findOne({ email: email.trim().toLowerCase(), deletedAt: null })
+      .select('+passwordHash +authVersion +mfaEnabled +loginPasswordFailedAttempts +loginPasswordLockedUntil');
+    if (!user) return res.status(401).json({ message: invalidCredentials });
+    if (sendLoginWait(res, user.loginPasswordLockedUntil)) return;
+    if (!(await argon2.verify(user.passwordHash, password))) {
+      const failed = await recordLoginPasswordFailure(user);
+      const latest = failed || await User.findOne({ _id: user._id, deletedAt: null }).select('+loginPasswordLockedUntil');
+      if (sendLoginWait(res, latest?.loginPasswordLockedUntil)) return;
       return res.status(401).json({ message: invalidCredentials });
     }
 
+    const reset = await User.updateOne({
+      ...loginOwner(user),
+      $or: [{ loginPasswordLockedUntil: null }, { loginPasswordLockedUntil: { $lte: new Date() } }],
+    }, {
+      $set: { loginPasswordFailedAttempts: 0, loginPasswordLockedUntil: null },
+    });
+    if (!reset.matchedCount) {
+      const latest = await User.findOne({ _id: user._id, deletedAt: null }).select('+loginPasswordLockedUntil');
+      if (sendLoginWait(res, latest?.loginPasswordLockedUntil)) return;
+      return res.status(401).json({ message: invalidCredentials });
+    }
+    if (user.mfaEnabled) return res.json(await beginLoginMfa(user));
+
     // The client keeps this token and sends it in future Authorization headers.
-    const session = await createSession(user._id);
+    const session = await createSession(user._id, user.authVersion ?? 0);
     return res.status(200).json({
       message: 'Login successful.',
       ...session,
@@ -160,15 +230,38 @@ router.post('/login', async (req, res) => {
       },
     });
   } catch (err) {
+    if (err.name === 'SessionStateError') return res.status(401).json({ message: 'Please sign in again.' });
+    if (sendSecurityError(res, err)) return;
     console.error('Login failed:', err.name);
     return res.status(500).json({ message: 'Unable to log in. Please try again.' });
+  }
+});
+
+// A challenge cannot access protected routes; the full session starts only here.
+router.post('/login/mfa', async (req, res) => {
+  try {
+    const { challengeToken, code, recoveryCode } = req.body ?? {};
+    const { user, session } = await completeLoginMfa({ challengeToken, code, recoveryCode });
+    return res.json({
+      message: 'Login successful.',
+      ...session,
+      user: {
+        _id: user._id, firstName: user.firstName, lastName: user.lastName,
+        username: user.username, email: user.email, avatarUrl: user.avatarUrl ?? '',
+      },
+    });
+  } catch (err) {
+    if (err.name === 'SessionStateError') return res.status(401).json({ message: 'Please sign in again.' });
+    if (sendSecurityError(res, err)) return;
+    console.error('MFA login failed:', err.name);
+    return res.status(500).json({ message: 'Unable to finish signing in. Please try again.' });
   }
 });
 
 // Restore the signed-in profile from the session instead of trusting a client-supplied user ID.
 router.get('/me', requireAuth, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select(PROFILE_FIELDS);
+    const user = await User.findOne({ _id: req.userId, deletedAt: null }).select(PROFILE_FIELDS);
     if (!user) return res.status(401).json({ message: 'Please log in again.' });
     return res.json({ user: toUserProfile(user) });
   } catch (err) {
@@ -223,7 +316,7 @@ router.patch('/me', requireAuth, async (req, res) => {
     }
 
     // Apply one validated update and return the saved profile rather than echoing input.
-    const user = await User.findByIdAndUpdate(req.userId, { $set: updates }, {
+    const user = await User.findOneAndUpdate(loginOwner({ _id: req.userId, authVersion: req.authVersion }), { $set: updates }, {
       new: true,
       runValidators: true,
     }).select(PROFILE_FIELDS);
