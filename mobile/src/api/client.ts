@@ -85,11 +85,36 @@ export interface LoginResponse {
 
 // Responses contain safe account details loaded from the current session.
 export interface UserProfileResponse {
-  user: SignupResponse['user'];
+  user: SignupResponse['user'] & {
+    phone?: string;
+    dob?: string;
+    bio?: string;
+  };
 }
 
-export async function fetchUserProfile(): Promise<UserProfileResponse> {
-  const response = await api.get<UserProfileResponse>('/auth/me');
+export interface UpdateUserProfileRequest {
+  username: string;
+  email: string;
+  phone: string;
+  dob: string;
+  bio: string;
+}
+
+// Validation and duplicate-account errors belong beside the corresponding field.
+export interface UserProfileErrorResponse {
+  message?: string;
+  errors?: Partial<Record<keyof UpdateUserProfileRequest, string>>;
+}
+
+// A screen can cancel its profile load when it closes.
+export async function fetchUserProfile(signal?: AbortSignal): Promise<UserProfileResponse> {
+  const response = await api.get<UserProfileResponse>('/auth/me', { signal });
+  return response.data;
+}
+
+// Save the complete account form and return the server's current profile.
+export async function updateUserProfile(form: UpdateUserProfileRequest): Promise<UserProfileResponse> {
+  const response = await api.patch<UserProfileResponse>('/auth/me', form);
   return response.data;
 }
 

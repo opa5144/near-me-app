@@ -6,6 +6,44 @@ const { createSession, requireAuth } = require('../middleware/requireAuth');
 
 const router = express.Router(); 
 
+const PROFILE_FIELDS = '_id firstName lastName username email phone dob bio avatarUrl';
+const EDITABLE_PROFILE_FIELDS = ['username', 'email', 'phone', 'dob', 'bio'];
+
+function profileValidationErrors(error) {
+  const errors = {};
+  for (const field of EDITABLE_PROFILE_FIELDS) {
+    if (error.errors?.[field]) errors[field] = error.errors[field].message;
+  }
+  return errors;
+}
+
+// MongoDB identifies the unique index that rejected the write; do not blame the other field.
+function duplicateProfileErrors(error) {
+  const errors = {};
+  for (const field of ['username', 'email']) {
+    if (Object.prototype.hasOwnProperty.call(error.keyPattern ?? {}, field) ||
+        Object.prototype.hasOwnProperty.call(error.keyValue ?? {}, field)) {
+      errors[field] = field === 'username' ? 'Username is already in use.' : 'Email is already in use.';
+    }
+  }
+  return errors;
+}
+
+// Explicit response fields exclude password hashes and stored avatar bytes.
+function toUserProfile(user) {
+  return {
+    _id: user._id,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    username: user.username,
+    email: user.email,
+    phone: user.phone ?? '',
+    dob: user.dob ?? '',
+    bio: user.bio ?? '',
+    avatarUrl: user.avatarUrl ?? '',
+  };
+}
+
 // Validate and normalize signup fields before saving an account in AccountList.
 router.post('/signup', async (req, res)=>{//signup endpoint for creating new user accounts
     try{
@@ -28,6 +66,11 @@ router.post('/signup', async (req, res)=>{//signup endpoint for creating new use
             return res.status(400).json({
                 message: 'All fields are required',
             });
+        }
+
+        if (account.username.length > 25 || !/^[A-Za-z0-9]+$/.test(account.username)) {
+            const message = 'Username must be 25 characters or fewer and contain only letters and numbers.';
+            return res.status(400).json({ message, errors: { username: message } });
         }
 
         if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(account.email)){ //valid email checking 
@@ -65,14 +108,18 @@ router.post('/signup', async (req, res)=>{//signup endpoint for creating new use
         });
     } catch (err){
         if (err.code === 11000) { //mongodb duplicate error
+        const errors = duplicateProfileErrors(err);
         return res.status(409).json({
-            message: 'Username or email is already in use.',
+            message: Object.values(errors)[0] || 'Username or email is already in use.',
+            errors,
         });
         }
 
         if (err.name === 'ValidationError') {
+        const errors = profileValidationErrors(err);
         return res.status(400).json({
-            message: 'Please check your account details.',
+            message: Object.values(errors)[0] || 'Please check your account details.',
+            errors,
         });
         }
 
@@ -121,11 +168,81 @@ router.post('/login', async (req, res) => {
 // Restore the signed-in profile from the session instead of trusting a client-supplied user ID.
 router.get('/me', requireAuth, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select('_id firstName lastName username email avatarUrl');
+    const user = await User.findById(req.userId).select(PROFILE_FIELDS);
     if (!user) return res.status(401).json({ message: 'Please log in again.' });
-    return res.json({ user });
+    return res.json({ user: toUserProfile(user) });
   } catch (err) {
     return res.status(500).json({ message: 'Unable to load your account.' });
+  }
+});
+
+// The session supplies the owner; only these five editable fields are accepted.
+router.patch('/me', requireAuth, async (req, res) => {
+  try {
+    const body = req.body;
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return res.status(400).json({ message: 'Please submit your account details.', errors: {} });
+    }
+
+    const updates = {};
+    const errors = {};
+    for (const field of EDITABLE_PROFILE_FIELDS) {
+      if (!Object.prototype.hasOwnProperty.call(body, field)) continue;
+      if (typeof body[field] !== 'string') {
+        errors[field] = 'This field must be text.';
+        continue;
+      }
+      // Saving an empty optional string clears that detail; omitted fields stay unchanged.
+      updates[field] = body[field].trim();
+    }
+    if (updates.email !== undefined) {
+      updates.email = updates.email.toLowerCase();
+    }
+    // Accept raw digits or the displayed format, and store both forms identically.
+    if (updates.phone && /^\d{11}$/.test(updates.phone)) {
+      const digits = updates.phone;
+      updates.phone = digits[0] + ' ' + digits.slice(1, 4) + '-' + digits.slice(4, 7) + '-' + digits.slice(7);
+    }
+
+    if (Object.keys(updates).length > 0) {
+      try {
+        // Validate only supplied fields and collect every field error before any database write.
+        await User.validate(updates, Object.keys(updates));
+      } catch (error) {
+        if (error.name !== 'ValidationError') throw error;
+        Object.assign(errors, profileValidationErrors(error));
+      }
+    }
+    if (Object.keys(errors).length > 0) {
+      return res.status(400).json({ message: 'Please correct the highlighted fields.', errors });
+    }
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({
+        message: 'Please submit at least one account field to update.', errors: {},
+      });
+    }
+
+    // Apply one validated update and return the saved profile rather than echoing input.
+    const user = await User.findByIdAndUpdate(req.userId, { $set: updates }, {
+      new: true,
+      runValidators: true,
+    }).select(PROFILE_FIELDS);
+    if (!user) return res.status(401).json({ message: 'Please log in again.' });
+    return res.json({ user: toUserProfile(user) });
+  } catch (err) {
+    if (err.code === 11000) {
+      const errors = duplicateProfileErrors(err);
+      return res.status(409).json({
+        message: Object.values(errors)[0] || 'Username or email is already in use.', errors,
+      });
+    }
+    if (err.name === 'ValidationError') {
+      return res.status(400).json({
+        message: 'Please correct the highlighted fields.', errors: profileValidationErrors(err),
+      });
+    }
+    console.error('Account update failed:', err.name);
+    return res.status(500).json({ message: 'Unable to save your account. Please try again.' });
   }
 });
 

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { View, Share, TouchableOpacity, StyleSheet, Image, ScrollView, Modal, FlatList, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -39,28 +40,37 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
     { id: '1', name: 'Sarah Jenkins', lastMessage: 'Are we heading to the concert together?', time: '10m ago', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330' },
   ]);
 
-// Fetch logged-in user profile on mount
-  useEffect(() => {
-    fetchUserProfile()
-      .then((res: any) => {
-        const profileData = res?.user || res;
-        console.log('--- DEBUG USER PROFILE DATA FROM SERVER ---', profileData); // 👈 Check your terminal log!
-        
+  // Refresh after returning from Account so saved profile changes appear here.
+  useFocusEffect(useCallback(() => {
+    const controller = new AbortController();
+    let active = true;
+
+    fetchUserProfile(controller.signal)
+      .then((res) => {
+        // A blurred screen must not apply a response from an earlier visit.
+        if (!active) return;
+        const profileData: any = res.user;
         setUser(profileData);
-        
+
         const savedAvatar = profileData?.avatarUrl || profileData?.avatar || profileData?.profilePicture;
         if (savedAvatar && typeof savedAvatar === 'string' && savedAvatar.trim() !== '') {
-          // 👈 Cache-buster added here to prevent image caching on load
+          // Bypass cached image bytes when loading the saved avatar again.
           setAvatarUri(`${savedAvatar}?t=${Date.now()}`);
         } else {
           setAvatarUri(DEFAULT_AVATAR);
         }
       })
       .catch((err) => {
+        if (!active || controller.signal.aborted) return;
         console.log('Failed to fetch user profile:', err.message);
         setAvatarUri(DEFAULT_AVATAR);
       });
-  }, []);
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, []));
 
   // Fetch real friends & pending requests when modal opens
   const loadFriendsNetwork = async () => {
