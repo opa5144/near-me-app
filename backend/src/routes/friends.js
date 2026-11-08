@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const Friendship = require('../models/Friendship');
-const User = require('../models/User'); // Adjust path to your User model if needed
-const authMiddleware = require('../middleware/auth'); // Adjust path to your auth middleware
+const User = require('../models/User'); 
+const { requireAuth } = require('../middleware/requireAuth');
 
 // Apply authentication middleware to all friend routes
-router.use(authMiddleware);
+router.use(requireAuth);
 
 // GET /api/friends - Fetch accepted friends and pending incoming requests
 router.get('/', async (req, res) => {
