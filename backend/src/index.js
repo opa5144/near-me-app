@@ -9,22 +9,26 @@ const itineraryRoutes = require('./routes/itinerary');
 const mapsRoutes = require('./routes/mapsRoutes');
 const authRoutes = require('./routes/auth');
 const eventRoutes = require('./routes/events');
+const friendsRoutes = require('./routes/friends');
+const userRoutes = require('./routes/users');
 
 const app = express();
 app.use(cors());
-// Allows a <=1 MiB JPEG encoded as base64 plus the event's text.
-app.use(express.json({ limit: '2mb' }));
+// Increased limit to 10mb to safely handle base64-encoded profile pictures and event images.
+app.use(express.json({ limit: '10mb' }));
 // Each router owns the endpoints below its shared /api prefix.
 app.use('/api/auth', authRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/itinerary', itineraryRoutes);
 app.use('/api/maps', mapsRoutes);
+app.use('/api/friends', friendsRoutes);
+app.use('/api/users', userRoutes);
 
 // Turn JSON parsing failures into readable API responses before handling other errors.
 app.use((err, req, res, next) => {
   if (res.headersSent) return next(err);
   if (err.type === 'entity.too.large') {
-    return res.status(413).json({ message: 'The request is too large. Choose a smaller event image.' });
+    return res.status(413).json({ message: 'The request is too large. Choose a smaller image.' });
   }
   if (err instanceof SyntaxError && 'body' in err) {
     return res.status(400).json({ message: 'Please submit valid JSON.' });
