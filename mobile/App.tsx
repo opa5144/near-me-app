@@ -9,6 +9,7 @@ import { LoginScreen } from './src/screens/auth/LoginScreen';
 import { SignupScreen } from './src/screens/auth/SignupScreen';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // App Linking Map
 const linkingConfig: any = {
@@ -76,12 +77,13 @@ function MainApp() {
 // Both the authentication screens and event screens read the same theme provider.
 export default function App() {
   return (
-    <ThemeProvider>
-      <MainApp />
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <MainApp />
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }
-
 const styles = StyleSheet.create({
   safe: { flex: 1 },
 });

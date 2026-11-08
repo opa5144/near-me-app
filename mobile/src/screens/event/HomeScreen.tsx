@@ -1,73 +1,305 @@
-
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { EventItem, categories } from '../../data/events';
-import { EventCard } from '../../components/EventCard';
+import { EventItem } from '../../data/events';
 import { ScreenHeader } from '../../components/ScreenHeader';
-import { CategoryFilter } from '../../components/CategoryFilter';
-import { SearchBar } from '../../components/SearchBar';
 import { useTheme } from '../../context/ThemeContext';
 
-// Events are supplied by the shared API-backed list in AppNavigator; this screen
-// arranges them into sections and delegates navigation through its callbacks.
-export function HomeScreen({ events, onOpenEvent, onSeeAll }: { events: EventItem[]; onOpenEvent: (event: EventItem) => void; onSeeAll: () => void }) {
+export function HomeScreen({
+  events,
+  interestedEvents,
+  onOpenEvent,
+  onSeeAll
+}: {
+  events: EventItem[];
+  interestedEvents: EventItem[];
+  onOpenEvent: (event: EventItem) => void;
+  onSeeAll: () => void;
+}) {
   const { colors } = useTheme();
 
+  const nextEvent = useMemo(() => {
+    const now = Date.now();
+
+    return interestedEvents
+      .filter(event => {
+        const startTime = Date.parse(event.startsAt);
+        return Number.isFinite(startTime) && startTime >= now;
+      })
+      .sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt))[0];
+  }, [interestedEvents]);
+
+  const topPicks = events.slice(0, 4);
+
   return (
-    <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
-      <Text style={[styles.welcome, { color: colors.muted }]}>Welcome back!</Text>
-      <ScreenHeader title="Discover Events" subtitle="Find something great to do nearby." />
-      <SearchBar value="" onChangeText={() => {}} placeholder="⌕  Search artists, venues, or vibes..." editable={false} />
-      <CategoryFilter categories={categories.slice(1)} selectedCategory={categories[1]} onSelectCategory={() => {}} />
+    <ScrollView
+      contentContainerStyle={[styles.content, { backgroundColor: colors.background }]}
+      showsVerticalScrollIndicator={false}
+    >
+      <Text style={[styles.welcome, { color: colors.muted }]}>
+        Welcome back!
+      </Text>
+
+      <ScreenHeader
+        title="Your Dashboard"
+        subtitle="A quick look at your plans and discoveries."
+      />
+
+      <Text style={[styles.section, { color: colors.text }]}>
+        Your Next Event
+      </Text>
+
+      {nextEvent ? (
+        <View style={[styles.upcomingCard, {
+          backgroundColor: colors.surface,
+          borderColor: colors.border
+        }]}>
+          <View style={[styles.upcomingArt, { backgroundColor: nextEvent.accent }]}>
+            {nextEvent.bannerImage ? (
+              <Image
+                source={{ uri: nextEvent.bannerImage }}
+                style={styles.upcomingImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <Text style={styles.upcomingEmoji}>{nextEvent.emoji}</Text>
+            )}
+          </View>
+
+          <View style={styles.upcomingInfo}>
+            <Text style={[styles.upcomingTitle, { color: colors.text }]}>
+              {nextEvent.title}
+            </Text>
+
+            <Text style={[styles.upcomingMeta, { color: colors.muted }]}>
+              {nextEvent.date} · {nextEvent.time}
+            </Text>
+
+            <Text style={[styles.upcomingMeta, { color: colors.muted }]}>
+              {nextEvent.venue}
+            </Text>
+
+            <Text
+              onPress={() => onOpenEvent(nextEvent)}
+              style={[styles.detailsLink, { color: colors.primary }]}
+            >
+              View event details →
+            </Text>
+          </View>
+        </View>
+      ) : (
+        <View style={[styles.emptyCard, {
+          backgroundColor: colors.surface,
+          borderColor: colors.border
+        }]}>
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>
+            No upcoming plans yet
+          </Text>
+          <Text style={[styles.emptyText, { color: colors.muted }]}>
+            Events you're interested in will appear here. Explore events and
+            start planning something fun!
+          </Text>
+          <Text
+            onPress={onSeeAll}
+            style={[styles.detailsLink, { color: colors.primary }]}
+          >
+            Explore events →
+          </Text>
+        </View>
+      )}
+
       <View style={styles.sectionTitle}>
-        <Text style={[styles.section, { color: colors.text, marginBottom: 0 }]}>Top Picks</Text>
-        <Text onPress={onSeeAll} style={[styles.seeAll, { color: colors.primary }]}>See All</Text>
+        <Text style={[styles.section, { color: colors.text, marginBottom: 0 }]}>
+          Top Picks
+        </Text>
+
+        <Text
+          onPress={onSeeAll}
+          style={[styles.seeAll, { color: colors.primary }]}
+        >
+          See All
+        </Text>
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featured}>
-        {events.slice(0, 4).map(event => (
-          <View key={event.id} style={[styles.featuredCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.featured}
+      >
+        {topPicks.map(event => (
+          <View
+            key={event.id}
+            style={[styles.featuredCard, {
+              backgroundColor: colors.surface,
+              borderColor: colors.border
+            }]}
+          >
             <FeaturedArt event={event} />
-            <Text style={[styles.featuredTitle, { color: colors.text }]} numberOfLines={2}>{event.title}</Text>
-            <Text style={[styles.featuredMeta, { color: colors.muted }]}>{event.date} · {event.price}</Text>
-            <Text onPress={() => onOpenEvent(event)} style={[styles.detailsLink, { color: colors.primary }]}>View details →</Text>
+
+            <Text
+              style={[styles.featuredTitle, { color: colors.text }]}
+              numberOfLines={2}
+            >
+              {event.title}
+            </Text>
+
+            <Text style={[styles.featuredMeta, { color: colors.muted }]}>
+              {event.date} · {event.price}
+            </Text>
+
+            <Text
+              onPress={() => onOpenEvent(event)}
+              style={[styles.detailsLink, { color: colors.primary }]}
+            >
+              View details →
+            </Text>
           </View>
         ))}
       </ScrollView>
-      {!events.length && <Text style={{ color: colors.muted }}>No events to display yet.</Text>}
-      <Text style={[styles.section, { color: colors.text }]}>Popular near you</Text>
-      {events.slice(1).map(event => <EventCard key={event.id} event={event} horizontal onPress={() => onOpenEvent(event)} />)}
+
+      {!topPicks.length && (
+        <Text style={{ color: colors.muted }}>
+          No events available right now.
+        </Text>
+      )}
     </ScrollView>
   );
 }
 
-// bannerImage is a server-provided image URL. Missing or failed images show the
-// event emoji, so a broken image does not leave the featured card empty.
 function FeaturedArt({ event }: { event: EventItem }) {
   const [imageFailed, setImageFailed] = useState(false);
-  // A changed URL gets a fresh load attempt even if the previous image failed.
+
   useEffect(() => setImageFailed(false), [event.bannerImage]);
+
   return (
     <View style={[styles.featuredArt, { backgroundColor: event.accent }]}>
       {event.bannerImage && !imageFailed ? (
-        <Image source={{ uri: event.bannerImage }} style={styles.featuredImage}
-          resizeMode="cover" accessibilityLabel={event.title} onError={() => setImageFailed(true)} />
-      ) : <Text style={styles.featuredEmoji}>{event.emoji}</Text>}
+        <Image
+          source={{ uri: event.bannerImage }}
+          style={styles.featuredImage}
+          resizeMode="cover"
+          accessibilityLabel={event.title}
+          onError={() => setImageFailed(true)}
+        />
+      ) : (
+        <Text style={styles.featuredEmoji}>{event.emoji}</Text>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingBottom: 24, flexGrow: 1 },
-  welcome: { fontSize: 11, marginBottom: 5 },
-  sectionTitle: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  section: { fontSize: 16, fontWeight: '900', marginBottom: 10 },
-  seeAll: { fontSize: 11, fontWeight: '700' },
-  featured: { gap: 12, paddingBottom: 20 },
-  featuredCard: { width: 190, borderRadius: 18, padding: 10, borderWidth: 1 },
-  featuredArt: { height: 105, borderRadius: 13, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginBottom: 10 },
-  featuredEmoji: { fontSize: 42, color: '#FFFFFF' },
-  featuredImage: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
-  featuredTitle: { fontSize: 13, fontWeight: '800', lineHeight: 17 },
-  featuredMeta: { fontSize: 10, marginTop: 5 },
-  detailsLink: { fontSize: 11, fontWeight: '800', marginTop: 9 },
+  content: {
+    padding: 16,
+    paddingBottom: 24,
+    flexGrow: 1
+  },
+  welcome: {
+    fontSize: 11,
+    marginBottom: 5
+  },
+  section: {
+    fontSize: 16,
+    fontWeight: '900',
+    marginBottom: 10
+  },
+  upcomingCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: 'hidden',
+    marginBottom: 24
+  },
+  upcomingArt: {
+    height: 150,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden'
+  },
+  upcomingImage: {
+    width: '100%',
+    height: '100%'
+  },
+  upcomingEmoji: {
+    fontSize: 56,
+    color: '#FFFFFF'
+  },
+  upcomingInfo: {
+    padding: 14
+  },
+  upcomingTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+    marginBottom: 6
+  },
+  upcomingMeta: {
+    fontSize: 12,
+    marginBottom: 4
+  },
+  emptyCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 24
+  },
+  emptyTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    marginBottom: 6
+  },
+  emptyText: {
+    fontSize: 12,
+    lineHeight: 18
+  },
+  sectionTitle: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10
+  },
+  seeAll: {
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  featured: {
+    gap: 12,
+    paddingBottom: 20
+  },
+  featuredCard: {
+    width: 190,
+    borderRadius: 18,
+    padding: 10,
+    borderWidth: 1
+  },
+  featuredArt: {
+    height: 105,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    marginBottom: 10
+  },
+  featuredEmoji: {
+    fontSize: 42,
+    color: '#FFFFFF'
+  },
+  featuredImage: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0
+  },
+  featuredTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    lineHeight: 17
+  },
+  featuredMeta: {
+    fontSize: 10,
+    marginTop: 5
+  },
+  detailsLink: {
+    fontSize: 11,
+    fontWeight: '800',
+    marginTop: 9
+  }
 });

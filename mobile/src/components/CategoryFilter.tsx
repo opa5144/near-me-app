@@ -4,7 +4,7 @@ import { useTheme } from '../context/ThemeContext';
 
 type CategoryFilterProps = {
   categories: string[];
-  selectedCategory: string;
+  selectedCategory: string | string[];
   onSelectCategory: (category: string) => void;
 };
 
@@ -20,12 +20,16 @@ export function CategoryFilter({ categories, selectedCategory, onSelectCategory 
       keyboardShouldPersistTaps="handled"
     >
       {categories.map(category => {
-        const selected = selectedCategory === category;
+        const selected = Array.isArray(selectedCategory)
+          ? selectedCategory.includes(category)
+          : selectedCategory === category;
 
         return (
           <Pressable
             key={category}
             onPress={() => onSelectCategory(category)}
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
             style={[
               styles.chip,
               {

@@ -71,7 +71,7 @@ export function SettingsScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  content: { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 32, flexGrow: 1 },
+  content: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32, flexGrow: 1 },
   backButton: { paddingHorizontal: 8, marginLeft: -8, marginBottom: 8 },
   backText: { fontWeight: '800', fontSize: 14 },
   sectionContainer: { marginBottom: 16 },

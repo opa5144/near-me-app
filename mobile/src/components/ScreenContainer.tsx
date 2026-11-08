@@ -14,20 +14,18 @@ export function ScreenContainer({ children, style, testID }: ScreenContainerProp
   const { colors } = useTheme();
 
   return (
-    <View 
+    <View
       testID={testID}
-      // Accessibility attributes treating this cleanly as a structural screen region
-      accessible={false} 
+      accessible={false}
       accessibilityRole="none"
       style={[
-        { 
-          flex: 1, 
-          // Added a small +8px buffer so top headers/buttons never crowd the hardware notch/Dynamic Island
-          paddingTop: insets.top + 8, 
-          paddingBottom: insets.bottom, 
-          paddingHorizontal: 16, // Ensures content doesn't clip on curved phone edges
-          backgroundColor: colors.background 
-        }, 
+        {
+          flex: 1,
+          paddingTop: 0,
+          paddingBottom: 0,
+          paddingHorizontal: 16,
+          backgroundColor: colors.background
+        },
         style
       ]}
     >

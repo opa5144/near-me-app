@@ -1,3 +1,4 @@
+
 import { ScrollView, StyleSheet } from 'react-native';
 import { EventItem } from '../../data/events';
 import { EventCard } from '../../components/EventCard';
@@ -9,7 +10,10 @@ export function MyEventsScreen({ events, onOpenEvent }: { events: EventItem[]; o
   const { colors } = useTheme();
 
   return (
-    <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]}>
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={[styles.content, { backgroundColor: colors.background }]}
+    >
       <ScreenHeader title="My Events" subtitle="Your plans, all together." />
       <AppText variant="bodyMedium" color={colors.primary} style={styles.section}>♥  Interested · {events.length} events</AppText>
       {events.length ? events.map(event => <EventCard key={event.id} event={event} horizontal onPress={() => onOpenEvent(event)} />) : <AppText variant="bodyMedium" color={colors.muted} style={styles.empty}>No saved events yet. Explore events and tap “I’m interested” to add one here.</AppText>}
@@ -18,7 +22,7 @@ export function MyEventsScreen({ events, onOpenEvent }: { events: EventItem[]; o
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingBottom: 24, flexGrow: 1 },
-  section: { fontWeight: '800', marginBottom: 12 },
-  empty: { lineHeight: 19, marginTop: 12 },
+  content: { padding: 16, paddingBottom: 46, flexGrow: 1 },
+  section: { fontSize: 12, fontWeight: '800', marginBottom: 12 },
+  empty: { fontSize: 12, lineHeight: 19, marginTop: 12 },
 });

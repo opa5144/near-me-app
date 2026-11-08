@@ -11,29 +11,52 @@ import { useTheme } from '../../context/ThemeContext';
 export function SearchScreen({ events, onOpenEvent }: { events: EventItem[]; onOpenEvent: (event: EventItem) => void }) {
   const { colors } = useTheme();
   const [query, setQuery] = useState('');
-  const [category, setCategory] = useState('All');
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+
+  const toggleCategory = (category: string) => {
+    setSelectedCategories(prev =>
+      prev.includes(category)
+        ? prev.filter(item => item !== category)
+        : [...prev, category]
+    );
+  };
 
   const filtered = useMemo(() => events.filter(event =>
-    (category === 'All' || event.category === category) &&
+    (selectedCategories.length === 0 || selectedCategories.includes(event.category)) &&
     `${event.title} ${event.venue} ${event.category}`.toLowerCase().includes(query.toLowerCase()),
-  ), [events, category, query]);
+  ), [events, selectedCategories, query]);
 
   return (
-    <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]} keyboardShouldPersistTaps="handled">
-      <ScreenHeader eyebrow="Discover something new" title="What do you want to do?" subtitle="Search by activity, place, or mood." />
-      <SearchBar value={query} onChangeText={setQuery} placeholder="Try “live music” or “pottery”" />
-      <CategoryFilter categories={categories} selectedCategory={category} onSelectCategory={setCategory} />
-      <View style={styles.resultsHeader}>
-        <Text style={[styles.results, { color: colors.text }]}>Events near you</Text>
-        <Text style={[styles.count, { color: colors.muted }]}>{filtered.length} results</Text>
-      </View>
-      {filtered.length ? filtered.map(event => <EventCard key={event.id} event={event} horizontal onPress={() => onOpenEvent(event)} />) : <Text style={[styles.empty, { color: colors.muted }]}>No events match that search. Try another term or category.</Text>}
-    </ScrollView>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
+        <ScreenHeader eyebrow="Discover something new" title="What do you want to do?" subtitle="Search by activity, place, or mood." />
+
+        <SearchBar value={query} onChangeText={setQuery} placeholder="Try “live music” or “pottery”" />
+
+        <CategoryFilter
+          categories={categories}
+          selectedCategory={selectedCategories}
+          onSelectCategory={toggleCategory}
+        />
+
+        <View style={styles.resultsHeader}>
+          <Text style={[styles.results, { color: colors.text }]}>Events near you</Text>
+          <Text style={[styles.count, { color: colors.muted }]}>{filtered.length} results</Text>
+        </View>
+
+        {filtered.length
+          ? filtered.map(event => <EventCard key={event.id} event={event} horizontal onPress={() => onOpenEvent(event)} />)
+          : <Text style={[styles.empty, { color: colors.muted }]}>No events match that search. Try another term or category.</Text>}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingBottom: 24, flexGrow: 1 },
+  content: { paddingHorizontal: 16, paddingTop: 46, paddingBottom: 24, flexGrow: 1 },
   resultsHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
   results: { fontSize: 15, fontWeight: '900' },
   count: { fontSize: 11 },

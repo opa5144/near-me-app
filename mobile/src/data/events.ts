@@ -9,6 +9,8 @@ export type EventItem = {
   price: string;
   date: string;
   time: string;
+  startsAt: string;
+  endsAt: string;
   venue: string;
   address: string;
   location?: string;
