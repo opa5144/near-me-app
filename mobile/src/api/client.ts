@@ -57,6 +57,19 @@ export interface SignupResponse {
   };
 }
 
+export interface SignupErrorResponse {
+  message?: string;
+  errors?: Partial<Record<keyof SignupRequest, string>>;
+}
+
+// Availability is advisory; the signup write still enforces the unique index.
+export async function checkUsernameAvailability(username: string, signal?: AbortSignal): Promise<boolean> {
+  const response = await api.get<{ available: boolean }>('/auth/username-availability', {
+    params: { username }, signal,
+  });
+  return response.data.available;
+}
+
 // Form screens await this helper and handle validation/duplicate-account errors.
 export async function signupUser(
   form: SignupRequest, 

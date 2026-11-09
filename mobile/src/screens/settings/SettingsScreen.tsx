@@ -9,14 +9,13 @@ const settingSections = [
     items: [
       { id: 'Account', icon: '👤', title: 'Account Information', subtitle: 'Profile, username, email, phone & bio' },
       { id: 'Security', icon: '🔒', title: 'Security & Login', subtitle: 'Password changes, MFA, and account deletion' },
-      { id: 'BookingHistory', icon: '📅', title: 'Booking History', subtitle: 'View previously booked events' },
+      { id: 'BookingHistory', icon: '📅', title: 'Booking History', subtitle: 'Past interested or attending events' },
     ],
   },
   {
     title: 'Preferences',
     items: [
       { id: 'Preferences', icon: '✨', title: 'My Preferences', subtitle: 'Preferred categories and subscribed cities' },
-      { id: 'Location', icon: '📍', title: 'Location', subtitle: 'Nearby activity distance search radius' },
     ],
   },
   {

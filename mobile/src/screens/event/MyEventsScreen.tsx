@@ -15,8 +15,8 @@ export function MyEventsScreen({ events, onOpenEvent }: { events: EventItem[]; o
       contentContainerStyle={[styles.content, { backgroundColor: colors.background }]}
     >
       <ScreenHeader title="My Events" subtitle="Your plans, all together." />
-      <AppText variant="bodyMedium" color={colors.primary} style={styles.section}>♥  Interested · {events.length} events</AppText>
-      {events.length ? events.map(event => <EventCard key={event.id} event={event} horizontal onPress={() => onOpenEvent(event)} />) : <AppText variant="bodyMedium" color={colors.muted} style={styles.empty}>No saved events yet. Explore events and tap “I’m interested” to add one here.</AppText>}
+      <AppText variant="bodyMedium" color={colors.primary} style={styles.section}>♥  Saved plans · {events.length} events</AppText>
+      {events.length ? events.map(event => <EventCard key={event.id} event={event} horizontal onPress={() => onOpenEvent(event)} />) : <AppText variant="bodyMedium" color={colors.muted} style={styles.empty}>No saved plans yet. Mark an event Interested or Attending to add it here.</AppText>}
     </ScrollView>
   );
 }

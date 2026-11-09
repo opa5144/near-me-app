@@ -9,9 +9,11 @@ import { AppText } from '../../components/AppText';
 import { fetchUserProfile, fetchFriendsNetwork, respondToFriendRequest, updateUserAvatar } from '../../api/client';
 import { EventItem } from '../../data/events';
 import { EventCard } from '../../components/EventCard';
+import { useEvents } from '../../context/EventsContext';
 
 export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigation: any; events: EventItem[]; onOpenEvent: (event: EventItem) => void }) {
   const { colors } = useTheme();
+  const { events: availableEvents, attendingEventIds } = useEvents();
 
   // User state
   const [user, setUser] = useState<any>(null);
@@ -137,7 +139,8 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
 
   const today = new Date();
   const interestedEvents = events || [];
-  const attendedEvents = interestedEvents.filter(e => new Date(e.date) < today);
+  // An old interest alone is not an RSVP; use the account's persisted attending flag.
+  const attendedEvents = availableEvents.filter(event => attendingEventIds.includes(event.id) && new Date(event.endsAt) <= today);
 
   return (
     <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>

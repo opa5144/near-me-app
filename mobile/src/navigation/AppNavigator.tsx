@@ -33,8 +33,8 @@ import { SettingsScreen } from '../screens/settings/SettingsScreen';
 import { AccountScreen } from '../screens/settings/AccountScreen';
 import { SecurityScreen } from '../screens/settings/SecurityScreen';
 import { BookingHistoryScreen } from '../screens/settings/BookingHistoryScreen';
+import { BookingHistoryDetailsScreen } from '../screens/settings/BookingHistoryDetailsScreen';
 import { PreferencesScreen } from '../screens/settings/PreferencesScreen';
-import { LocationScreen } from '../screens/settings/LocationScreen';
 import { NotificationsScreen } from '../screens/settings/NotificationsScreen';
 import { DisplayScreen } from '../screens/settings/DisplayScreen';
 import { AboutScreen } from '../screens/settings/AboutScreen';
@@ -85,11 +85,11 @@ function ProfileNavigator() {
       <ProfileStack.Screen name="BookingHistory">
         {props => <ScreenContainer style={{ paddingHorizontal: 0 }}><BookingHistoryScreen {...props} /></ScreenContainer>}
       </ProfileStack.Screen>
+      <ProfileStack.Screen name="BookingHistoryDetails">
+        {props => <ScreenContainer style={{ paddingHorizontal: 0 }}><BookingHistoryDetailsScreen {...props} /></ScreenContainer>}
+      </ProfileStack.Screen>
       <ProfileStack.Screen name="Preferences">
         {props => <ScreenContainer style={{ paddingHorizontal: 0 }}><PreferencesScreen {...props} /></ScreenContainer>}
-      </ProfileStack.Screen>
-      <ProfileStack.Screen name="Location">
-        {props => <ScreenContainer style={{ paddingHorizontal: 0 }}><LocationScreen {...props} /></ScreenContainer>}
       </ProfileStack.Screen>
       <ProfileStack.Screen name="Notifications">
         {props => <ScreenContainer style={{ paddingHorizontal: 0 }}><NotificationsScreen {...props} /></ScreenContainer>}
@@ -108,8 +108,9 @@ function ProfileNavigator() {
 }
 
 function EventsStatus({ children }: { children: ReactNode }) {
-  const { colors } = useTheme();
-  const { isLoading, error, refreshEvents } = useEvents();
+  const { colors, theme } = useTheme();
+  const { isLoading, error, refreshEvents, selectionsLoading, selectionsError, refreshSelections } = useEvents();
+  const selectionErrorColor = theme === 'dark' ? '#FF8A80' : '#C62828';
 
   return (
     <View style={[styles.fill, { backgroundColor: colors.background }]}>
@@ -126,6 +127,15 @@ function EventsStatus({ children }: { children: ReactNode }) {
           )}
         </View>
       )}
+      {(selectionsLoading || selectionsError) && <View style={[styles.status, { backgroundColor: colors.surface }]}>
+        {selectionsLoading && <ActivityIndicator color={colors.primary} />}
+        <Text accessibilityRole={selectionsError ? 'alert' : undefined} style={[styles.statusText, { color: selectionsError ? selectionErrorColor : colors.muted }]}>
+          {selectionsError || 'Loading saved event choices...'}
+        </Text>
+        {!selectionsLoading && selectionsError && <Pressable onPress={() => void refreshSelections()} accessibilityRole="button">
+          <Text style={{ color: colors.primary }}>Retry</Text>
+        </Pressable>}
+      </View>}
       {children}
     </View>
   );
@@ -180,8 +190,9 @@ function HostNavigator() {
 }
 
 function TabNavigator() {
-  const { events, interestedEventIds } = useEvents();
-  const interestedEvents = events.filter(event => interestedEventIds.includes(event.id));
+  const { events, interestedEventIds, attendingEventIds } = useEvents();
+  // Either independent choice makes an event part of the user's plans.
+  const plannedEvents = events.filter(event => interestedEventIds.includes(event.id) || attendingEventIds.includes(event.id));
 
   return (
     <Tab.Navigator
@@ -199,7 +210,7 @@ function TabNavigator() {
             <ScreenContainer style={{ paddingHorizontal: 0 }}>
               <HomeScreen
                 events={events}
-                interestedEvents={interestedEvents}
+                interestedEvents={plannedEvents}
                 onOpenEvent={event => props.navigation.navigate('EventDetails', { eventId: event.id })}
                 onSeeAll={() => props.navigation.navigate('Search')}
               />
@@ -224,7 +235,7 @@ function TabNavigator() {
           <EventsStatus>
             <ScreenContainer style={{ paddingHorizontal: 0 }}>
               <MyEventsScreen
-                events={interestedEvents}
+                events={plannedEvents}
                 onOpenEvent={event => props.navigation.navigate('EventDetails', { eventId: event.id })}
               />
             </ScreenContainer>
@@ -239,7 +250,8 @@ function TabNavigator() {
 
 function EventDetailsRoute({ route, navigation }: NativeStackScreenProps<RootStackParamList, 'EventDetails'>) {
   const { colors } = useTheme();
-  const { interestedEventIds, toggleInterested, recordView } = useEvents();
+  const { interestedEventIds, attendingEventIds, toggleInterested, toggleAttending, recordView,
+    selectionsLoading, selectionsReady, selectionsSavingEventIds, selectionsError, refreshSelections } = useEvents();
   const eventId = route.params?.eventId;
   const [event, setEvent] = useState<EventItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -311,6 +323,13 @@ function EventDetailsRoute({ route, navigation }: NativeStackScreenProps<RootSta
         navigation={navigation}
         interested={interestedEventIds.includes(event.id)}
         onToggleInterested={() => toggleInterested(event.id)}
+        attending={attendingEventIds.includes(event.id)}
+        onToggleAttending={() => toggleAttending(event.id)}
+        selectionsLoading={selectionsLoading}
+        selectionsReady={selectionsReady}
+        selectionSaving={selectionsSavingEventIds.includes(event.id)}
+        selectionError={selectionsError}
+        onRetrySelections={() => { void refreshSelections(); }}
         onBack={goBack}
       />
     </ScreenContainer>

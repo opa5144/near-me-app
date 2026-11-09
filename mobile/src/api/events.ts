@@ -50,3 +50,42 @@ export async function updateEvent(id: string, input: UpdateEventRequest): Promis
   const data = response.data;
   return ('event' in data && data.event) ? data.event : (data as EventItem);
 }
+// Independent saved choices belong to the authenticated account, never a client-supplied user ID.
+export interface EventSelection {
+  eventId: string;
+  interested: boolean;
+  attending: boolean;
+}
+
+export interface BookingHistoryItem extends EventSelection {
+  id: string; // The selection record ID, used by the private history detail route.
+  event: EventItem & { timeZone?: string };
+}
+
+export async function fetchEventSelections(signal?: AbortSignal): Promise<EventSelection[]> {
+  const response = await api.get<{ selections: EventSelection[] }>('/event-selections', { signal });
+  return response.data.selections;
+}
+
+export async function saveEventSelection(
+  eventId: string,
+  changes: Partial<Pick<EventSelection, 'interested' | 'attending'>>,
+): Promise<EventSelection> {
+  const response = await api.put<{ selection: EventSelection }>(
+    '/event-selections/' + encodeURIComponent(eventId), changes,
+  );
+  return response.data.selection;
+}
+
+// History contains ended events with a real saved selection; no sample bookings are fabricated.
+export async function fetchBookingHistory(signal?: AbortSignal): Promise<BookingHistoryItem[]> {
+  const response = await api.get<{ bookings: BookingHistoryItem[] }>('/event-selections/history', { signal });
+  return response.data.bookings;
+}
+
+export async function fetchBookingHistoryDetails(id: string, signal?: AbortSignal): Promise<BookingHistoryItem> {
+  const response = await api.get<{ booking: BookingHistoryItem }>(
+    '/event-selections/history/' + encodeURIComponent(id), { signal },
+  );
+  return response.data.booking;
+}

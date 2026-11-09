@@ -95,91 +95,69 @@ async function recordLoginPasswordFailure(user) {
   ], { new: true, updatePipeline: true }).select('+loginPasswordLockedUntil');
 }
 
-// Validate and normalize signup fields before saving an account in AccountList.
-router.post('/signup', async (req, res)=>{//signup endpoint for creating new user accounts
-    try{
-        const {firstName, lastName, username, email, password} = req.body ?? {}; //reads input
-        const values = [firstName, lastName, username, email, password]; 
-        
-        if(!values.every(value => typeof value === 'string')){ //validates input
-            return res.status(400).json({
-                message: 'All fields must be text',
-            })
-        }
+// Closed accounts keep their usernames reserved; an availability check cannot restore them.
+router.get('/username-availability', async (req, res) => {
+  const username = typeof req.query.username === 'string' ? req.query.username.trim() : '';
+  if (!/^[A-Za-z0-9]{1,25}$/.test(username)) {
+    return res.status(400).json({
+      message: 'Use 1 to 25 letters and numbers for your username.',
+      errors: { username: 'Use 1 to 25 letters and numbers.' },
+    });
+  }
+  try { return res.json({ available: !(await User.exists({ username })) }); }
+  catch (err) { return res.status(503).json({ message: 'Unable to check this username. Please try again.' }); }
+});
 
-        const account = { //normalize input
-            firstName: firstName.trim(),
-            lastName: lastName.trim(),
-            username: username.trim(),
-            email: email.trim().toLowerCase(), 
-        };
-        if(Object.values(account).some(value => value.length === 0)){ 
-            return res.status(400).json({
-                message: 'All fields are required',
-            });
-        }
-
-        if (account.username.length > 25 || !/^[A-Za-z0-9]+$/.test(account.username)) {
-            const message = 'Username must be 25 characters or fewer and contain only letters and numbers.';
-            return res.status(400).json({ message, errors: { username: message } });
-        }
-
-        if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(account.email)){ //valid email checking 
-            return res.status(400).json({
-                message: 'Please enter a valid email address',
-            }); 
-        }
-
-        const passwordLength = Array.from(password).length; //password length checking 
-        if (passwordLength < 15 || passwordLength > 128) {
-            return res.status(400).json({
-                message: 'Password must contain 15 to 128 characters.',
-            });
-        }
-
-        await User.init(); //ensures indexes are created before checking for duplicates
-
-        // Argon2id hashes the exact password, including spaces; plaintext is never saved.
-        const passwordHash = await argon2.hash(password, {type: argon2.argon2id,}); //hashing password 
-
-        const user = await User.create({//creates new user account
-            ...account,
-            passwordHash,
-        });
-        // Return only account fields the app needs, excluding the stored password hash.
-        return res.status(201).json({//success response
-            message: 'Account Created.',
-            user:{
-                _id: user._id,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                username: user.username,
-                email: user.email,
-            },
-        });
-    } catch (err){
-        if (err.code === 11000) { //mongodb duplicate error
-        const errors = duplicateProfileErrors(err);
-        return res.status(409).json({
-            message: Object.values(errors)[0] || 'Username or email is already in use.',
-            errors,
-        });
-        }
-
-        if (err.name === 'ValidationError') {
-        const errors = profileValidationErrors(err);
-        return res.status(400).json({
-            message: Object.values(errors)[0] || 'Please check your account details.',
-            errors,
-        });
-        }
-
-        console.error('Signup failed:', err.name);
-
-        return res.status(500).json({
-        message: 'Unable to create your account. Please try again.',
-        });
+// Collect field errors together, and still enforce uniqueness on the final insert.
+router.post('/signup', async (req, res) => {
+  try {
+    const body = req.body ?? {};
+    const account = {};
+    const errors = {};
+    const labels = { firstName: 'First name', lastName: 'Last name', username: 'Username', email: 'Email' };
+    for (const [field, label] of Object.entries(labels)) {
+      if (typeof body[field] !== 'string' || !body[field].trim()) errors[field] = label + ' is required.';
+      else account[field] = body[field].trim();
     }
+    if (account.username && !/^[A-Za-z0-9]{1,25}$/.test(account.username)) {
+      errors.username = 'Use only letters and numbers, up to 25 characters.';
+    }
+    if (account.email) {
+      account.email = account.email.toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(account.email)) errors.email = 'Enter a valid email address.';
+    }
+    const password = body.password;
+    if (typeof password !== 'string' || !password) errors.password = 'Password is required.';
+    else if (Array.from(password).length < 15 || Array.from(password).length > 128) {
+      errors.password = 'Password must contain 15 to 128 characters.';
+    }
+    if (Object.keys(errors).length) return res.status(400).json({ message: 'Please correct the highlighted fields.', errors });
+
+    await User.init();
+    // Password spaces and Unicode are preserved; the device never receives the hash.
+    const passwordHash = await argon2.hash(password, { type: argon2.argon2id });
+    const user = await User.create({ ...account, passwordHash });
+    return res.status(201).json({
+      message: 'Account Created.',
+      user: { _id: user._id, firstName: user.firstName, lastName: user.lastName, username: user.username, email: user.email },
+    });
+  } catch (err) {
+    if (err.code === 11000) {
+      const errors = duplicateProfileErrors(err);
+      if (errors.username) errors.username = 'Username already exists.';
+      if (errors.email) errors.email = 'Email already exists.';
+      return res.status(409).json({ message: Object.values(errors)[0] || 'Username or email already exists.', errors });
+    }
+    if (err.name === 'ValidationError') {
+      const errors = {};
+      for (const field of ['firstName', 'lastName', 'username', 'email']) {
+        if (err.errors?.[field]) errors[field] = err.errors[field].message;
+      }
+      return res.status(400).json({ message: 'Please check your account details.', errors });
+    }
+    console.error('Signup failed:', err.name);
+    return res.status(500).json({ message: 'Unable to create your account. Please try again.' });
+  }
 });
 
 

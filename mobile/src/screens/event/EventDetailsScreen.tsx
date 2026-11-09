@@ -8,9 +8,44 @@ import { useTheme } from '../../context/ThemeContext';
 import { PublicProfileScreen } from '../settings/PublicProfileScreen'; 
 import { fetchUserProfile } from '../../api/client';
 
-export function EventDetailsScreen({ event, interested, onToggleInterested, onBack, navigation }: { event: EventItem; interested: boolean; onToggleInterested: () => void; onBack: () => void; navigation?: any }) {
-  const { colors } = useTheme();
+type EventDetailsScreenProps = {
+  event: EventItem;
+  interested: boolean;
+  attending: boolean;
+  onToggleInterested: () => void;
+  onToggleAttending: () => void;
+  selectionsLoading: boolean;
+  selectionsReady: boolean;
+  selectionSaving: boolean;
+  selectionError: string | null;
+  onRetrySelections: () => void;
+  onBack: () => void;
+  navigation?: any;
+};
+
+export function EventDetailsScreen({ event, interested, attending, onToggleInterested, onToggleAttending,
+  selectionsLoading, selectionsReady, selectionSaving, selectionError, onRetrySelections,
+  onBack, navigation }: EventDetailsScreenProps) {
+  const { colors, theme } = useTheme();
+  const errorColor = theme === 'dark' ? '#FF8A80' : '#C62828';
   
+  // A screen left open becomes read-only as soon as the saved end time passes.
+  const [hasEnded, setHasEnded] = useState(() => {
+    const end = Date.parse(event.endsAt);
+    return !Number.isFinite(end) || end <= Date.now();
+  });
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const checkEnd = () => {
+      const remaining = Date.parse(event.endsAt) - Date.now();
+      setHasEnded(!Number.isFinite(remaining) || remaining <= 0);
+      if (remaining > 0) timer = setTimeout(checkEnd, Math.min(remaining, 60000));
+    };
+    checkEnd();
+    return () => { if (timer) clearTimeout(timer); };
+  }, [event.endsAt]);
+  const selectionDisabled = hasEnded || !selectionsReady || selectionsLoading || selectionSaving;
+
   // Modal state for viewing host profile popup
   const [showHostModal, setShowHostModal] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -168,7 +203,17 @@ export function EventDetailsScreen({ event, interested, onToggleInterested, onBa
         </Pressable>
       </View>
 
-      <AppButton title={interested ? '♥  Interested' : '♡  I’m Interested'} onPress={onToggleInterested} style={styles.button} />
+      {selectionError && <View style={styles.selectionNotice}>
+        <AppText accessibilityRole="alert" style={{ color: errorColor }}>{selectionError}</AppText>
+        <AppButton title="Reload saved choices" variant="quiet" onPress={onRetrySelections} disabled={selectionsLoading || selectionSaving} />
+      </View>}
+      {selectionsLoading && <AppText style={[styles.selectionNotice, { color: colors.muted }]}>Loading your saved choices...</AppText>}
+      {hasEnded && <AppText style={[styles.selectionNotice, { color: colors.muted }]}>This event has ended. Your saved choices are read-only.</AppText>}
+      <AppButton title={interested ? 'Interested' : "I'm Interested"} onPress={onToggleInterested}
+        disabled={selectionDisabled} variant={interested ? 'primary' : 'secondary'} style={styles.button} />
+      <AppButton title={selectionSaving ? 'Saving choices...' : attending ? 'Attending' : "I'll Attend"}
+        onPress={onToggleAttending} disabled={selectionDisabled} variant={attending ? 'primary' : 'secondary'}
+        style={styles.attendingButton} />
       
       <AppText style={[styles.section, { color: colors.text }]}>About Event</AppText>
       <AppText style={[styles.description, { color: colors.muted }]}>{event.description}</AppText>
@@ -220,7 +265,9 @@ const styles = StyleSheet.create({
   infoText: { flex: 1 },
   infoMain: { fontSize: 12, fontWeight: '800' },
   infoSub: { fontSize: 11, marginTop: 3 },
-  button: { marginTop: 17, marginBottom: 22 },
+  button: { marginTop: 17, marginBottom: 10 },
+  attendingButton: { marginBottom: 22 },
+  selectionNotice: { marginTop: 12, marginBottom: 8 },
   section: { fontSize: 16, fontWeight: '900', marginTop: 6, marginBottom: 9 },
   description: { fontSize: 12, lineHeight: 19, marginBottom: 20 },
   mapButton: { flexDirection: 'row', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },

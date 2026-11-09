@@ -7,7 +7,7 @@ import {
     View
 } from 'react-native';
 import type {TextInputProps} from 'react-native';
-import {colors} from '../data/theme';
+import { useTheme } from '../context/ThemeContext';
 
 type AppTextInputProps = Omit< 
     TextInputProps,
@@ -15,22 +15,29 @@ type AppTextInputProps = Omit<
     > & {
         label: string;
         isPassword?: boolean; 
+        error?: string;
 };
 
 
 export function AppTextInput({ 
     label, // Label for the input field
     isPassword = false,
+    error,
     style, // Allow custom styles to be passed in
     ...inputProps
 }: AppTextInputProps) {
+    const { colors, theme } = useTheme();
+    const errorColor = theme === 'dark' ? '#FF8A80' : '#C62828';
     const [showPassword, setShowPassword] = useState(false); // State to toggle password visibility
 
     return (
         <View style={styles.container}>
-            <Text style={styles.label}>{label}</Text>
+            <View style={styles.labelRow}>
+                <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
+                {error && <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.error, { color: errorColor }]}>{error}</Text>}
+            </View>
             
-            <View style={styles.field}>
+            <View style={[styles.field, { backgroundColor: colors.surface, borderColor: error ? errorColor : colors.border }]}>
                 <TextInput 
                     placeholder={label}
                     placeholderTextColor={colors.muted}
@@ -41,7 +48,7 @@ export function AppTextInput({
                     {...inputProps}
                     multiline={false}
                     secureTextEntry={isPassword && !showPassword} // Hide text if it's a password and showPassword is false
-                    style={[styles.input, style]} // Apply custom styles if provided
+                    style={[styles.input, { color: colors.text }, style]} // Apply custom styles if provided
                 />
 
                 {isPassword && (
@@ -51,7 +58,7 @@ export function AppTextInput({
                         accessibilityLabel={showPassword ? "Hide password" : "Show password"}
                         style={styles.toggle}
                     >   
-                        <Text style={styles.toggleText}>
+                        <Text style={[styles.toggleText, { color: colors.primary }]}>
                             {showPassword ? "Hide" : "Show"}
                         </Text>
                     </Pressable>
@@ -66,18 +73,16 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     label: {
-        color: colors.text,
         fontSize: 14,
         fontWeight: '600',
-        marginBottom: 8,
     },
+    labelRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', gap: 8, marginBottom: 8 },
+    error: { fontSize: 12, flexShrink: 1 },
     field: {
         flexDirection: 'row',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: colors.border,
         borderRadius: 12,
-        backgroundColor: colors.surface,
     },
   input: {
     flex: 1,
@@ -86,7 +91,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    color: colors.text,
   },
   toggle: {
     minWidth: 76,
@@ -96,7 +100,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   toggleText: {
-    color: colors.primary,
     fontWeight: '700',
   },
 });
