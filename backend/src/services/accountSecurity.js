@@ -7,7 +7,8 @@ const QRCode = require('qrcode');
 const User = require('../models/User');
 const AuthSession = require('../models/AuthSession');
 const AuthChallenge = require('../models/AuthChallenge');
-const { createSession, authVersionFilter, SessionStateError } = require('../middleware/requireAuth');
+const { createSession, authVersionFilter, SessionStateError } = require('./sessionService');
+const { ServiceError } = require('./serviceError');
 
 const MAX_FAILURES = 5;
 const COOLDOWN_MS = 5 * 60 * 1000;
@@ -20,27 +21,11 @@ const SECURITY_FIELDS = [
   '+securityPasswordFailedAttempts +securityPasswordLockedUntil',
 ].join(' ');
 
-class SecurityError extends Error {
+class SecurityError extends ServiceError {
   constructor(status, message, errors = {}, extras = {}) {
-    super(message);
+    super(status, message, { errors, ...extras });
     this.name = 'SecurityError';
-    this.status = status;
-    this.errors = errors;
-    this.retryAfterSeconds = extras.retryAfterSeconds;
-    this.lockedUntil = extras.lockedUntil;
   }
-}
-
-function sendSecurityError(res, error) {
-  if (!(error instanceof SecurityError) && !(error instanceof SessionStateError)) return false;
-  const body = { message: error.message, errors: error.errors || {} };
-  if (error.retryAfterSeconds) {
-    body.retryAfterSeconds = error.retryAfterSeconds;
-    res.set('Retry-After', String(error.retryAfterSeconds));
-  }
-  if (error.lockedUntil) body.lockedUntil = error.lockedUntil;
-  res.status(error.status).json(body);
-  return true;
 }
 
 function versionOf(user) { return user.authVersion ?? 0; }
@@ -64,11 +49,11 @@ async function loadAccount(userId, authVersion) {
   return user;
 }
 
-function requestBody(req) {
-  if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+function securityBody(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
     throw new SecurityError(400, 'Please submit your security details.');
   }
-  return req.body;
+  return body;
 }
 
 function publicUser(user) {
@@ -252,8 +237,8 @@ async function verifyMfaProof(user, body) {
   return updated;
 }
 
-async function sensitiveProof(req, body) {
-  const user = await loadAccount(req.userId, req.authVersion ?? 0);
+async function sensitiveProof(auth, body) {
+  const user = await loadAccount(auth.userId, auth.authVersion ?? 0);
   const verified = await verifyCurrentPassword(user, body.currentPassword);
   return verifyMfaProof(verified, body);
 }
@@ -314,8 +299,8 @@ async function rotateAccount(user, changes, unset = {}, conditions = []) {
   return { user: updated, session };
 }
 
-async function getSecurityState(req) {
-  const user = await loadAccount(req.userId, req.authVersion ?? 0);
+async function getSecurityState(auth) {
+  const user = await loadAccount(auth.userId, auth.authVersion ?? 0);
   return {
     mfaEnabled: Boolean(user.mfaEnabled),
     recoveryCodesRemaining: user.mfaRecoveryCodeHashes?.length ?? 0,
@@ -324,8 +309,8 @@ async function getSecurityState(req) {
   };
 }
 
-async function changePassword(req) {
-  const body = requestBody(req);
+async function changePassword(auth, input) {
+  const body = securityBody(input);
   const errors = {};
   if (typeof body.currentPassword !== 'string' || !body.currentPassword) errors.currentPassword = 'Current password is required.';
   if (typeof body.newPassword !== 'string' || Array.from(body.newPassword).length < 15 || Array.from(body.newPassword).length > 128) {
@@ -337,14 +322,14 @@ async function changePassword(req) {
     errors.confirmPassword = 'New passwords do not match.';
   }
   if (Object.keys(errors).length) throw new SecurityError(400, 'Please correct the highlighted fields.', errors);
-  const user = await sensitiveProof(req, body);
+  const user = await sensitiveProof(auth, body);
   const passwordHash = await argon2.hash(body.newPassword, { type: argon2.argon2id });
   const { session } = await rotateAccount(user, { passwordHash });
   return { message: 'Password updated. Other sessions have been signed out.', ...session };
 }
 
-async function beginMfaSetup(req) {
-  const user = await sensitiveProof(req, requestBody(req));
+async function beginMfaSetup(auth, input) {
+  const user = await sensitiveProof(auth, securityBody(input));
   throwIfLocked(user, 'mfa');
   const secret = OTPAuth.Secret.fromHex(randomBytes(20).toString('hex')).base32;
   const secretEncrypted = encryptSecret(secret, user._id);
@@ -352,17 +337,17 @@ async function beginMfaSetup(req) {
     errorCorrectionLevel: 'M', width: 256, margin: 2,
   });
   const challenge = await createChallenge(user, 'mfa-setup', SETUP_CHALLENGE_MS, {
-    authSessionId: req.authSessionId, secretEncrypted,
+    authSessionId: auth.sessionId, secretEncrypted,
   });
   return { setupToken: challenge.token, secret, qrCodeDataUrl, expiresAt: challenge.expiresAt };
 }
 
-async function confirmMfaSetup(req) {
-  const body = requestBody(req);
-  const user = await loadAccount(req.userId, req.authVersion ?? 0);
+async function confirmMfaSetup(auth, input) {
+  const body = securityBody(input);
+  const user = await loadAccount(auth.userId, auth.authVersion ?? 0);
   throwIfLocked(user, 'mfa');
   const challenge = await readChallenge(body.setupToken, 'mfa-setup', {
-    userId: req.userId, authSessionId: req.authSessionId, authVersion: versionOf(user),
+    userId: auth.userId, authSessionId: auth.sessionId, authVersion: versionOf(user),
   });
   const secret = decryptSecret(challenge.secretEncrypted, user._id);
   const step = matchingStep(secret, user, body.code);
@@ -380,8 +365,8 @@ async function confirmMfaSetup(req) {
   };
 }
 
-async function disableMfa(req) {
-  const user = await sensitiveProof(req, requestBody(req));
+async function disableMfa(auth, input) {
+  const user = await sensitiveProof(auth, securityBody(input));
   if (!user.mfaEnabled) throw new SecurityError(400, 'Authenticator verification is already disabled.');
   const { session } = await rotateAccount(user, {
     mfaEnabled: false, mfaRecoveryCodeHashes: [], mfaLastUsedStep: -1,
@@ -390,20 +375,20 @@ async function disableMfa(req) {
   return { message: 'Authenticator disabled. Other sessions have been signed out.', mfaEnabled: false, ...session };
 }
 
-async function regenerateRecoveryCodes(req) {
-  const user = await sensitiveProof(req, requestBody(req));
+async function regenerateRecoveryCodes(auth, input) {
+  const user = await sensitiveProof(auth, securityBody(input));
   if (!user.mfaEnabled) throw new SecurityError(400, 'Enable an authenticator before generating recovery codes.');
   const recovery = newRecoveryCodes();
   const { session } = await rotateAccount(user, { mfaRecoveryCodeHashes: recovery.hashes });
   return { message: 'New recovery codes generated. Previous codes no longer work.', recoveryCodes: recovery.recoveryCodes, ...session };
 }
 
-async function closeAccount(req) {
-  const body = requestBody(req);
+async function closeAccount(auth, input) {
+  const body = securityBody(input);
   if (body.confirmation !== 'DELETE') {
     throw new SecurityError(400, 'Confirm permanent account closure.', { confirmation: 'Type DELETE to permanently close your account.' });
   }
-  const user = await sensitiveProof(req, body);
+  const user = await sensitiveProof(auth, body);
   const closed = await User.findOneAndUpdate(activeQuery(user), {
     $set: { deletedAt: new Date() }, $inc: { authVersion: 1 },
   }, { new: true }).select('+authVersion');
@@ -438,7 +423,7 @@ async function completeLoginMfa({ challengeToken, code, recoveryCode }) {
 }
 
 module.exports = {
-  SecurityError, sendSecurityError, getSecurityState, changePassword,
+  SecurityError, getSecurityState, changePassword,
   beginMfaSetup, confirmMfaSetup, disableMfa, regenerateRecoveryCodes, closeAccount,
   beginLoginMfa, completeLoginMfa,
 };

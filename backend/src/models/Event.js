@@ -28,5 +28,7 @@ const eventSchema = new mongoose.Schema({
 eventSchema.index({ seedKey: 1 }, { unique: true, sparse: true });
 // Index the schedule field for database queries that select events by start time.
 eventSchema.index({ startsAt: 1 });
+// Public discovery filters out events whose end instant has already passed.
+eventSchema.index({ endsAt: 1 });
 
 module.exports = mongoose.model('Event', eventSchema);

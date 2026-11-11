@@ -1,45 +1,7 @@
 const express = require('express');
+const controller = require('../controllers/itineraryController');
+
 const router = express.Router();
-const Activity = require('../models/Activity');
-const User = require('../models/User');
-
-router.post('/generate', async (req, res) => {
-  try {
-    const { interests, maxBudget, startTime, endTime, isSurprise } = req.body;
-
-    let query = {
-      cost: { $lte: maxBudget || 1000 },
-      'timeSlots.startTime': { $gte: new Date(startTime) },
-      'timeSlots.endTime': { $lte: new Date(endTime) },
-    };
-
-    if (!isSurprise && interests && interests.length > 0) {
-      query.category = { $in: interests };
-    }
-
-    // Legacy activities are archived with their host too; retain records but hide them.
-    const closedHostIds = await User.distinct('_id', { deletedAt: { $ne: null } });
-    query.hostId = { $nin: closedHostIds };
-    const availableActivities = await Activity.find(query);
-
-    let accumulatedCost = 0;
-    const selectedSchedule = [];
-
-    for (const activity of availableActivities) {
-      if (accumulatedCost + activity.cost <= maxBudget) {
-        selectedSchedule.push(activity);
-        accumulatedCost += activity.cost;
-      }
-    }
-
-    return res.status(200).json({
-      success: true,
-      totalCost: accumulatedCost,
-      schedule: selectedSchedule,
-    });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-});
+router.post('/generate', controller.generate);
 
 module.exports = router;

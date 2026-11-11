@@ -13,6 +13,7 @@ const userSchema = new mongoose.Schema({ //Account data model
         match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Please enter a valid email address.'],
     },
     passwordHash: {type: String, required: true, select: false},
+
     // Older accounts can leave these optional details blank until their owner adds them.
     phone: {
         type: String, trim: true, default: '',
@@ -43,8 +44,10 @@ const userSchema = new mongoose.Schema({ //Account data model
     avatarUrl: {type: String, default: ''},
     avatarData: {type: Buffer, select: false},      
     avatarMimeType: {type: String, select: false},
+
     // Closure retains the account and related records, but permanently prevents authentication.
     deletedAt: {type: Date, default: null, index: true},
+    
     authVersion: {type: Number, default: 0, min: 0, select: false},
     archiveWriteVersion: {type: Number, default: 0, select: false},
     mfaEnabled: {type: Boolean, default: false, select: false},

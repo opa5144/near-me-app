@@ -18,6 +18,26 @@ function requiredText(value, label, maxLength) {
   return value.trim();
 }
 
+// Require an explicit year and timezone instead of JavaScript's permissive, yearless date parsing.
+function parseEventTimestamp(value, label = 'Timestamp') {
+  const match = typeof value === 'string' && /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|[+-]\d{2}:\d{2})$/.exec(value);
+  if (!match) {
+    throw new EventInputError(label + ' must include a four-digit year, date, time, and Z or a UTC offset.');
+  }
+  const [year, month, day, hour, minute, second] = match.slice(1, 7).map(Number);
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  const zone = match[8];
+  const validOffset = zone === 'Z' || (Number(zone.slice(1, 3)) <= 23 && Number(zone.slice(4, 6)) <= 59);
+  if (year < 1 || month < 1 || month > 12 || day < 1 || day > daysInMonth[month - 1] ||
+      hour > 23 || minute > 59 || second > 59 || !validOffset) {
+    throw new EventInputError(label + ' must be a valid ISO date and time.');
+  }
+  const instant = new Date(value);
+  if (!Number.isFinite(instant.getTime())) throw new EventInputError(label + ' must be a valid ISO date and time.');
+  return instant;
+}
+
 // Convert untrusted JSON into allowed database fields without copying arbitrary properties.
 function parseCreateEvent(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -34,15 +54,9 @@ function parseCreateEvent(body) {
       Math.abs(body.price * 100 - Math.round(body.price * 100)) > 0.000001) {
     throw new EventInputError('Price must be a non-negative number with at most two decimal places.');
   }
-  // Validate real start/end instants before checking future starts and minimum duration.
-  if (typeof body.startsAt !== 'string' || typeof body.endsAt !== 'string') {
-    throw new EventInputError('Start and end timestamps are required.');
-  }
-  const startsAt = new Date(body.startsAt);
-  const endsAt = new Date(body.endsAt);
-  if (!Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime())) {
-    throw new EventInputError('Please supply valid start and end timestamps.');
-  }
+  // Validate real, fully specified instants before checking future starts and minimum duration.
+  const startsAt = parseEventTimestamp(body.startsAt, 'Start time');
+  const endsAt = parseEventTimestamp(body.endsAt, 'End time');
   if (startsAt.getTime() <= Date.now()) throw new EventInputError('The event must start in the future.');
   if (endsAt.getTime() - startsAt.getTime() < 30 * 60 * 1000) {
     throw new EventInputError('The event must last at least 30 minutes.');
@@ -104,7 +118,7 @@ function toEventItem(event, apiBaseUrl) {
   const timeZone = event.timeZone;
   // Format display labels in the event's zone, keeping output consistent across devices.
   const dateFormat = new Intl.DateTimeFormat('en-US', {
-    weekday: 'short', month: 'short', day: 'numeric', timeZone,
+    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone,
   });
   const timeFormat = new Intl.DateTimeFormat('en-US', {
     hour: 'numeric', minute: '2-digit', hour12: true, timeZone,
@@ -153,4 +167,4 @@ function toEventItem(event, apiBaseUrl) {
   };
 }
 
-module.exports = { parseCreateEvent, toEventItem, EventInputError, MAX_IMAGE_BYTES };
+module.exports = { parseCreateEvent, parseEventTimestamp, toEventItem, EventInputError, MAX_IMAGE_BYTES };

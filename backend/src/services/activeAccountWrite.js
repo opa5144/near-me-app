@@ -1,20 +1,20 @@
 const mongoose = require('mongoose');
 const User = require('../models/User');
-const { authVersionFilter } = require('../middleware/requireAuth');
+const { authVersionFilter } = require('./sessionService');
+const { ServiceError } = require('./serviceError');
 
-class ActiveAccountWriteError extends Error {
+class ActiveAccountWriteError extends ServiceError {
   constructor(status, message) {
-    super(message);
+    super(status, message);
     this.name = 'ActiveAccountWriteError';
-    this.status = status;
   }
 }
 
 // Lock the participating account records before changing their events or relationships.
 // Closure writes the same account document, so it must finish before this transaction
 // (which then rejects the closed account), or wait until these writes have committed.
-async function withActiveAccountWrite(req, counterpartIds, write) {
-  const currentId = String(req.userId).toLowerCase();
+async function withActiveAccountWrite(auth, counterpartIds, write) {
+  const currentId = String(auth.userId).toLowerCase();
   const accountIds = [...new Set([currentId, ...counterpartIds.map(id => String(id).toLowerCase())])].sort();
 
   return mongoose.connection.transaction(async session => {
@@ -24,7 +24,7 @@ async function withActiveAccountWrite(req, counterpartIds, write) {
       const result = await User.updateOne({
         _id: accountId,
         deletedAt: null,
-        ...(currentAccount ? authVersionFilter(req.authVersion ?? 0) : {}),
+        ...(currentAccount ? authVersionFilter(auth.authVersion ?? 0) : {}),
       }, { $inc: { archiveWriteVersion: 1 } }, {
         session,
         timestamps: false,

@@ -1,10 +1,10 @@
 const axios = require('axios');
+const { ServiceError } = require('./serviceError');
 
-class CityLookupError extends Error {
+class CityLookupError extends ServiceError {
   constructor(status, message) {
-    super(message);
+    super(status, message);
     this.name = 'CityLookupError';
-    this.status = status;
   }
 }
 

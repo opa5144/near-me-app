@@ -1,6 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Alert } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import { isAxiosError } from 'axios';
 import { fetchEvents, fetchMyEvents, fetchEventSelections, saveEventSelection } from '../api/events';
 import type { EventSelection } from '../api/events';
@@ -45,7 +45,8 @@ function selectionError(reason: unknown): string {
 }
 
 export function EventsProvider({ children }: { children: ReactNode }) {
-  const [events, setEvents] = useState<EventItem[]>([]);
+  const [loadedEvents, setEvents] = useState<EventItem[]>([]);
+  const [now, setNow] = useState(Date.now());
   const [myEvents, setMyEvents] = useState<EventItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -128,13 +129,49 @@ export function EventsProvider({ children }: { children: ReactNode }) {
     mounted.current = true;
     void refreshEvents();
     void refreshSelections();
+    const appState = AppState.addEventListener('change', state => {
+      if (state !== 'active' || !mounted.current) return;
+      // Suspended timers must not leave yesterday's events visible after resuming.
+      setNow(Date.now());
+      void refreshEvents();
+      void refreshSelections();
+    });
     return () => {
       mounted.current = false;
+      appState.remove();
       ++requestId.current;
       ++selectionRequestId.current;
       selectionLoadSucceeded.current = false;
     };
   }, [refreshEvents, refreshSelections]);
+
+  // Expire cached discovery records at their actual end instant. Keep the raw
+  // records separate from the host dashboard and private booking-history data.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    function updateClock() {
+      const instant = Date.now();
+      setNow(instant);
+      const futureEnds = loadedEvents.map(event => Date.parse(event.endsAt))
+        .filter(end => Number.isFinite(end) && end > instant);
+      if (futureEnds.length) {
+        const nextEnd = Math.min(...futureEnds);
+        timer = setTimeout(updateClock, Math.min(Math.max(nextEnd - instant + 1, 1), 60000));
+      }
+    }
+    updateClock();
+    return () => { if (timer) clearTimeout(timer); };
+  }, [loadedEvents]);
+
+  const events = useMemo(() => {
+    // A response can arrive after an event ends, before the next timer callback.
+    const instant = Math.max(now, Date.now());
+    return loadedEvents.filter(event => {
+      const start = Date.parse(event.startsAt);
+      const end = Date.parse(event.endsAt);
+      return Number.isFinite(start) && Number.isFinite(end) && start < end && end > instant;
+    });
+  }, [loadedEvents, now]);
 
   const addCreatedEvent = useCallback((created: EventItem) => {
     ++mutationVersion.current;

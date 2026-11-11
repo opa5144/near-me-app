@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
+import { isAxiosError } from 'axios';
 import { View, Share, TouchableOpacity, StyleSheet, Image, ScrollView, Modal, FlatList, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -9,15 +10,20 @@ import { AppText } from '../../components/AppText';
 import { fetchUserProfile, fetchFriendsNetwork, respondToFriendRequest, updateUserAvatar } from '../../api/client';
 import { EventItem } from '../../data/events';
 import { EventCard } from '../../components/EventCard';
-import { useEvents } from '../../context/EventsContext';
+import { fetchBookingHistory } from '../../api/events';
+import type { BookingHistoryItem } from '../../api/events';
 
 export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigation: any; events: EventItem[]; onOpenEvent: (event: EventItem) => void }) {
-  const { colors } = useTheme();
-  const { events: availableEvents, attendingEventIds } = useEvents();
+  const { colors, theme } = useTheme();
+  const attendedErrorColor = theme === 'dark' ? '#FF8A80' : '#C62828';
 
   // User state
   const [user, setUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'interested' | 'attended'>('interested');
+  const [attendedBookings, setAttendedBookings] = useState<BookingHistoryItem[]>([]);
+  const [loadingAttended, setLoadingAttended] = useState(true);
+  const [attendedError, setAttendedError] = useState<string | null>(null);
+  const [attendedAttempt, setAttendedAttempt] = useState(0);
 
   const DEFAULT_AVATAR = 'https://static.vecteezy.com/system/resources/previews/077/167/094/non_2x/simple-icon-of-a-person-with-a-round-head-and-rounded-body-vector.jpg';
 
@@ -73,6 +79,32 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
       controller.abort();
     };
   }, []));
+
+  // Public discovery now excludes ended events. Read past attendance from this
+  // account's private history instead, whenever the Attended tab gains focus.
+  useFocusEffect(useCallback(() => {
+    if (activeTab !== 'attended') return;
+    let active = true;
+    const controller = new AbortController();
+    setLoadingAttended(true);
+    setAttendedError(null);
+    setAttendedBookings([]);
+    void fetchBookingHistory(controller.signal)
+      .then(bookings => {
+        if (active) setAttendedBookings(bookings.filter(booking => booking.attending));
+      })
+      .catch((reason: unknown) => {
+        if (!active || controller.signal.aborted) return;
+        const message = isAxiosError<{ message?: string }>(reason) ? reason.response?.data?.message : undefined;
+        setAttendedError(typeof message === 'string' && message.trim()
+          ? message : 'Unable to load your attended events. Please try again.');
+      })
+      .finally(() => { if (active) setLoadingAttended(false); });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [activeTab, attendedAttempt]));
 
   // Fetch real friends & pending requests when modal opens
   const loadFriendsNetwork = async () => {
@@ -137,10 +169,7 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
     ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username
     : 'Profile';
 
-  const today = new Date();
   const interestedEvents = events || [];
-  // An old interest alone is not an RSVP; use the account's persisted attending flag.
-  const attendedEvents = availableEvents.filter(event => attendingEventIds.includes(event.id) && new Date(event.endsAt) <= today);
 
   return (
     <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
@@ -238,10 +267,20 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
           <View style={styles.sectionHeaderRow}>
             <Ionicons name="checkmark-done-circle" size={16} color={colors.primary} />
             <AppText variant="bodyMedium" color={colors.primary} style={styles.section}>
-              Attended · {attendedEvents.length} events
+              {loadingAttended || attendedError ? 'Attended events' : 'Attended - ' + attendedBookings.length + ' events'}
             </AppText>
           </View>
-          {attendedEvents.length ? attendedEvents.map(event => <EventCard key={event.id} event={event} horizontal onPress={() => onOpenEvent(event)} />) : <AppText variant="bodyMedium" color={colors.muted} style={styles.empty}>No attended events yet.</AppText>}
+          {loadingAttended ? (
+            <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />
+          ) : attendedError ? (
+            <>
+              <AppText accessibilityRole="alert" color={attendedErrorColor} style={styles.empty}>{attendedError}</AppText>
+              <AppButton title="Retry" variant="secondary" onPress={() => setAttendedAttempt(current => current + 1)} />
+            </>
+          ) : attendedBookings.length ? attendedBookings.map(booking => (
+            <EventCard key={booking.id} event={booking.event} horizontal
+              onPress={() => navigation.navigate('BookingHistoryDetails', { bookingId: booking.id })} />
+          )) : <AppText variant="bodyMedium" color={colors.muted} style={styles.empty}>No attended events yet.</AppText>}
         </>
       )}
 

@@ -30,7 +30,8 @@ export function PublicProfileScreen({ publicUser, events, onOpenEvent, onSendFri
 
   const today = new Date();
   const interestedEvents = events || [];
-  const attendedEvents = interestedEvents.filter(e => new Date(e.date) < today);
+  // Compare the real end timestamp; event.date is a formatted display label.
+  const attendedEvents = interestedEvents.filter(e => new Date(e.endsAt) < today);
 
   const handleFriendPress = () => {
     if (isFriend || requestSent) return;

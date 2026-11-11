@@ -127,7 +127,7 @@ export function CreateEventScreen({ onBack, onCreated }: Props) {
   const getNextDayFormatted = (value: string) => {
     const next = new Date(`${value}T00:00:00`);
     next.setDate(next.getDate() + 1);
-    return next.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return next.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   };
   // Block past calendar days here; submission also checks the complete start time.
   const handleDateChange = (newDate: string) => {
