@@ -1,4 +1,4 @@
-const MAX_IMAGE_BYTES = 1024 * 1024;
+const { MAX_IMAGE_BYTES, validatePhotoInput, resolvePhotos, photoItems } = require('./photoData');
 const CATEGORIES = ['Music', 'Dance', 'Food', 'Film', 'Workshop', 'Art'];
 
 // Validation failures carry a safe message and HTTP status for the event route.
@@ -79,26 +79,20 @@ function parseCreateEvent(body) {
     throw new EventInputError('Please supply valid latitude and longitude together.');
   }
 
-  // Decode optional pure Base64; check encoded and decoded limits because Base64 expands bytes.
+  // Full ordered photo lists are resolved against this event by the service, not trusted as stored IDs.
+  if (Object.prototype.hasOwnProperty.call(body, 'photos')) {
+    validatePhotoInput(body.photos);
+    if (body.imageBase64 !== undefined && body.imageBase64 !== null && body.imageBase64 !== '') {
+      throw new EventInputError('Submit photos or a single legacy image, not both.');
+    }
+  }
+  // Keep the previous single-image request working while new clients use ordered photos.
   let imageData;
   let imageMimeType = null;
   if (body.imageBase64 !== undefined && body.imageBase64 !== null && body.imageBase64 !== '') {
-    if (typeof body.imageBase64 !== 'string' ||
-        body.imageBase64.length > Math.ceil(MAX_IMAGE_BYTES / 3) * 4 ||
-        !/^[A-Za-z0-9+/]+={0,2}$/.test(body.imageBase64) ||
-        body.imageBase64.length % 4 !== 0) {
-      throw new EventInputError('Please select a JPEG image no larger than 1 MiB.', 413);
-    }
-    imageData = Buffer.from(body.imageBase64, 'base64');
-    if (imageData.length > MAX_IMAGE_BYTES) {
-      throw new EventInputError('Please select a JPEG image no larger than 1 MiB.', 413);
-    }
-    // Screen JPEG boundary markers; this is a signature check, not a full image decode.
-    if (imageData.length < 4 || imageData[0] !== 0xff || imageData[1] !== 0xd8 || imageData[2] !== 0xff ||
-        imageData[imageData.length - 2] !== 0xff || imageData[imageData.length - 1] !== 0xd9) {
-      throw new EventInputError('Please select a valid JPEG image.');
-    }
-    imageMimeType = 'image/jpeg';
+    const photo = resolvePhotos([{ imageBase64: body.imageBase64 }], [])[0];
+    imageData = photo.imageData;
+    imageMimeType = photo.imageMimeType;
   }
 
   // Ownership and seed keys are deliberately omitted; the route assigns the authenticated host.
@@ -132,6 +126,7 @@ function toEventItem(event, apiBaseUrl) {
   const crossesDay = calendarFormat.format(start) !== calendarFormat.format(end);
   // Keep a numeric price for app logic alongside the formatted Free/currency label.
   const priceAmount = Number(event.price);
+  const photos = photoItems(event, apiBaseUrl, 'events');
   return {
     id: String(event._id),
     // For hostId, return an object with user details if populated, otherwise just the ID string. 
@@ -155,7 +150,8 @@ function toEventItem(event, apiBaseUrl) {
     emoji: event.emoji || '🎟️',
     accent: event.accent || '#6549EF',
     location: event.address,
-    ...(event.imageMimeType ? { bannerImage: apiBaseUrl.replace(/\/$/, '') + '/events/' + event._id + '/image' } : {}),
+    photos,
+    ...(photos[0] ? { bannerImage: photos[0].url } : {}),
     priceAmount,
     startsAt: start.toISOString(),
     endsAt: end.toISOString(),

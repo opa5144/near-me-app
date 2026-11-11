@@ -13,6 +13,7 @@ const friendsRoutes = require('./routes/friends');
 const userRoutes = require('./routes/users');
 const settingsRoutes = require('./routes/settings');
 const eventSelectionRoutes = require('./routes/eventSelections');
+const storeRoutes = require('./routes/stores');
 
 const app = express();
 app.use(cors());
@@ -27,6 +28,7 @@ app.use('/api/friends', friendsRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/event-selections', eventSelectionRoutes);
+app.use('/api/stores', storeRoutes);
 
 // Turn JSON parsing failures into readable API responses before handling other errors.
 app.use((err, req, res, next) => {

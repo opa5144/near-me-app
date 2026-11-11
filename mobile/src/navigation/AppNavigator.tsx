@@ -27,6 +27,7 @@ import { EventHostDetailsScreen } from '../screens/host/EventHostDetailsScreen';
 import { CreateEventScreen } from '../screens/host/CreateEventScreen';
 import { EditEventScreen } from '../screens/host/EditEventScreen';
 import { CreateStoreScreen } from '../screens/host/CreateStoreScreen';
+import { StoreDetailsScreen } from '../screens/host/StoreDetailsScreen';
 
 import { UserProfileScreen } from '../screens/settings/UserProfileScreen';
 import { SettingsScreen } from '../screens/settings/SettingsScreen';
@@ -44,6 +45,7 @@ export type RootStackParamList = {
   EventDetails: { eventId: string };
   EventHostDetail: { eventId: string };
   EditEvent: { eventId: string };
+  StoreDetails: { storeId: string };
 };
 
 const Tab = createBottomTabNavigator();
@@ -160,6 +162,7 @@ function HostNavigator() {
                 onOpenEvent={event => props.navigation.navigate('EventHostDetail', { eventId: event.id })}
                 onCreateEvent={() => props.navigation.navigate('CreateEvent')}
                 onCreateStore={() => props.navigation.navigate('CreateStore')}
+                onOpenStore={store => props.navigation.navigate('StoreDetails', { storeId: store.id })}
               />
             </ScreenContainer>
           </EventsStatus>
@@ -183,7 +186,7 @@ function HostNavigator() {
         }}
       </HostStack.Screen>
       <HostStack.Screen name="CreateStore">
-        {props => <CreateStoreScreen {...props} onBack={() => props.navigation.goBack()} />}
+        {props => <CreateStoreScreen onBack={() => props.navigation.goBack()} onCreated={() => props.navigation.goBack()} />}
       </HostStack.Screen>
     </HostStack.Navigator>
   );
@@ -406,6 +409,13 @@ function EventHostDetailsRoute({ route, navigation }: NativeStackScreenProps<Roo
   );
 }
 
+function StoreDetailsRoute({ route, navigation }: NativeStackScreenProps<RootStackParamList, 'StoreDetails'>) {
+  return <ScreenContainer style={{ paddingHorizontal: 0 }}>
+    <StoreDetailsScreen storeId={route.params?.storeId ?? ''}
+      onBack={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MainTabs')} />
+  </ScreenContainer>;
+}
+
 function RootNavigator() {
   const { colors } = useTheme();
   const { refreshEvents } = useEvents();
@@ -419,6 +429,7 @@ function RootNavigator() {
       <RootStack.Screen name="MainTabs" component={TabNavigator} />
       <RootStack.Screen name="EventDetails" component={EventDetailsRoute} />
       <RootStack.Screen name="EventHostDetail" component={EventHostDetailsRoute} />
+      <RootStack.Screen name="StoreDetails" component={StoreDetailsRoute} />
       <RootStack.Screen name="EditEvent">
         {props => {
           const route = props.route as { params?: { eventId: string } };

@@ -19,6 +19,7 @@ export type EventItem = {
   emoji: string;
   accent: string;
   bannerImage?: string;
+  photos?: { id: string; url: string }[];
   hostId?: {
     _id: string;
     username: string;

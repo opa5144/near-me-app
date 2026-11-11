@@ -1,5 +1,6 @@
 import { api } from './client';
 import type { EventItem } from '../data/events';
+import type { PhotoInput } from './photos';
 export type { EventItem };
 
 // Creation sends canonical values, not the formatted strings shown in event cards.
@@ -18,6 +19,7 @@ export interface CreateEventRequest {
   latitude?: number;
   longitude?: number;
   imageBase64?: string; // Raw JPEG base64; the device-local preview URI is not uploaded.
+  photos?: PhotoInput[]; // Ordered complete collection; omission preserves it, [] clears it.
 }
 
 export type UpdateEventRequest = Partial<CreateEventRequest>;

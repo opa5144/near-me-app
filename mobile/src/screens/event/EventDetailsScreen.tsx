@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { EventItem } from '../../data/events';
 import { AppButton } from '../../components/AppButton';
 import { AppText } from '../../components/AppText';
+import { PhotoCollection } from '../../components/PhotoCollection';
 import { useTheme } from '../../context/ThemeContext';
 import { PublicProfileScreen } from '../settings/PublicProfileScreen'; 
 import { fetchUserProfile } from '../../api/client';
@@ -60,10 +61,6 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
       .catch(() => {});
   }, []);
 
-  // Display the uploaded image URL when available, with the emoji as a fallback.
-  const [imageFailed, setImageFailed] = useState(false);
-
-  useEffect(() => setImageFailed(false), [event.bannerImage]);
 
   const handleShare = async () => {
     try {
@@ -140,15 +137,10 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
         </Pressable>
       </View>
       
-      <View style={[styles.hero, { backgroundColor: event.accent }]}>
-        {event.bannerImage && !imageFailed ? (
-          <Image source={{ uri: event.bannerImage }} style={styles.heroImage}
-            accessibilityLabel={event.title} onError={() => setImageFailed(true)} />
-        ) : (
-          <AppText style={styles.heroEmoji}>{event.emoji}</AppText>
-        )}
-        <AppText style={styles.heroTag}>{event.category.toUpperCase()} EVENT</AppText>
-      </View>
+      <PhotoCollection photos={event.photos ?? []} fallbackUri={event.bannerImage} title={event.title}
+        emoji={event.emoji} accent={event.accent} mode="hero" />
+        <AppText style={[styles.photoCategory, { color: colors.primary }]}>{event.category.toUpperCase()} EVENT</AppText>
+
 
       <View style={styles.titleRow}>
         <AppText style={[styles.title, { color: colors.text }]}>{event.title}</AppText>
@@ -217,6 +209,8 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
       
       <AppText style={[styles.section, { color: colors.text }]}>About Event</AppText>
       <AppText style={[styles.description, { color: colors.muted }]}>{event.description}</AppText>
+      <PhotoCollection photos={event.photos ?? []} fallbackUri={event.bannerImage} title={event.title}
+        emoji={event.emoji} accent={event.accent} mode="gallery" />
 
       {/* --- HOST PROFILE POPUP MODAL (Only opens for other users) --- */}
       <Modal
@@ -251,10 +245,7 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 13 },
   back: { fontWeight: '800', fontSize: 13 },
   shareButton: { width: 34, height: 34, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  hero: { height: 210, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginBottom: 18, overflow: 'hidden', position: 'relative' },
-  heroImage: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', resizeMode: 'cover' },
-  heroEmoji: { fontSize: 78 },
-  heroTag: { position: 'absolute', bottom: 14, color: '#FFFFFF', fontSize: 10, fontWeight: '900', letterSpacing: 1.2, zIndex: 2 },
+  photoCategory: { fontSize: 11, fontWeight: '700', marginBottom: 12 },
   titleRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', marginBottom: 17 },
   title: { flex: 1, fontSize: 23, fontWeight: '900', lineHeight: 28 },
   price: { fontSize: 15, fontWeight: '900', marginTop: 4 },

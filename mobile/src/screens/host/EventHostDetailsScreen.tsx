@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { Alert, Image, Linking, Platform, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
+import React from 'react';
+import { Alert, Linking, Platform, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { EventItem } from '../../data/events';
 import { AppText } from '../../components/AppText';
+import { PhotoCollection } from '../../components/PhotoCollection';
 import { useTheme } from '../../context/ThemeContext';
 import { useEvents } from '../../context/EventsContext';
 
@@ -11,10 +12,6 @@ export function EventHostDetailsScreen({ event, onEditEvent, onBack }: { event: 
   const { colors } = useTheme();
   const { viewedEventIds, interestedEventIds } = useEvents();
   
-  // Display the uploaded image URL when available, with the emoji as a fallback.
-  const [imageFailed, setImageFailed] = useState(false);
-  // Try again when a different event image URL is supplied.
-  useEffect(() => setImageFailed(false), [event.bannerImage]);
 
   // Calculate stats for this specific event
   const viewCount = viewedEventIds.includes(event.id) ? 1 : 0;
@@ -85,15 +82,10 @@ export function EventHostDetailsScreen({ event, onEditEvent, onBack }: { event: 
         </Pressable>
       </View>
       
-      <View style={[styles.hero, { backgroundColor: event.accent }]}>
-        {event.bannerImage && !imageFailed ? (
-          <Image source={{ uri: event.bannerImage }} style={styles.heroImage}
-            accessibilityLabel={event.title} onError={() => setImageFailed(true)} />
-        ) : (
-          <AppText style={styles.heroEmoji}>{event.emoji}</AppText>
-        )}
-        <AppText style={styles.heroTag}>{event.category.toUpperCase()} EVENT • HOST VIEW</AppText>
-      </View>
+      <PhotoCollection photos={event.photos ?? []} fallbackUri={event.bannerImage} title={event.title}
+        emoji={event.emoji} accent={event.accent} mode="hero" />
+        <AppText style={[styles.photoCategory, { color: colors.primary }]}>{event.category.toUpperCase()} EVENT • HOST VIEW</AppText>
+
 
       {/* Host Analytics Performance Summary */}
       <View style={[styles.metricsContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -151,6 +143,8 @@ export function EventHostDetailsScreen({ event, onEditEvent, onBack }: { event: 
 
       <AppText style={[styles.section, { color: colors.text }]}>About event</AppText>
       <AppText style={[styles.description, { color: colors.muted }]}>{event.description}</AppText>
+      <PhotoCollection photos={event.photos ?? []} fallbackUri={event.bannerImage} title={event.title}
+        emoji={event.emoji} accent={event.accent} mode="gallery" />
     </ScrollView>
   );
 }
@@ -160,10 +154,7 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 13 },
   back: { fontWeight: '800', fontSize: 13 },
   shareButton: { width: 34, height: 34, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  hero: { height: 210, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginBottom: 14, overflow: 'hidden', position: 'relative' },
-  heroImage: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', resizeMode: 'cover' },
-  heroEmoji: { fontSize: 78 },
-  heroTag: { position: 'absolute', bottom: 14, color: '#FFFFFF', fontSize: 10, fontWeight: '900', letterSpacing: 1.2, zIndex: 2 },
+  photoCategory: { fontSize: 11, fontWeight: '700', marginBottom: 12 },
   metricsContainer: { flexDirection: 'row', borderRadius: 16, borderWidth: 1, padding: 12, marginBottom: 18, alignItems: 'center' },
   metricItem: { flex: 1, alignItems: 'center' },
   metricValue: { fontSize: 18, fontWeight: '900' },

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const photoSchema = require('./photoSchema');
 
 // Store each event in eventList, with a User reference identifying its host.
 // Dates are absolute instants; timeZone controls how those instants appear to viewers.
@@ -16,6 +17,11 @@ const eventSchema = new mongoose.Schema({
   placeId: { type: String, default: null },
   latitude: { type: Number, default: null, min: -90, max: 90 },
   longitude: { type: Number, default: null, min: -180, max: 180 },
+  // Undefined preserves old single-image records; an explicit [] means the owner cleared all photos.
+  photos: {
+    type: [photoSchema], default: undefined,
+    validate: { validator: value => !value || value.length <= 5, message: 'Choose up to five photos.' },
+  },
   // Image bytes stay out of normal event queries and are fetched by the image endpoint.
   imageData: { type: Buffer, select: false },
   imageMimeType: { type: String, enum: ['image/jpeg', null], default: null },

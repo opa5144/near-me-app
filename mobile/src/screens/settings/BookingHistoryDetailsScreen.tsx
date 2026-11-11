@@ -1,9 +1,10 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { isAxiosError } from 'axios';
 import { AppButton } from '../../components/AppButton';
 import { ScreenHeader } from '../../components/ScreenHeader';
+import { PhotoCollection } from '../../components/PhotoCollection';
 import { fetchBookingHistoryDetails } from '../../api/events';
 import type { BookingHistoryItem } from '../../api/events';
 import { useTheme } from '../../context/ThemeContext';
@@ -44,7 +45,6 @@ export function BookingHistoryDetailsScreen({ navigation, route }: BookingHistor
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const [imageFailed, setImageFailed] = useState(false);
 
   // Reload by the private selection ID on every visit; never trust a passed event copy.
   useFocusEffect(useCallback(() => {
@@ -53,7 +53,6 @@ export function BookingHistoryDetailsScreen({ navigation, route }: BookingHistor
     setBooking(null);
     setIsLoading(true);
     setError(null);
-    setImageFailed(false);
     if (!bookingId) {
       setError('This history entry is unavailable.');
       setIsLoading(false);
@@ -88,11 +87,8 @@ export function BookingHistoryDetailsScreen({ navigation, route }: BookingHistor
           <AppButton title="Retry" variant="secondary" onPress={() => setAttempt(current => current + 1)} />
         </View>
       ) : <>
-        <View style={[styles.hero, { backgroundColor: event.accent }]}>
-          {event.bannerImage && !imageFailed ? <Image source={{ uri: event.bannerImage }} style={styles.image}
-            accessibilityLabel={event.title} onError={() => setImageFailed(true)} />
-            : <Text style={styles.emoji}>{event.emoji}</Text>}
-        </View>
+        <PhotoCollection photos={event.photos ?? []} fallbackUri={event.bannerImage} title={event.title}
+          emoji={event.emoji} accent={event.accent} mode="hero" />
         <Text style={[styles.title, { color: colors.text }]}>{event.title}</Text>
         <DetailRow label="Category" value={event.category} />
         <DetailRow label="Price" value={event.price} />
@@ -104,10 +100,11 @@ export function BookingHistoryDetailsScreen({ navigation, route }: BookingHistor
         {typeof event.latitude === 'number' && typeof event.longitude === 'number' &&
           <DetailRow label="Coordinates" value={event.latitude.toFixed(5) + ', ' + event.longitude.toFixed(5)} />}
         {host?.username && <DetailRow label="Host" value={'@' + host.username + (hostName ? ' (' + hostName + ')' : '')} />}
-        <DetailRow label="Your saved choices" value={booking.interested && booking.attending
-          ? 'Interested and attending' : booking.attending ? 'Attending' : 'Interested'} />
+        <DetailRow label="History section" value={booking.attending ? 'Attended' : 'Interested'} />
         <Text style={[styles.section, { color: colors.text }]}>About this event</Text>
         <Text style={[styles.description, { color: colors.muted }]}>{event.description}</Text>
+        <PhotoCollection photos={event.photos ?? []} fallbackUri={event.bannerImage} title={event.title}
+          emoji={event.emoji} accent={event.accent} mode="gallery" />
       </>}
     </ScrollView>
   );
@@ -118,9 +115,6 @@ const styles = StyleSheet.create({
   loading: { marginTop: 24 },
   notice: { paddingVertical: 16 },
   message: { fontSize: 13, lineHeight: 20, marginVertical: 16 },
-  hero: { height: 210, borderRadius: 20, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  image: { width: '100%', height: '100%', resizeMode: 'cover' },
-  emoji: { fontSize: 72 },
   title: { fontSize: 23, fontWeight: '800', marginBottom: 12 },
   infoRow: { borderBottomWidth: 1, paddingVertical: 12 },
   label: { fontSize: 12, marginBottom: 4 },

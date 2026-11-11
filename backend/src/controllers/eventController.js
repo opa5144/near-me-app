@@ -47,6 +47,20 @@ async function getEvent(req, res) {
   }
 }
 
+async function getPhoto(req, res) {
+  try {
+    const photo = await events.getEventPhoto(req.params.id, req.params.photoId);
+    if (!photo) return res.sendStatus(404);
+    res.set('Content-Type', photo.mimeType);
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.set('Cache-Control', 'no-store');
+    return res.send(photo.data);
+  } catch (error) {
+    if (sendServiceError(res, error)) return;
+    return res.status(500).json({ message: 'Unable to load this image.' });
+  }
+}
+
 async function createEvent(req, res) {
   try {
     const event = await events.createEvent(getAuthContext(req), req.body, apiBaseUrl(req));
@@ -69,4 +83,4 @@ async function updateEvent(req, res) {
   }
 }
 
-module.exports = { listEvents, listHostedEvents, getImage, getEvent, createEvent, updateEvent };
+module.exports = { listEvents, listHostedEvents, getImage, getPhoto, getEvent, createEvent, updateEvent };

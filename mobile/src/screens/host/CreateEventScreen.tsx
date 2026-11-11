@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, View, KeyboardAvoidingView, Platform, Alert, Image, TouchableOpacity } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
-import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { ScrollView, StyleSheet, TextInput, View, KeyboardAvoidingView, Platform, Alert, TouchableOpacity } from 'react-native';
 import { isAxiosError } from 'axios';
-import { Ionicons } from '@expo/vector-icons';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { AppButton } from '../../components/AppButton';
+import { PhotoPickerField } from '../../components/PhotoPickerField';
+import { toPhotoInput } from '../../api/photos';
+import type { EditablePhoto } from '../../api/photos';
 import { AppText } from '../../components/AppText';
 import { DatePickerField } from '../../components/DatePickerField';
 import { TimePickerField } from '../../components/TimePickerField';
@@ -21,7 +21,6 @@ import { useTheme } from '../../context/ThemeContext';
 // All is a browsing filter; new events must use a specific category.
 const eventCategories = categories.filter(category => category !== 'All');
 const MINUTE_INTERVAL: 15 | 30 = 15;
-const MAX_IMAGE_BYTES = 1024 * 1024;
 // Keep the date picker value in local YYYY-MM-DD form, without converting it to UTC.
 const formatDateString = (value: Date) =>
   `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
@@ -43,38 +42,6 @@ const priceToAmount = (value: string): number | null => {
   const cents = Number(whole || '0') * 100 + Number(fractional.padEnd(2, '0'));
   return Number.isSafeInteger(cents) && cents >= 0 ? cents / 100 : null;
 };
-// Base64 text is larger than the image bytes; apply the 1 MiB limit to decoded bytes.
-const decodedBase64Bytes = (value: string) =>
-  (value.length * 3) / 4 - (value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0);
-
-// Normalize any selected image to a centered 16:9 JPEG, up to 1280 pixels wide.
-// Return a local URI for preview and Base64 for upload; release native image objects
-// in finally blocks even if conversion or size validation fails.
-async function prepareBanner(uri: string) {
-  const context = ImageManipulator.manipulate(uri);
-  try {
-    const original = await context.renderAsync();
-    try {
-      const { width, height } = original;
-      if (width < 1 || height < 1) throw new Error('The selected image could not be read.');
-      const cropWidth = Math.min(width, Math.floor(height * 16 / 9));
-      const cropHeight = Math.min(height, Math.floor(cropWidth * 9 / 16));
-      if (cropWidth < 1 || cropHeight < 1) throw new Error('Choose an image with larger dimensions.');
-      context.crop({ originX: Math.floor((width - cropWidth) / 2), originY: Math.floor((height - cropHeight) / 2), width: cropWidth, height: cropHeight });
-      context.resize({ width: Math.min(1280, cropWidth) });
-      const rendered = await context.renderAsync();
-      try {
-        const result = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.72, base64: true });
-        if (!result.base64) throw new Error('The selected image could not be prepared.');
-        if (decodedBase64Bytes(result.base64) > MAX_IMAGE_BYTES) {
-          throw new Error('This banner is still larger than 1 MiB. Please choose a simpler or smaller image.');
-        }
-        return { uri: result.uri, base64: result.base64 };
-      } finally { rendered.release(); }
-    } finally { original.release(); }
-  } finally { context.release(); }
-}
-
 type Props = { onBack: () => void; onCreated: (event: EventItem) => void };
 
 export function CreateEventScreen({ onBack, onCreated }: Props) {
@@ -91,8 +58,7 @@ export function CreateEventScreen({ onBack, onCreated }: Props) {
   const [price, setPrice] = useState('');
   const [selectedVenue, setSelectedVenue] = useState<EventPlace | null>(null);
   // The device-local preview URI is never sent as a shared image URL.
-  const [bannerImage, setBannerImage] = useState<string | null>(null);
-  const [imageBase64, setImageBase64] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<EditablePhoto[]>([]);
   // State updates the button/loading UI; refs below guard repeat taps immediately,
   // before React has rendered the updated disabled state.
   const [isSaving, setIsSaving] = useState(false);
@@ -141,32 +107,9 @@ export function CreateEventScreen({ onBack, onCreated }: Props) {
   // Keep the form's Back link from interrupting its image preparation or save flow.
   const handleBack = () => { if (!savingRef.current && !imageBusyRef.current) onBack(); };
 
-  // Request library access, let the host crop, then prepare both preview and upload
-  // data. Canceling or failing leaves the previously selected banner unchanged.
-  const handlePickImage = async () => {
-    if (savingRef.current || imageBusyRef.current || completedRef.current) return;
-    imageBusyRef.current = true;
-    setImageBusy(true);
-    try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('Permission Denied', 'Permission to access the media library is required.'); return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [16, 9], quality: 1 });
-      if (result.canceled || !result.assets?.length) return;
-      const prepared = await prepareBanner(result.assets[0].uri);
-      if (mountedRef.current) { setBannerImage(prepared.uri); setImageBase64(prepared.base64); }
-    } catch (error) {
-      if (mountedRef.current) Alert.alert('Image Error', error instanceof Error ? error.message : 'The selected image could not be prepared.');
-    } finally {
-      imageBusyRef.current = false;
-      if (mountedRef.current) setImageBusy(false);
-    }
-  };
-  // Clear both representations so a removed preview is also omitted from the request.
-  const handleRemoveImage = () => {
-    if (savingRef.current || imageBusyRef.current || completedRef.current) return;
-    setBannerImage(null); setImageBase64(null);
+  const handlePhotoBusyChange = (busy: boolean) => {
+    imageBusyRef.current = busy;
+    if (mountedRef.current) setImageBusy(busy);
   };
 
   // Validate the complete draft before making a request. The ref guards also prevent
@@ -210,14 +153,13 @@ export function CreateEventScreen({ onBack, onCreated }: Props) {
       startsAt: start.toISOString(), endsAt: end.toISOString(), timeZone,
       address: selectedVenue.address.trim(), place: selectedVenue.name.trim(),
       placeId: selectedVenue.placeId || undefined, latitude: selectedVenue.latitude, longitude: selectedVenue.longitude,
-      ...(imageBase64 ? { imageBase64 } : {}),
     };
     savingRef.current = true;
     setIsSaving(true);
     let savedEvent: EventItem;
     try {
       // Wait for the saved document, including its database ID and durable image URL.
-      savedEvent = await createEvent(payload);
+      savedEvent = await createEvent({ ...payload, photos: toPhotoInput(photos) });
       completedRef.current = true;
     } catch (error) {
       // Prefer a useful backend validation message; report a missing response as a
@@ -318,29 +260,8 @@ export function CreateEventScreen({ onBack, onCreated }: Props) {
         {/* Secure typeahead autocomplete proxy search drop-down location field */}
         <LocationComponent onVenueSelected={setSelectedVenue} onSelectionCleared={() => setSelectedVenue(null)} />
 
-        {/* Upload Banner Image */}
-        <View style={styles.formGroup}>
-          <AppText style={[styles.fieldLabel, { color: colors.text }]}>Upload Banner Image</AppText>
-          {imageBusy && <AppText style={{ color: colors.muted, marginBottom: 8 }}>Preparing banner...</AppText>}
-          {bannerImage ? (
-            <View style={[styles.imagePreviewContainer, { borderColor: colors.border }]}>
-              <Image source={{ uri: bannerImage }} style={styles.bannerImagePreview} />
-              <View style={styles.actionRow}>
-                <TouchableOpacity onPress={handlePickImage} disabled={isSaving || imageBusy || completedRef.current} activeOpacity={0.8} style={styles.changeBtn}>
-                  <AppText style={styles.actionBtnText}>Change</AppText>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={handleRemoveImage} disabled={isSaving || imageBusy || completedRef.current} activeOpacity={0.8} style={styles.removeBtn}>
-                  <AppText style={styles.removeBtnText}>Remove</AppText>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            <TouchableOpacity onPress={handlePickImage} disabled={isSaving || imageBusy || completedRef.current} activeOpacity={0.8} style={[styles.imagePlaceholderFrame, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Ionicons name="image-outline" size={26} color={colors.muted} style={{ marginBottom: 4 }} />
-              <AppText style={[styles.placeholderText, { color: colors.muted }]}>Tap to select and crop image (optional)</AppText>
-            </TouchableOpacity>
-          )}
-        </View>
+        <PhotoPickerField photos={photos} onChange={setPhotos} label="Event photos"
+          disabled={isSaving || completedRef.current} onBusyChange={handlePhotoBusyChange} />
 
         <AppButton title={isSaving ? "Creating Event..." : "Create Event"} onPress={handleSubmit} disabled={isSaving || imageBusy || completedRef.current} style={styles.submitButton} />
       </ScrollView>
@@ -365,14 +286,5 @@ const styles = StyleSheet.create({
   chip: { borderWidth: 1, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20 },
   chipText: { fontSize: 11, fontWeight: '700' },
   activeChipText: { color: '#FFFFFF' },
-  imagePlaceholderFrame: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 8, height: 100, alignItems: 'center', justifyContent: 'center' },
-  placeholderText: { fontSize: 12, fontWeight: '600' },
-  imagePreviewContainer: { position: 'relative', height: 140, borderRadius: 12, overflow: 'hidden', borderWidth: 1, backgroundColor: '#000' },
-  bannerImagePreview: { width: '100%', height: '100%', resizeMode: 'cover', opacity: 0.9 },
-  actionRow: { position: 'absolute', bottom: 8, right: 8, flexDirection: 'row', gap: 8 },
-  changeBtn: { backgroundColor: 'rgba(0, 0, 0, 0.75)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 },
-  removeBtn: { backgroundColor: 'rgba(229, 62, 62, 0.85)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 },
-  actionBtnText: { color: '#FFF', fontSize: 11, fontWeight: '700' },
-  removeBtnText: { color: '#FFF', fontSize: 11, fontWeight: '700' },
   submitButton: { marginTop: 10 }
 });

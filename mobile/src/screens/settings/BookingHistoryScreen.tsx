@@ -38,6 +38,24 @@ export function BookingHistoryScreen({ navigation }: any) {
     };
   }, [attempt]));
 
+  // Attendance takes display priority without changing either saved selection flag.
+  const attended = bookings.filter(booking => booking.attending);
+  const interested = bookings.filter(booking => booking.interested && !booking.attending);
+
+  const section = (title: string, entries: BookingHistoryItem[], emptyMessage: string) => (
+    <View style={styles.section}>
+      <Text accessibilityRole="header" style={[styles.sectionTitle, { color: colors.text }]}>
+        {title} · {entries.length}
+      </Text>
+      {entries.length ? entries.map(booking => (
+        <View key={booking.id} style={styles.entry}>
+          <EventCard event={booking.event} horizontal
+            onPress={() => navigation.navigate('BookingHistoryDetails', { bookingId: booking.id })} />
+        </View>
+      )) : <Text style={[styles.message, { color: colors.muted }]}>{emptyMessage}</Text>}
+    </View>
+  );
+
   return (
     <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]}>
       <AppButton title="Back to Settings" variant="quiet" alignment="left" onPress={() => navigation.goBack()} />
@@ -47,17 +65,10 @@ export function BookingHistoryScreen({ navigation }: any) {
           <Text accessibilityRole="alert" style={[styles.message, { color: errorColor }]}>{error}</Text>
           <AppButton title="Retry" variant="secondary" onPress={() => setAttempt(current => current + 1)} />
         </View>
-      ) : bookings.length ? bookings.map(booking => (
-        <View key={booking.id} style={styles.entry}>
-          <EventCard event={booking.event} horizontal
-            onPress={() => navigation.navigate('BookingHistoryDetails', { bookingId: booking.id })} />
-          <Text style={[styles.savedState, { color: colors.muted }]}>
-            {booking.interested && booking.attending ? 'Interested and attending' : booking.attending ? 'Attending' : 'Interested'}
-          </Text>
-        </View>
-      )) : <Text style={[styles.message, { color: colors.muted }]}>
-        No past events yet. Your Interested or Attending events appear here after they end.
-      </Text>}
+      ) : <>
+        {section('Attended', attended, 'No past events marked as attending yet.')}
+        {section('Interested', interested, 'No past events marked only as interested yet.')}
+      </>}
     </ScrollView>
   );
 }
@@ -68,5 +79,6 @@ const styles = StyleSheet.create({
   notice: { paddingVertical: 16 },
   message: { fontSize: 13, lineHeight: 20, marginVertical: 16 },
   entry: { marginBottom: 12 },
-  savedState: { fontSize: 12, marginTop: -4, marginLeft: 4 },
+  section: { marginTop: 18 },
+  sectionTitle: { fontSize: 18, fontWeight: '800', marginBottom: 12 },
 });
