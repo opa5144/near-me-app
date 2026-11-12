@@ -30,7 +30,7 @@ async function getAvatar(req, res) {
 
 async function getCurrentUser(req, res) {
   try {
-    const user = await userService.fetchCurrentUser(getAuthContext(req).userId);
+    const user = await userService.fetchCurrentUser(getAuthContext(req).userId, apiBaseUrl(req));
     return res.status(200).json({ success: true, user });
   } catch (error) {
     if (sendServiceError(res, error)) return;

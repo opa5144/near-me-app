@@ -1,11 +1,17 @@
 const argon2 = require('argon2');
+const mongoose = require('mongoose');
 const User = require('../models/User');
+const UserProfile = require('../models/UserProfile');
+const AccountSecurity = require('../models/AccountSecurity');
 const { createSession, deleteSession } = require('./sessionService');
 const { beginLoginMfa, completeLoginMfa } = require('./accountSecurity');
+const { withActiveAccountWrite } = require('./activeAccountWrite');
+const { authVersionFilter } = require('./accountState');
+const { readUserProfile, IDENTITY_FIELDS } = require('./accountReadService');
 const { ServiceError } = require('./serviceError');
 
-const PROFILE_FIELDS = '_id firstName lastName username email phone dob bio avatarUrl';
 const EDITABLE_PROFILE_FIELDS = ['username', 'email', 'phone', 'dob', 'bio'];
+const LOGIN_SECURITY_FIELDS = '_id userId +passwordHash +authVersion +mfaEnabled +loginPasswordFailedAttempts +loginPasswordLockedUntil';
 
 function profileValidationErrors(error) {
   const errors = {};
@@ -26,19 +32,10 @@ function duplicateProfileErrors(error) {
   return errors;
 }
 
-// Explicit profile fields exclude password hashes and stored avatar bytes.
-function toUserProfile(user) {
+function loginSecurityOwner(user, conditions = []) {
   return {
-    _id: user._id, firstName: user.firstName, lastName: user.lastName,
-    username: user.username, email: user.email,
-    phone: user.phone ?? '', dob: user.dob ?? '', bio: user.bio ?? '', avatarUrl: user.avatarUrl ?? '',
-  };
-}
-
-function loginOwner(user) {
-  return {
-    _id: user._id, deletedAt: null,
-    $expr: { $eq: [{ $ifNull: ['$authVersion', 0] }, user.authVersion ?? 0] },
+    userId: user._id,
+    $and: [authVersionFilter(user.authVersion ?? 0), ...conditions],
   };
 }
 
@@ -53,11 +50,11 @@ function throwIfLoginLocked(lockedUntil) {
 
 async function recordLoginPasswordFailure(user) {
   const now = new Date();
-  // Count failures atomically across devices, resetting an expired lock first.
-  return User.findOneAndUpdate({
-    ...loginOwner(user),
-    $or: [{ loginPasswordLockedUntil: null }, { loginPasswordLockedUntil: { $lte: now } }],
-  }, [
+  // Commit the fenced failure update before the caller throws an authentication error.
+  return withActiveAccountWrite({ userId: user._id, authVersion: user.authVersion ?? 0 }, [], async session =>
+    AccountSecurity.findOneAndUpdate(loginSecurityOwner(user, [{
+      $or: [{ loginPasswordLockedUntil: null }, { loginPasswordLockedUntil: { $lte: now } }],
+    }]), [
     { $set: { loginPasswordFailedAttempts: { $add: [
       { $cond: [
         { $and: [
@@ -69,7 +66,7 @@ async function recordLoginPasswordFailure(user) {
     { $set: { loginPasswordLockedUntil: {
       $cond: [{ $gte: ['$loginPasswordFailedAttempts', 5] }, new Date(now.getTime() + 5 * 60 * 1000), null],
     } } },
-  ], { new: true, updatePipeline: true }).select('+loginPasswordLockedUntil');
+    ], { new: true, updatePipeline: true, session }).select('+loginPasswordLockedUntil'));
 }
 
 async function getUsernameAvailability(value) {
@@ -110,7 +107,13 @@ async function signup(input) {
     }
     await User.init();
     const passwordHash = await argon2.hash(password, { type: argon2.argon2id });
-    const user = await User.create({ ...account, passwordHash });
+    // New accounts become usable only when all three authoritative records commit together.
+    const user = await mongoose.connection.transaction(async session => {
+      const [identity] = await User.create([account], { session });
+      await UserProfile.create([{ _id: identity._id, userId: identity._id }], { session });
+      await AccountSecurity.create([{ _id: identity._id, userId: identity._id, passwordHash }], { session });
+      return identity;
+    });
     return {
       message: 'Account Created.',
       user: { _id: user._id, firstName: user.firstName, lastName: user.lastName, username: user.username, email: user.email },
@@ -140,22 +143,28 @@ async function login(input) {
   }
   const invalidCredentials = 'Invalid email or password.';
   if (Array.from(password).length > 128) throw new ServiceError(401, invalidCredentials);
-  const user = await User.findOne({ email: email.trim().toLowerCase(), deletedAt: null })
-    .select('+passwordHash +authVersion +mfaEnabled +loginPasswordFailedAttempts +loginPasswordLockedUntil');
-  if (!user) throw new ServiceError(401, invalidCredentials);
+  const identity = await User.findOne({ email: email.trim().toLowerCase(), deletedAt: null })
+    .select(IDENTITY_FIELDS).lean();
+  if (!identity) throw new ServiceError(401, invalidCredentials);
+  const security = await AccountSecurity.findOne({ userId: identity._id }).select(LOGIN_SECURITY_FIELDS).lean();
+  if (!security || typeof security.passwordHash !== 'string' || !security.passwordHash) {
+    throw new ServiceError(503, 'Your account security is unavailable. Please contact support.');
+  }
+  // The security document has its own ID; challenges and tokens still belong to the identity ID.
+  const user = { ...identity, ...security, _id: identity._id, userId: identity._id };
   throwIfLoginLocked(user.loginPasswordLockedUntil);
   if (!(await argon2.verify(user.passwordHash, password))) {
     const failed = await recordLoginPasswordFailure(user);
-    const latest = failed || await User.findOne({ _id: user._id, deletedAt: null }).select('+loginPasswordLockedUntil');
+    const latest = failed || await AccountSecurity.findOne({ userId: user._id }).select('+loginPasswordLockedUntil');
     throwIfLoginLocked(latest?.loginPasswordLockedUntil);
     throw new ServiceError(401, invalidCredentials);
   }
-  const reset = await User.updateOne({
-    ...loginOwner(user),
-    $or: [{ loginPasswordLockedUntil: null }, { loginPasswordLockedUntil: { $lte: new Date() } }],
-  }, { $set: { loginPasswordFailedAttempts: 0, loginPasswordLockedUntil: null } });
+  const reset = await withActiveAccountWrite({ userId: user._id, authVersion: user.authVersion ?? 0 }, [], async session =>
+    AccountSecurity.updateOne(loginSecurityOwner(user, [{
+      $or: [{ loginPasswordLockedUntil: null }, { loginPasswordLockedUntil: { $lte: new Date() } }],
+    }]), { $set: { loginPasswordFailedAttempts: 0, loginPasswordLockedUntil: null } }, { session }));
   if (!reset.matchedCount) {
-    const latest = await User.findOne({ _id: user._id, deletedAt: null }).select('+loginPasswordLockedUntil');
+    const latest = await AccountSecurity.findOne({ userId: user._id }).select('+loginPasswordLockedUntil');
     throwIfLoginLocked(latest?.loginPasswordLockedUntil);
     throw new ServiceError(401, invalidCredentials);
   }
@@ -170,9 +179,9 @@ async function login(input) {
   };
 }
 
-async function loginMfa(input) {
+async function loginMfa(input, baseUrl) {
   const { challengeToken, code, recoveryCode } = input ?? {};
-  const { user, session } = await completeLoginMfa({ challengeToken, code, recoveryCode });
+  const { user, session } = await completeLoginMfa({ challengeToken, code, recoveryCode }, baseUrl);
   return {
     message: 'Login successful.', ...session,
     user: {
@@ -182,13 +191,13 @@ async function loginMfa(input) {
   };
 }
 
-async function getProfile(auth) {
-  const user = await User.findOne({ _id: auth.userId, deletedAt: null }).select(PROFILE_FIELDS);
+async function getProfile(auth, baseUrl) {
+  const user = await readUserProfile(auth.userId, baseUrl);
   if (!user) throw new ServiceError(401, 'Please log in again.');
-  return { user: toUserProfile(user) };
+  return { user };
 }
 
-async function updateProfile(auth, body) {
+async function updateProfile(auth, body, baseUrl) {
   try {
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
       throw new ServiceError(400, 'Please submit your account details.', { errors: {} });
@@ -208,8 +217,11 @@ async function updateProfile(auth, body) {
       const digits = updates.phone;
       updates.phone = digits[0] + ' ' + digits.slice(1, 4) + '-' + digits.slice(4, 7) + '-' + digits.slice(7);
     }
-    if (Object.keys(updates).length > 0) {
-      try { await User.validate(updates, Object.keys(updates)); }
+    const identityUpdates = Object.fromEntries(Object.entries(updates).filter(([field]) => ['username', 'email'].includes(field)));
+    const profileUpdates = Object.fromEntries(Object.entries(updates).filter(([field]) => ['phone', 'dob', 'bio'].includes(field)));
+    for (const [model, changes] of [[User, identityUpdates], [UserProfile, profileUpdates]]) {
+      if (!Object.keys(changes).length) continue;
+      try { await model.validate(changes, Object.keys(changes)); }
       catch (error) {
         if (error.name !== 'ValidationError') throw error;
         Object.assign(errors, profileValidationErrors(error));
@@ -221,11 +233,30 @@ async function updateProfile(auth, body) {
     if (!Object.keys(updates).length) {
       throw new ServiceError(400, 'Please submit at least one account field to update.', { errors: {} });
     }
-    const user = await User.findOneAndUpdate(loginOwner({ _id: auth.userId, authVersion: auth.authVersion }), {
-      $set: updates,
-    }, { new: true, runValidators: true }).select(PROFILE_FIELDS);
-    if (!user) throw new ServiceError(401, 'Please log in again.');
-    return { user: toUserProfile(user) };
+    const user = await withActiveAccountWrite(auth, [], async session => {
+      // Missing authoritative profile data is an integrity error, never a reason to revive a legacy copy.
+      if (!(await UserProfile.exists({ userId: auth.userId }).session(session))) {
+        throw new ServiceError(503, 'Your account profile is unavailable. Please contact support.');
+      }
+      if (Object.keys(identityUpdates).length) {
+        const identity = await User.updateOne({ _id: auth.userId, deletedAt: null }, {
+          $set: identityUpdates,
+        }, { runValidators: true, session });
+        if (!identity.matchedCount) throw new ServiceError(401, 'Please log in again.');
+      }
+      if (Object.keys(profileUpdates).length) {
+        const profile = await UserProfile.updateOne({ userId: auth.userId }, {
+          $set: profileUpdates,
+        }, { runValidators: true, session });
+        if (!profile.matchedCount) {
+          throw new ServiceError(503, 'Your account profile is unavailable. Please contact support.');
+        }
+      }
+      const saved = await readUserProfile(auth.userId, baseUrl, { session });
+      if (!saved) throw new ServiceError(401, 'Please log in again.');
+      return saved;
+    });
+    return { user };
   } catch (error) {
     if (error.code === 11000) {
       const errors = duplicateProfileErrors(error);

@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const User = require('../models/User');
-const { authVersionFilter } = require('./sessionService');
+const AccountSecurity = require('../models/AccountSecurity');
+const { authVersionFilter } = require('./accountState');
 const { ServiceError } = require('./serviceError');
 
 class ActiveAccountWriteError extends ServiceError {
@@ -24,7 +25,6 @@ async function withActiveAccountWrite(auth, counterpartIds, write) {
       const result = await User.updateOne({
         _id: accountId,
         deletedAt: null,
-        ...(currentAccount ? authVersionFilter(auth.authVersion ?? 0) : {}),
       }, { $inc: { archiveWriteVersion: 1 } }, {
         session,
         timestamps: false,
@@ -34,6 +34,13 @@ async function withActiveAccountWrite(auth, counterpartIds, write) {
         throw new ActiveAccountWriteError(currentAccount ? 401 : 404,
           currentAccount ? 'Please log in again.' : 'This account is unavailable.');
       }
+    }
+
+    // Security changes use this same User fence; check the authoritative version after locking it.
+    if (!(await AccountSecurity.exists({
+      userId: auth.userId, ...authVersionFilter(auth.authVersion ?? 0),
+    }).session(session))) {
+      throw new ActiveAccountWriteError(401, 'Please log in again.');
     }
 
     // No HTTP responses or other external effects belong here: MongoDB may retry it.

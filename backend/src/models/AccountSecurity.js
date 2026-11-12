@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
-// Staged definition only: current services still use User's existing security fields.
-// Collection/index creation must be explicitly enabled during a later approved rollout.
+// Authoritative account credentials and MFA state, linked to the identity record by userId.
+// Collections and indexes are provisioned explicitly rather than created at application startup.
 const accountSecuritySchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
   passwordHash: { type: String, required: true, select: false },

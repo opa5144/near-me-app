@@ -4,7 +4,7 @@ const User = require('../models/User');
 const { parseCreateEvent, toEventItem, EventInputError } = require('./eventData');
 const { withActiveAccountWrite } = require('./activeAccountWrite');
 const { ServiceError } = require('./serviceError');
-const { resolvePhotos, photoImage } = require('./photoData');
+const { loadPhotoMetadata, getResourcePhotoImage, replaceResourcePhotos } = require('./photoCollectionService');
 
 function requireEventId(id) {
   if (typeof id !== 'string' || !/^[a-f0-9]{24}$/i.test(id) || !mongoose.isObjectIdOrHexString(id)) {
@@ -18,6 +18,11 @@ function eventWriteError(error) {
   return error;
 }
 
+async function eventItems(events, baseUrl, session) {
+  const photos = await loadPhotoMetadata('event', events.map(event => event._id), session);
+  return events.map(event => toEventItem(event, baseUrl, photos.get(String(event._id)) ?? []));
+}
+
 async function listPublicEvents(baseUrl) {
   // Compare full BSON instants: an ongoing event remains visible until its end time.
   const events = await Event.find({
@@ -27,14 +32,16 @@ async function listPublicEvents(baseUrl) {
   }).populate({
     path: 'hostId', select: 'firstName lastName username', match: { deletedAt: null },
   }).sort({ createdAt: -1, _id: -1 }).lean();
-  return events.filter(event => event.hostId).map(event => toEventItem(event, baseUrl));
+  return eventItems(events.filter(event => event.hostId), baseUrl);
 }
 
 async function listHostedEvents(auth, baseUrl) {
   // Hosts retain access to past events for management and history.
-  const events = await Event.find({ hostId: auth.userId }).populate('hostId', 'firstName lastName username')
+  const events = await Event.find({ hostId: auth.userId }).populate({
+    path: 'hostId', select: 'firstName lastName username', match: { deletedAt: null },
+  })
     .sort({ createdAt: -1, _id: -1 }).lean();
-  return events.map(event => toEventItem(event, baseUrl));
+  return eventItems(events.filter(event => event.hostId), baseUrl);
 }
 
 async function getEventImage(id) {
@@ -46,9 +53,9 @@ async function getEventPhoto(id, photoId) {
   if (photoId !== undefined && (typeof photoId !== 'string' || !/^[a-f0-9]{24}$/i.test(photoId))) {
     throw new ServiceError(400, 'Invalid photo ID.');
   }
-  const event = await Event.findById(id).select('+photos.imageData +imageData');
+  const event = await Event.findById(id).select('_id hostId').lean();
   if (!event || !(await User.exists({ _id: event.hostId, deletedAt: null }))) return null;
-  return photoImage(event, photoId);
+  return getResourcePhotoImage('event', event._id, photoId);
 }
 
 async function getEvent(id, baseUrl) {
@@ -57,24 +64,29 @@ async function getEvent(id, baseUrl) {
     path: 'hostId', select: 'firstName lastName username', match: { deletedAt: null },
   }).lean();
   if (!event || !event.hostId) throw new ServiceError(404, 'Event not found.');
-  return toEventItem(event, baseUrl);
+  return (await eventItems([event], baseUrl))[0];
+}
+
+function eventPhotoInput(body) {
+  if (Object.prototype.hasOwnProperty.call(body, 'photos')) return body.photos;
+  if (body.imageBase64 !== undefined && body.imageBase64 !== null && body.imageBase64 !== '') {
+    return [{ imageBase64: body.imageBase64 }];
+  }
+  return undefined;
 }
 
 async function createEvent(auth, body, baseUrl) {
   try {
     const fields = parseCreateEvent(body);
-    const input = Object.prototype.hasOwnProperty.call(body, 'photos') ? body.photos
-      : fields.imageData ? [{ imageBase64: body.imageBase64 }] : [];
-    const photos = resolvePhotos(input, []);
-    delete fields.imageData;
-    delete fields.imageMimeType;
+    const input = eventPhotoInput(body) ?? [];
     // Ignore client ownership and seed keys; a verified account owns every new event.
     return await withActiveAccountWrite(auth, [], async session => {
-      const [event] = await Event.create([{ ...fields, photos, hostId: auth.userId }], { session });
+      const [event] = await Event.create([{ ...fields, hostId: auth.userId }], { session });
+      const photos = await replaceResourcePhotos('event', event._id, input, session);
       const populated = await Event.findById(event._id).session(session).populate({
         path: 'hostId', select: 'firstName lastName username', options: { session },
       }).lean();
-      return toEventItem(populated, baseUrl);
+      return toEventItem(populated, baseUrl, photos);
     });
   } catch (error) {
     throw eventWriteError(error);
@@ -88,31 +100,21 @@ async function updateEvent(auth, id, body, baseUrl) {
     if (!event) throw new ServiceError(404, 'Event not found.');
     if (String(event.hostId) !== String(auth.userId)) throw new ServiceError(403, 'Unauthorized to edit this event.');
     const fields = parseCreateEvent(body);
-    const photoInput = Object.prototype.hasOwnProperty.call(body, 'photos') ? body.photos
-      : fields.imageData ? [{ imageBase64: body.imageBase64 }] : undefined;
-    delete fields.imageData;
-    delete fields.imageMimeType;
+    const photoInput = eventPhotoInput(body);
     const changes = { ...fields, hostId: auth.userId };
     return await withActiveAccountWrite(auth, [event.hostId], async session => {
-      if (photoInput !== undefined) {
-        // Resolve retained IDs after locking this resource's owner; foreign-resource IDs are rejected.
-        const current = await Event.findOne({ _id: id, hostId: auth.userId })
-          .select('+photos.imageData +imageData').session(session);
-        if (!current) throw new ServiceError(404, 'Event not found.');
-        changes.photos = resolvePhotos(photoInput, current.photos ?? [],
-          Array.isArray(current.photos) ? undefined : current);
-      }
       // Account closure and ownership are checked again at the transactional write.
       const updated = await Event.findOneAndUpdate({ _id: id, hostId: auth.userId },
-        {
-          $set: changes,
-          // Explicit photo edits retire the old single image, including when [] clears every photo.
-          ...(photoInput !== undefined ? { $unset: { imageData: '', imageMimeType: '' } } : {}),
-        }, { new: true, runValidators: true, session }).populate({
+        { $set: changes }, { new: true, runValidators: true, session }).populate({
           path: 'hostId', select: 'firstName lastName username', options: { session },
         }).lean();
       if (!updated) throw new ServiceError(404, 'Event not found.');
-      return toEventItem(updated, baseUrl);
+      if (photoInput !== undefined) {
+        const photos = await replaceResourcePhotos('event', updated._id, photoInput, session);
+        return toEventItem(updated, baseUrl, photos);
+      }
+      // Omission preserves the new collection unchanged; original media is never consulted.
+      return (await eventItems([updated], baseUrl, session))[0];
     });
   } catch (error) {
     throw eventWriteError(error);

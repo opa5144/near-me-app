@@ -1,117 +1,136 @@
 # Stores, photo galleries, and booking history sections
 
-## Behavior
+The active layout keeps main metadata in `eventList` and `StoreList`, and stores
+photo records in `EventPhotos` and `StorePhotos`. Main-record embedded/single-image
+fields are not a runtime fallback. [The collection cutover](split-collection-cutover.md)
+documents the approved copy and transition. The subsequent
+[legacy-field cleanup](legacy-field-cleanup.md) removed the obsolete original
+fields after a fresh backup and successful integrity verification.
 
-Booking History shows two sections for the account's ended selected events.
-Attended contains every entry with `attending: true`. Interested contains entries
-with `interested: true` and `attending: false`. Entries with both flags appear
-only under Attended. Saved flags remain independent; the detail label uses the
-same priority. History stays read-only, while photos can be viewed and swiped.
+## Store behavior
 
-Create Store publishes through the authenticated API rather than logging a
-draft. Saved stores appear under Your Stores on the Host Dashboard. Each opens
-a Store Details route by its database ID, with address, categories, description,
-seven-day hours, owner name, a photo slideshow, and a clickable gallery.
+Create Store publishes through the authenticated API. Saved stores appear under
+Your Stores on the Host Dashboard. Each opens a Store Details route by database
+ID, showing address, categories, description, seven-day hours, owner name, a
+photo slideshow and clickable gallery. Publishing blocks duplicate submissions,
+navigation and editing until the request settles; failures keep the form available.
 
-The exact MongoDB collection is `StoreList`. Each document has an automatic ID,
+The exact main collection is `StoreList`. Each document has an automatic ID,
 an authenticated `ownerId` referencing User, name, category array, description,
 address/place/optional place ID and coordinates, IANA timezone, seven weekday
-entries, ordered photos, and timestamps. Categories reuse Music, Dance, Food,
-Film, Workshop, and Art. Every weekday is explicitly open or closed. Open days
-have one distinct opening/closing HH:mm pair; a closing time earlier than the
-opening means the following day. Closed days store null times. Split shifts and
-24-hour equal-time intervals are not part of this version.
+entries, and timestamps. Coordinates must be supplied together or both omitted.
+Photo documents reference that store through `StorePhotos.storeId`; they are not
+embedded in its metadata.
+
+Categories reuse Music, Dance, Food, Film, Workshop and Art, with one or more
+unique selections. Every weekday is explicitly open or closed. Open days have
+one distinct opening/closing HH:mm pair; a closing time earlier than the opening
+means the following day. Closed days store null times. Split shifts and 24-hour
+equal-time intervals are not part of this version.
+
+No store editing/deletion UI or separate public store-search screen was added.
+The previous placeholder Google Maps import button is not part of the published
+form; address selection uses the existing location search.
+
+## Photo behavior and storage
 
 Photos are optional, with at most five per event or store. The first photo is
-the cover. Shared picker controls add, remove, reorder, and choose the cover.
-The existing picker/manipulator converts each selected photo into a cropped
-16:9 JPEG, up to 1280 pixels wide and 1 MiB decoded. Five maximum-size Base64
-uploads fit the existing 10 MiB JSON request limit. No dependencies were added.
-Only photo metadata/URLs appear in ordinary API responses; binary JPEG data is
-hidden by the schema and served separately. Resource ownership and account
-closure protections also apply to photos.
+the cover. Shared picker controls add, remove, reorder and choose the cover.
+Each selected image becomes a cropped 16:9 JPEG, up to 1280 pixels wide and 1 MiB
+decoded. Five maximum-size Base64 uploads fit the existing 10 MiB JSON request
+limit. A device-local file URI is used only for preview.
 
-Existing single-photo events keep working without a migration. An old image
-appears as a legacy photo; an explicit edit can retain and convert it into the
-ordered collection. Omitted photo updates preserve the collection. An explicit
-empty array removes all photos, including the legacy image. Retained photo IDs
-must belong to that event. Images from another event or store cannot be attached
-by guessing an ID. Existing event cards continue using `bannerImage` for covers.
+`EventPhotos` and `StorePhotos` contain stable photo IDs, the parent ID, hidden
+JPEG bytes, MIME type, `displayOrder` from 0 to 4, and timestamps. Unique
+(parent ID, display order) indexes provide the bounded ordered slots; collection
+and index provisioning is explicit rather than automatic at application startup.
+Ordinary API responses return only ordered `photos: [{ id, url }]` and the first
+photo's URL as `bannerImage`. Lists and history batch-load metadata. Image
+endpoints select bytes only from the separate collections and check the active
+parent owner. Images from another event/store cannot be attached by guessing an ID.
 
-The shared photo collection shows a manually swipeable hero with indicators and
-a thumbnail gallery. Clicking either opens a full-screen viewer at that photo,
-with swipe, previous/next, and close controls. It is reused by public event,
-host event, past booking, and store details.
+Create requests send `photos: [{ imageBase64: "..." }]`; store creation accepts
+only new uploads. Event edits may mix new uploads with retained `{ id: "..." }`
+entries in the desired order. Omission preserves the existing photo collection;
+`photos: []` clears only its separate photo records. Retained photos keep their
+IDs and timestamps. Parent creation and photo insertion, or event metadata and
+photo edits, use the same account-fenced transaction. No active service rewrites
+or clears an original embedded image as part of these operations.
+
+The older event `imageBase64` request field remains compatible for one new photo,
+but the upload is written to `EventPhotos`. The backend does not emit a legacy
+photo ID or read an archived image when the new collection is empty.
+
+The shared display provides a swipeable hero with indicators and a thumbnail
+gallery. Selecting either opens the chosen photo full screen, with swipe,
+previous/next and close controls. Public event, host event, past booking and store
+details reuse these components.
+
+## Booking history
+
+Booking History shows two sections for the account's ended selected events.
+Attended contains entries with `attending: true`. Interested contains entries
+with `interested: true` and `attending: false`. Entries with both flags appear
+only under Attended. Saved flags remain independent; the detail label uses the
+same priority. History is read-only, while photos remain viewable and swipeable.
 
 ## Backend flow and endpoints
 
-New store requests follow routes -> controllers -> services -> Mongoose models.
-Services accept plain input/authentication values and do not depend on Express
-requests or responses. Store creation uses the account-fenced transaction so
-ownership cannot be supplied by the client or revived after account closure.
-Closed owners' stores/photos are retained but hidden through the API.
+Requests follow routes -> controllers -> services -> Mongoose models. Services
+accept plain input/authentication values, not Express requests or responses.
+Store creation takes ownership from the verified session and uses the account
+write fence. Closed owners' stores and separate photo records are retained but
+hidden through public API reads.
 
-- `GET /api/stores` returns `{ stores }` for active owners.
-- `GET /api/stores/mine` requires authentication and returns the owner's stores.
-- `POST /api/stores` requires authentication and returns `{ store }` with 201.
-- `GET /api/stores/:id` returns `{ store }`.
-- `GET /api/stores/:id/image` returns the current cover JPEG.
-- `GET /api/stores/:id/photos/:photoId` returns a resource-local JPEG.
-- `GET /api/events/:id/photos/:photoId` adds individual event-photo retrieval.
-- The existing event `/image` endpoint now serves the current first-photo cover.
+| Method | Route | Response |
+| --- | --- | --- |
+| GET | `/api/stores` | `{ stores }` for active owners. |
+| GET | `/api/stores/mine` | Session-required owner list, `{ stores }`. |
+| POST | `/api/stores` | Session-required creation, `{ store }` with status 201. |
+| GET | `/api/stores/:id` | `{ store }` for an active owner. |
+| GET | `/api/stores/:id/image` | Current first-photo cover JPEG, or 404. |
+| GET | `/api/stores/:id/photos/:photoId` | One JPEG belonging to this store. |
+| GET | `/api/events/:id/photos/:photoId` | One JPEG belonging to this event. |
+| GET | `/api/events/:id/image` | Current first-photo event cover JPEG, or 404. |
 
-Photo responses are ordered `{ id, url }` arrays. Create/edit requests use ordered
-`photos: [{ imageBase64 }]` entries for new uploads or `{ id }` entries for retained
-event photos. Store creation accepts new uploads; no store editing/deletion UI
-or separate public store-search screen was added in this scope.
+## Relevant files
 
-## Created files (12)
-
-| File | Summary |
+| File | Responsibility |
 | --- | --- |
-| [Store.js](../backend/src/models/Store.js) | Owner-linked StoreList schema, category/hours/location validation, photos, timestamps and indexes. |
-| [photoSchema.js](../backend/src/models/photoSchema.js) | Reusable embedded photo schema with stable IDs and hidden image bytes. |
-| [storeService.js](../backend/src/services/storeService.js) | Store input rules, ownership, queries, fenced creation, DTOs and photo retrieval. |
-| [photoData.js](../backend/src/services/photoData.js) | Shared limits, JPEG validation, resource-local retention/legacy conversion, DTOs and binary normalization. |
-| [storeController.js](../backend/src/controllers/storeController.js) | HTTP store envelopes/statuses/errors and raw JPEG responses. |
-| [stores.js](../backend/src/routes/stores.js) | Store endpoint and cache/authentication middleware wiring. |
-| [stores.ts](../mobile/src/api/stores.ts) | Typed store creation/owner-list/detail requests and weekly-hours DTOs. |
-| [photos.ts](../mobile/src/api/photos.ts) | Shared photo types, JPEG preparation, retained/new request conversion and legacy fallback. |
-| [PhotoPickerField.tsx](../mobile/src/components/PhotoPickerField.tsx) | Five-photo picker with preparation feedback, removal, ordering and cover selection. |
-| [PhotoCollection.tsx](../mobile/src/components/PhotoCollection.tsx) | Shared swipeable hero, thumbnail gallery and full-screen viewer. |
-| [StoreDetailsScreen.tsx](../mobile/src/screens/host/StoreDetailsScreen.tsx) | ID-based store loading, retry states, weekly hours and shared galleries. |
-| [stores-and-photos.md](stores-and-photos.md) | This behavior and change inventory. |
+| [Store.js](../backend/src/models/Store.js) | Owner-linked main metadata, category/hours/location rules, timestamps and indexes. |
+| [EventPhoto.js](../backend/src/models/EventPhoto.js) | Separate `EventPhotos` schema with event references and bounded order. |
+| [StorePhoto.js](../backend/src/models/StorePhoto.js) | Separate `StorePhotos` schema with store references and bounded order. |
+| [storeService.js](../backend/src/services/storeService.js) | Input validation, owner reads, fenced publishing and store/photo DTOs. |
+| [photoCollectionService.js](../backend/src/services/photoCollectionService.js) | Batched separate-collection metadata, image reads and transactional replacement. |
+| [photoData.js](../backend/src/services/photoData.js) | JPEG limits, resource-local retention, byte normalization and URLs. |
+| [eventData.js](../backend/src/services/eventData.js) | Event photo input contract and explicit metadata serialization. |
+| [eventService.js](../backend/src/services/eventService.js) | Collection-backed event photo reads/writes and compatibility uploads. |
+| [eventSelectionService.js](../backend/src/services/eventSelectionService.js) | Private history with batched `EventPhotos` metadata. |
+| [storeController.js](../backend/src/controllers/storeController.js) | Store HTTP envelopes, errors and JPEG responses. |
+| [stores.js](../backend/src/routes/stores.js) | Endpoint, cache and authentication wiring. |
+| [stores.ts](../mobile/src/api/stores.ts) | Typed store creation, owner list, details and weekly hours. |
+| [photos.ts](../mobile/src/api/photos.ts) | Shared photo types, JPEG preparation and retained/new request conversion. |
+| [PhotoPickerField.tsx](../mobile/src/components/PhotoPickerField.tsx) | Photo preparation, ordering, cover choice and removal. |
+| [PhotoCollection.tsx](../mobile/src/components/PhotoCollection.tsx) | Hero, thumbnail gallery and full-screen viewer. |
+| [CreateStoreScreen.tsx](../mobile/src/screens/host/CreateStoreScreen.tsx) | Store publishing form and async/navigation guards. |
+| [StoreDetailsScreen.tsx](../mobile/src/screens/host/StoreDetailsScreen.tsx) | ID-based loading/retry, hours and gallery. |
+| [EventHostScreen.tsx](../mobile/src/screens/host/EventHostScreen.tsx) | Owner store cards, focus refresh and loading/retry states. |
+| [AppNavigator.tsx](../mobile/src/navigation/AppNavigator.tsx) | Store Details routing and post-publish return. |
+| [BookingHistoryScreen.tsx](../mobile/src/screens/settings/BookingHistoryScreen.tsx) | Exclusive Attended/Interested history sections. |
+| [BookingHistoryDetailsScreen.tsx](../mobile/src/screens/settings/BookingHistoryDetailsScreen.tsx) | Read-only history details and photos. |
 
-## Modified files (17)
+## Legacy cleanup and verification boundary
 
-| File | Summary |
-| --- | --- |
-| [backend/src/index.js](../backend/src/index.js) | Mounts the store router at /api/stores. |
-| [models/Event.js](../backend/src/models/Event.js) | Adds an ordered embedded photo collection while distinguishing legacy records from explicit empty galleries. |
-| [services/eventData.js](../backend/src/services/eventData.js) | Validates the photo input contract and returns photo metadata plus first-photo cover. |
-| [services/eventService.js](../backend/src/services/eventService.js) | Resolves retained/new/legacy photos transactionally, preserves omissions, clears explicit removals and serves photos. |
-| [controllers/eventController.js](../backend/src/controllers/eventController.js) | Sends individual event photos with existing privacy/cache/image headers. |
-| [routes/events.js](../backend/src/routes/events.js) | Adds the individual-photo endpoint. |
-| [mobile/src/data/events.ts](../mobile/src/data/events.ts) | Adds optional ordered photo metadata to EventItem. |
-| [mobile/src/api/events.ts](../mobile/src/api/events.ts) | Adds ordered photo inputs while retaining the previous single-image field for compatibility. |
-| [CreateEventScreen.tsx](../mobile/src/screens/host/CreateEventScreen.tsx) | Uses the shared photo picker and sends ordered photos on creation. |
-| [EditEventScreen.tsx](../mobile/src/screens/host/EditEventScreen.tsx) | Loads retained photos, tracks changes, and sends explicit additions/reordering/removals only when changed. |
-| [CreateStoreScreen.tsx](../mobile/src/screens/host/CreateStoreScreen.tsx) | Saves real stores with multiple categories, recurring hours/timezone, address and photos; guards publishing and shows errors. |
-| [EventHostScreen.tsx](../mobile/src/screens/host/EventHostScreen.tsx) | Loads the owner's stores on focus and displays cover/name/category/address cards with loading/retry states. |
-| [AppNavigator.tsx](../mobile/src/navigation/AppNavigator.tsx) | Registers Store Details, opens stores by ID, and returns to the dashboard after successful publishing. |
-| [EventDetailsScreen.tsx](../mobile/src/screens/event/EventDetailsScreen.tsx) | Replaces the single hero image with the shared slideshow and adds the gallery. |
-| [EventHostDetailsScreen.tsx](../mobile/src/screens/host/EventHostDetailsScreen.tsx) | Reuses slideshow/gallery while preserving host actions. |
-| [BookingHistoryScreen.tsx](../mobile/src/screens/settings/BookingHistoryScreen.tsx) | Renders exclusive Attended/Interested sections with counts and individual empty states. |
-| [BookingHistoryDetailsScreen.tsx](../mobile/src/screens/settings/BookingHistoryDetailsScreen.tsx) | Adds read-only photo viewing and prioritizes the Attended history label. |
+The separately approved cleanup removed superseded `photos`, `imageData` and
+`imageMimeType` fields from main event/store documents. Its private backup and
+post-cleanup report verify that main documents, metadata, IDs, timestamps,
+indexes, and all authoritative photo records were preserved. The historical
+copy/refresh utility is retired in every mode.
 
-## Review and manual verification
+The old demo seeders and fixture/test instructions are no longer current. New
+records should be published through the current application/API, which writes
+metadata and photos to their respective collections.
 
-Source/diff review covered the route/controller/service boundary, owner/session
-checks, archived-account behavior, photo ID isolation and byte exclusions,
-legacy retention/clearing, payload limits, navigation and async publishing,
-weekly hours, and history deduplication. No files were deleted.
-
-As requested, no tests, type checks, lint, syntax execution, app launches, or
-API/database calls were run. No records were imported or migrated by this work.
-Restart the backend and reload the mobile app for manual verification. Publishing
-a store writes its record and photos into StoreList through the application.
+Application verification remains the user's manual workflow. No tests, type
+checks, lint, syntax execution, app launches, or API checks were run; authorized
+database snapshot, backup, cleanup, and integrity operations ran separately.

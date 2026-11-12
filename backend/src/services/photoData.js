@@ -34,7 +34,7 @@ function validatePhotoInput(input) {
       throw new ServiceError(400, 'Each photo must contain a saved photo ID or a new JPEG image.');
     }
     if (Object.prototype.hasOwnProperty.call(item, 'id')) {
-      if (typeof item.id !== 'string' || (item.id !== 'legacy' && !/^[a-f0-9]{24}$/i.test(item.id))) {
+      if (typeof item.id !== 'string' || !/^[a-f0-9]{24}$/i.test(item.id)) {
         throw new ServiceError(400, 'Choose a valid saved photo.');
       }
       const key = item.id.toLowerCase();
@@ -66,24 +66,18 @@ function storedPhoto(photo) {
     throw new ServiceError(400, 'A saved photo is unavailable. Remove it and choose another photo.');
   }
   if (bytes.length > MAX_IMAGE_BYTES) throw new ServiceError(413, 'Each JPEG photo must be no larger than 1 MiB.');
-  return { _id: photo._id, imageData: bytes, imageMimeType: 'image/jpeg' };
+  return {
+    _id: photo._id, imageData: bytes, imageMimeType: 'image/jpeg',
+    createdAt: photo.createdAt, updatedAt: photo.updatedAt,
+  };
 }
 
-function resolvePhotos(input, existingPhotos = [], legacy) {
+function resolvePhotos(input, existingPhotos = []) {
   validatePhotoInput(input);
   const saved = new Map((existingPhotos ?? []).map(photo => [String(photo._id).toLowerCase(), photo]));
   return input.map(item => {
     if (Object.prototype.hasOwnProperty.call(item, 'imageBase64')) {
       return { _id: new mongoose.Types.ObjectId(), imageData: decodeJpeg(item.imageBase64), imageMimeType: 'image/jpeg' };
-    }
-    if (item.id === 'legacy') {
-      // Legacy retention is allowed only before a resource has an explicit photo collection.
-      if (!legacy || Array.isArray(legacy.photos) || saved.size) {
-        throw new ServiceError(400, 'This saved photo does not belong to this item.');
-      }
-      return storedPhoto({
-        _id: new mongoose.Types.ObjectId(), imageData: legacy.imageData, imageMimeType: legacy.imageMimeType,
-      });
     }
     const photo = saved.get(item.id.toLowerCase());
     if (!photo) throw new ServiceError(400, 'This saved photo does not belong to this item.');
@@ -91,27 +85,17 @@ function resolvePhotos(input, existingPhotos = [], legacy) {
   });
 }
 
-function photoItems(resource, baseUrl, resourcePath) {
+function photoItems(resource, baseUrl, resourcePath, photos = []) {
   const root = baseUrl.replace(/\/$/, '') + '/' + resourcePath + '/' + resource._id;
-  if (Array.isArray(resource.photos)) {
-    return resource.photos.filter(photo => photo?._id).map(photo => ({
-      id: String(photo._id), url: root + '/photos/' + photo._id,
-    }));
-  }
-  // An explicit empty array suppresses this fallback, even if an old image field still exists.
-  return resource.imageMimeType ? [{ id: 'legacy', url: root + '/image' }] : [];
+  // Only explicit collection results are serialized; original embedded fields are ignored.
+  return [...photos].sort((a, b) => a.displayOrder - b.displayOrder).map(photo => ({
+    id: String(photo._id), url: root + '/photos/' + photo._id,
+  }));
 }
 
-function photoImage(resource, photoId) {
-  if (Array.isArray(resource.photos)) {
-    const photo = photoId === undefined ? resource.photos[0]
-      : resource.photos.find(item => String(item._id).toLowerCase() === String(photoId).toLowerCase());
-    const bytes = imageBytes(photo?.imageData);
-    return bytes?.length && photo.imageMimeType ? { data: bytes, mimeType: photo.imageMimeType } : null;
-  }
-  if (photoId !== undefined && photoId !== 'legacy') return null;
-  const bytes = imageBytes(resource.imageData);
-  return bytes?.length && resource.imageMimeType ? { data: bytes, mimeType: resource.imageMimeType } : null;
+function photoImage(photo) {
+  const bytes = imageBytes(photo?.imageData);
+  return bytes?.length && photo.imageMimeType === 'image/jpeg' ? { data: bytes, mimeType: photo.imageMimeType } : null;
 }
 
 module.exports = { MAX_PHOTOS, MAX_IMAGE_BYTES, validatePhotoInput, resolvePhotos, photoItems, photoImage };

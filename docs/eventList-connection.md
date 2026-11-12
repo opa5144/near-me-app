@@ -1,97 +1,112 @@
 # Event storage and creation
 
-Events are stored in the Atlas collection `eventList`. The `Event` model owns title, category, numeric price, start/end timestamps, timezone, address, place, description, optional JPEG image bytes, and the hosting user ID.
+The Atlas collection `eventList` holds event metadata: title, category, numeric
+price, start/end timestamps, timezone, address, place, description, and the
+hosting account ID. Photo records live separately in `EventPhotos`, linked by
+`eventId`. Active services never read embedded or single-image fields from
+`eventList` as a fallback. See [the collection cutover](split-collection-cutover.md)
+for the approved copy and runtime transition.
 
 ## Running
 
-From `backend`, run `npm start`. The server waits for Atlas before listening. No new dependencies are required beyond the existing project dependencies.
+From `backend`, run `npm start`. The server waits for Atlas before listening.
+Sign in through the mobile app before creating or managing events. Sessions use
+an opaque Bearer token held in memory; restarting the mobile app requires signing
+in again. MFA-enabled accounts complete authenticator/recovery verification
+before receiving a full session. Remember me/local session persistence is not
+implemented.
 
-Login now returns a one-hour opaque session token. The client keeps it in memory, sends it as a Bearer header, and returns to Login when a protected request reports expiry. Restart the backend and sign in again after applying this change. Remember me/local persistence is not implemented.
+## Existing records and sample data
 
-## Sample data
+Events come from the API, not a mobile `sampleEvents` array. The old demo seeder,
+booking-history seeder, fixtures, and their test files are no longer shipped in
+this repository. There is no supported seed command on this page. Create records
+through the app or current authenticated API instead of restoring an old script
+that writes image bytes into the main event collection.
 
-From `backend`, run `node scripts/seedEvents.js` to import seven demo events for user `6ae7814e7d5f88664b48dc90`. The account must exist in `AccountList`. The script validates fixtures, uses unique seed keys, and preserves matching existing records on rerun. It does not delete other events.
-
-The fictional demo addresses, coordinates, posters, and missing end times are in `backend/scripts/fixtures`. Original June/September date labels use year 2026; the former Tonight sample is fixed to November 1, 2026, ending November 2. These demo events may be historical; the list includes them intentionally.
+Existing event IDs and `seedKey` values remain metadata. Removing superseded
+photo fields must not delete events, change these identifiers, or remove their
+indexes. Historical events stay available to their hosts and, when selected by
+the current account, in Booking History; expired events do not appear in public
+discovery or accept changes to Interested/Attending selections.
 
 ## API
 
 | Method | Route | Behavior |
 | --- | --- | --- |
-| GET | `/api/events` | Public event list |
-| GET | `/api/events/:id` | Event details |
-| GET | `/api/events/:id/image` | JPEG bytes |
-| GET | `/api/events/mine` | Session-required hosted events |
-| POST | `/api/events` | Session-required creation; hostId comes from the verified session |
-| GET | `/api/auth/me` | Safe signed-in account details |
-| POST | `/api/auth/logout` | Invalidate the current session |
+| GET | `/api/events` | Public discovery for active owners; events remain visible until their end instant. |
+| GET | `/api/events/mine` | Session-required hosted events, including past events. |
+| GET | `/api/events/:id` | Event details for an active owner. |
+| GET | `/api/events/:id/image` | The first ordered photo as JPEG bytes; 404 when no photo exists. |
+| GET | `/api/events/:id/photos/:photoId` | One photo belonging to this event, from `EventPhotos`. |
+| POST | `/api/events` | Session-required creation; `hostId` comes from the verified session. |
+| PATCH | `/api/events/:id` | Owner-required event editing and optional ordered photo changes. |
+| GET | `/api/auth/me` | Safe combined signed-in account details. |
+| POST | `/api/auth/logout` | Invalidate the current session. |
 
-The event API exposes display strings for dates/times/prices along with canonical ISO timestamps and numeric `priceAmount`. Creation preserves cents and handles overnight schedules in the device timezone shown on the form.
+Event responses contain display strings for dates, times and prices alongside
+canonical ISO timestamps and numeric `priceAmount`. Dates include a year and are
+formatted in the event's saved timezone. Creation preserves cents and validates
+future starts, minimum duration, and overnight schedules.
 
-Images are resized/cropped to JPEG, capped at 1 MiB, sent as base64, and stored in Atlas. A phone-local file URI is only a preview. Images load from the backend image endpoint on other devices. Backend checks size and JPEG signatures; native image manipulation produces the actual JPEG.
+## Photo contract
+
+Each event may have zero to five ordered photos. The first is the cover. The
+picker prepares 16:9 JPEGs up to 1280 pixels wide and 1 MiB decoded per photo;
+a phone-local file URI is only a preview. New uploads use
+`photos: [{ imageBase64: "..." }]`. Event edits can retain existing photos with
+`{ id: "..." }` entries in the desired order. IDs must belong to that event.
+
+Omitting `photos` during an edit preserves the authoritative photo collection.
+An explicit `photos: []` clears its photo records. The older `imageBase64` request
+field remains accepted for a single upload, but its bytes also go exclusively
+to `EventPhotos`; it is not a request to recreate old main-record fields.
+
+Ordinary responses expose only `photos: [{ id, url }]` and, when present,
+`bannerImage` for the first photo. Lists and booking history batch-load metadata.
+Bytes are excluded from normal queries and fetched by photo/image endpoints,
+which also check that the hosting account remains active. Parent metadata and
+photo changes commit through the same account-fenced transaction. Retained
+photo IDs and timestamps are preserved.
 
 ## Mobile flow
 
-`EventsContext` loads public and owned lists after login. Creation adds the server response to both lists. Version checks prevent an older GET from overwriting a newly created event. Details routes carry a database ID and load from the API, with explicit loading/error/not-found states.
+`EventsContext` loads public and owned lists after login. Creation adds the saved
+server response to both lists; version checks prevent an older GET from erasing
+newly created records. Detail routes carry a database ID and load from the API,
+with loading, retry and not-found states. Shared photo components provide cover
+slideshows, galleries and full-screen viewing.
 
-Host shows only events owned by the signed-in account. Interest selections remain in session memory. The old `/api/itinerary/generate` algorithm still uses `Activity.js`; it is separate from this event details/create flow.
+Interested and Attending are independent, persisted account selections rather
+than memory-only flags. [Settings and booking history](settings-booking.md)
+describes their private history views. The older itinerary generator still uses
+`Activity.js`; it is separate from this event flow.
 
-## Checks
+## Relevant source files
 
-From `backend`, run `npm test` for the offline event/session/image/seed contract checks. These use in-memory database substitutes and never contact Atlas.
-
-The app entry point can be checked separately from unused prototype files. A full mobile project TypeScript check currently encounters the pre-existing unfinished `ImageUploader.tsx` JSX. This event flow uses Expo ImagePicker and ImageManipulator directly.
-
-Native Android image processing, Google Places interactions, and a real device-to-Atlas save still require runtime testing.
-
-## Files changed
-
-13 existing files modified; 18 files added (including seven demo JPEGs).
-
-| Change | File |
+| File | Responsibility |
 | --- | --- |
-| Modified | [backend/package.json](../backend/package.json) |
-| Modified | [backend/src/index.js](../backend/src/index.js) |
-| Modified | [backend/src/routes/auth.js](../backend/src/routes/auth.js) |
-| Modified | [mobile/App.tsx](../mobile/App.tsx) |
-| Modified | [mobile/src/api/client.ts](../mobile/src/api/client.ts) |
-| Modified | [mobile/src/components/EventCard.tsx](../mobile/src/components/EventCard.tsx) |
-| Modified | [mobile/src/components/LocationInputField.tsx](../mobile/src/components/LocationInputField.tsx) |
-| Modified | [mobile/src/data/events.ts](../mobile/src/data/events.ts) |
-| Modified | [mobile/src/navigation/AppNavigator.tsx](../mobile/src/navigation/AppNavigator.tsx) |
-| Modified | [mobile/src/screens/event/EventDetailsScreen.tsx](../mobile/src/screens/event/EventDetailsScreen.tsx) |
-| Modified | [mobile/src/screens/event/HomeScreen.tsx](../mobile/src/screens/event/HomeScreen.tsx) |
-| Modified | [mobile/src/screens/host/CreateEventScreen.tsx](../mobile/src/screens/host/CreateEventScreen.tsx) |
-| Modified | [mobile/src/screens/host/EventHostScreen.tsx](../mobile/src/screens/host/EventHostScreen.tsx) |
-| Added | [backend/scripts/fixtures/images/sample-event-1.jpg](../backend/scripts/fixtures/images/sample-event-1.jpg) |
-| Added | [backend/scripts/fixtures/images/sample-event-2.jpg](../backend/scripts/fixtures/images/sample-event-2.jpg) |
-| Added | [backend/scripts/fixtures/images/sample-event-3.jpg](../backend/scripts/fixtures/images/sample-event-3.jpg) |
-| Added | [backend/scripts/fixtures/images/sample-event-4.jpg](../backend/scripts/fixtures/images/sample-event-4.jpg) |
-| Added | [backend/scripts/fixtures/images/sample-event-5.jpg](../backend/scripts/fixtures/images/sample-event-5.jpg) |
-| Added | [backend/scripts/fixtures/images/sample-event-6.jpg](../backend/scripts/fixtures/images/sample-event-6.jpg) |
-| Added | [backend/scripts/fixtures/images/sample-event-7.jpg](../backend/scripts/fixtures/images/sample-event-7.jpg) |
-| Added | [backend/scripts/fixtures/sample-events.json](../backend/scripts/fixtures/sample-events.json) |
-| Added | [backend/scripts/seedEvents.js](../backend/scripts/seedEvents.js) |
-| Added | [backend/src/middleware/requireAuth.js](../backend/src/middleware/requireAuth.js) |
-| Added | [backend/src/models/AuthSession.js](../backend/src/models/AuthSession.js) |
-| Added | [backend/src/models/Event.js](../backend/src/models/Event.js) |
-| Added | [backend/src/routes/events.js](../backend/src/routes/events.js) |
-| Added | [backend/src/services/eventData.js](../backend/src/services/eventData.js) |
-| Added | [backend/test/events.test.cjs](../backend/test/events.test.cjs) |
-| Added | [docs/eventList-connection.md](../docs/eventList-connection.md) |
-| Added | [mobile/src/api/events.ts](../mobile/src/api/events.ts) |
-| Added | [mobile/src/context/EventsContext.tsx](../mobile/src/context/EventsContext.tsx) |
+| [Event.js](../backend/src/models/Event.js) | Main `eventList` metadata schema and indexes. |
+| [EventPhoto.js](../backend/src/models/EventPhoto.js) | Separate `EventPhotos` records, event references, hidden JPEG bytes and ordered slots. |
+| [eventService.js](../backend/src/services/eventService.js) | Public/owner reads, validation, ownership and transactional event/photo writes. |
+| [eventData.js](../backend/src/services/eventData.js) | Event input rules and display/API serialization. |
+| [photoCollectionService.js](../backend/src/services/photoCollectionService.js) | Collection-only metadata/image reads and transactional ordered replacement. |
+| [photoData.js](../backend/src/services/photoData.js) | JPEG limits, resource-local retained IDs and photo serialization. |
+| [eventSelectionService.js](../backend/src/services/eventSelectionService.js) | Persisted selections and private history with separate photo metadata. |
+| [events.js](../backend/src/routes/events.js) | Event endpoints and authentication middleware. |
+| [events.ts](../mobile/src/api/events.ts) | Typed mobile event, selection and history requests. |
+| [EventsContext.tsx](../mobile/src/context/EventsContext.tsx) | Shared event lists and persisted account selections. |
+| [CreateEventScreen.tsx](../mobile/src/screens/host/CreateEventScreen.tsx) | Event form, schedule validation and photo uploads. |
+| [EditEventScreen.tsx](../mobile/src/screens/host/EditEventScreen.tsx) | Owner editing and explicit photo changes. |
 
-## Notes for data and configuration files
+## Legacy cleanup and verification boundary
 
-Source comments explain the JavaScript, TypeScript, and React components. JSON and JPEG files cannot contain those comments without changing their format, so their event-connection details are documented here.
+The subsequent approved [legacy-field cleanup](legacy-field-cleanup.md) removed
+obsolete original fields after a fresh private backup. Its integrity report
+verifies preserved event records, metadata, identifiers, timestamps, indexes,
+and current EventPhotos records. The old copy/refresh utility is retired.
 
-- `backend/package.json`: the added `test` script runs Node's built-in test runner. The event test replaces database calls with in-memory substitutes, so `npm test` never performs an Atlas import.
-- `backend/scripts/fixtures/sample-events.json`: migration data for the seven original samples. `seedKey` is a stable import identity, separate from MongoDB's generated `_id`. The seeder assigns the configured host account rather than trusting a fixture-supplied owner.
-- Fixture `startsAt` and `endsAt` are complete timestamps; `timeZone` determines the weekday/month/day and clock times shown on screen. Overnight events have their end timestamp on the following date.
-- Fixture `price` is numeric USD; zero is displayed as Free. `category` must be a saved event category, while All is only a screen filter.
-- Fixture `place` is the venue name; `address` and coordinates are separate location details. Demo addresses, coordinates, and missing schedule details are fictional, as described above.
-- Fixture `imageFile` is a path relative to the fixture directory. The seeder reads its JPEG bytes into `imageData`; the API later serves those bytes as the `bannerImage` URL used by the mobile app.
-- `backend/scripts/fixtures/images/sample-event-1.jpg` through `sample-event-7.jpg` are generated demo banners. They are binary assets, so explanatory notes belong here rather than inside the image files.
-
-Comments were added around validation, session ownership/expiry, list refreshes, navigation, image handling, and the import/test workflow. They describe existing behavior rather than changing it.
+Runtime verification remains the user's manual workflow. No application tests,
+type checks, syntax checks, app launches, or API checks were run. Authorized
+database snapshot, backup, cleanup, and integrity operations ran separately.
+Removed fixture/test commands above are not current verification instructions.

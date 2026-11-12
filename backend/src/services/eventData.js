@@ -1,4 +1,4 @@
-const { MAX_IMAGE_BYTES, validatePhotoInput, resolvePhotos, photoItems } = require('./photoData');
+const { MAX_IMAGE_BYTES, validatePhotoInput, photoItems } = require('./photoData');
 const CATEGORIES = ['Music', 'Dance', 'Food', 'Film', 'Workshop', 'Art'];
 
 // Validation failures carry a safe message and HTTP status for the event route.
@@ -86,13 +86,10 @@ function parseCreateEvent(body) {
       throw new EventInputError('Submit photos or a single legacy image, not both.');
     }
   }
-  // Keep the previous single-image request working while new clients use ordered photos.
-  let imageData;
-  let imageMimeType = null;
+  // The single-image request remains compatible, but its bytes are stored only
+  // by the collection-backed photo service, never on the main event record.
   if (body.imageBase64 !== undefined && body.imageBase64 !== null && body.imageBase64 !== '') {
-    const photo = resolvePhotos([{ imageBase64: body.imageBase64 }], [])[0];
-    imageData = photo.imageData;
-    imageMimeType = photo.imageMimeType;
+    validatePhotoInput([{ imageBase64: body.imageBase64 }]);
   }
 
   // Ownership and seed keys are deliberately omitted; the route assigns the authenticated host.
@@ -102,13 +99,11 @@ function parseCreateEvent(body) {
     placeId: typeof body.placeId === 'string' ? body.placeId.slice(0, 500) : null,
     latitude: hasLatitude ? body.latitude : null,
     longitude: hasLongitude ? body.longitude : null,
-    ...(imageData ? { imageData } : {}),
-    imageMimeType,
   };
 }
 
 // Translate a database record into the shared mobile shape with no embedded image bytes.
-function toEventItem(event, apiBaseUrl) {
+function toEventItem(event, apiBaseUrl, photoDocuments = []) {
   const timeZone = event.timeZone;
   // Format display labels in the event's zone, keeping output consistent across devices.
   const dateFormat = new Intl.DateTimeFormat('en-US', {
@@ -126,7 +121,7 @@ function toEventItem(event, apiBaseUrl) {
   const crossesDay = calendarFormat.format(start) !== calendarFormat.format(end);
   // Keep a numeric price for app logic alongside the formatted Free/currency label.
   const priceAmount = Number(event.price);
-  const photos = photoItems(event, apiBaseUrl, 'events');
+  const photos = photoItems(event, apiBaseUrl, 'events', photoDocuments);
   return {
     id: String(event._id),
     // For hostId, return an object with user details if populated, otherwise just the ID string. 

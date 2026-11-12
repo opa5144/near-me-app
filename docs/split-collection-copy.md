@@ -1,9 +1,17 @@
 # Additive collection copy
 
+Current status: after a separately approved reconciliation of testing changes,
+the [backend cutover](split-collection-cutover.md) now treats the new collections
+as authoritative. This page records the earlier copy. The later approved
+[legacy-field cleanup](legacy-field-cleanup.md) removed superseded originals.
+All historical copier modes are retired; current split data cannot be rebuilt
+from the remaining original fields.
+
 Completed on November 11, 2026, at approximately 8:14 p.m. America/New_York
 (`2026-11-12T01:14:05.835Z`). This operation copied data into the five staged
 collections. It did not move, update, remove, or rewrite original documents.
-The existing application continues to use the original models and services.
+At the time of this initial copy, the application continued to use the original
+models and services.
 
 ## Verified results
 
@@ -89,23 +97,16 @@ from Git; no credentials or environment file were exported.
   before committing abort those destination inserts. Fresh post-commit reads
   compare the entire destination documents and all original fingerprints.
 
-## Commands and remaining scope
+## Retired commands and historical scope
 
-From `backend`:
-
-```text
-node scripts/duplicateSplitCollections.js --plan
-node scripts/duplicateSplitCollections.js --apply
-```
-
-`--plan` reads and validates without creating collections or writing records.
-`--apply` performs a new private backup and inserts missing exact copies only.
-Running it later against changed source data can report conflicts rather than
-overwrite stale copies. Current originals can continue to change through normal
-application use, so these new collections are not a live synchronization system.
+The original plan, apply, refresh-plan, and refresh commands are retired. They
+stop before connecting to Atlas. The source fields used by that historical
+utility have now been removed, while the destination records may contain newer
+application edits. Never re-enable the copier to reconstruct current split data.
+The cleanup report documents the current backup and completed physical removal.
 
 The operational preflight, schema/BSON validation, backup read-back, transactional
 copy, and integrity comparisons completed successfully. No application tests,
 lint, API functionality tests, or app launches were run. Service/controller
-cutover, ongoing synchronization, source-field removal, and legacy collection
-cleanup remain outside this operation and need separate approval.
+cutover and source-field removal were outside this additive operation; they were
+subsequently approved and documented separately. No legacy collection was deleted.

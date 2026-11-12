@@ -1,5 +1,5 @@
 const auth = require('../services/authService');
-const { getAuthContext, sendServiceError } = require('./controllerUtils');
+const { getAuthContext, apiBaseUrl, sendServiceError } = require('./controllerUtils');
 
 // Controller adapters own status codes, response serialization, and HTTP error handling.
 function handle(action, { status = 200, fallbackMessage, logPrefix, login = false }) {
@@ -29,13 +29,13 @@ module.exports = {
   login: handle(req => auth.login(req.body), {
     login: true, fallbackMessage: 'Unable to log in. Please try again.', logPrefix: 'Login failed:',
   }),
-  loginMfa: handle(req => auth.loginMfa(req.body), {
+  loginMfa: handle(req => auth.loginMfa(req.body, apiBaseUrl(req)), {
     login: true, fallbackMessage: 'Unable to finish signing in. Please try again.', logPrefix: 'MFA login failed:',
   }),
-  getProfile: handle(req => auth.getProfile(getAuthContext(req)), {
+  getProfile: handle(req => auth.getProfile(getAuthContext(req), apiBaseUrl(req)), {
     fallbackMessage: 'Unable to load your account.',
   }),
-  updateProfile: handle(req => auth.updateProfile(getAuthContext(req), req.body), {
+  updateProfile: handle(req => auth.updateProfile(getAuthContext(req), req.body, apiBaseUrl(req)), {
     fallbackMessage: 'Unable to save your account. Please try again.', logPrefix: 'Account update failed:',
   }),
   logout: handle(req => auth.logout(getAuthContext(req)), {

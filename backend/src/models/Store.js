@@ -1,5 +1,4 @@
 const mongoose = require('mongoose');
-const photoSchema = require('./photoSchema');
 
 const STORE_CATEGORIES = ['Music', 'Dance', 'Food', 'Film', 'Workshop', 'Art'];
 const BUSINESS_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -59,11 +58,7 @@ const storeSchema = new mongoose.Schema({
       message: 'Provide exactly one opening-hours entry for each day of the week.',
     },
   },
-  // Ordered photo metadata is public; the shared schema hides image bytes by default.
-  photos: {
-    type: [photoSchema], default: [],
-    validate: { validator: photos => photos.length <= 5, message: 'Choose up to five photos.' },
-  },
+  // Photos are separate StorePhotos records; StoreList stores store metadata only.
 }, { timestamps: true, collection: 'StoreList' });
 
 storeSchema.index({ createdAt: -1, _id: -1 });

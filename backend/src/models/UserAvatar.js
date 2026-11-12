@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-// Staged schema only: no collection or index is created automatically, and existing avatar code is unchanged.
+// Active avatar storage, linked by userId; collection/index provisioning stays explicit.
 const userAvatarSchema = new mongoose.Schema({
     userId: {type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true},
     avatarData: {type: Buffer, required: true, select: false},

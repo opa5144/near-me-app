@@ -2,7 +2,8 @@ const mongoose = require('mongoose');
 const Store = require('../models/Store');
 const User = require('../models/User');
 const { withActiveAccountWrite } = require('./activeAccountWrite');
-const { resolvePhotos, photoItems, photoImage } = require('./photoData');
+const { validatePhotoInput, photoItems } = require('./photoData');
+const { loadPhotoMetadata, getResourcePhotoImage, replaceResourcePhotos } = require('./photoCollectionService');
 const { ServiceError } = require('./serviceError');
 
 const { STORE_CATEGORIES, BUSINESS_DAYS } = Store;
@@ -83,14 +84,13 @@ function parseStore(body) {
   }
 
   if (Object.keys(errors).length) throw new ServiceError(400, 'Please correct the highlighted store details.', { errors });
-  // Decode and validate uploads outside the retryable account-write transaction.
-  fields.photos = resolvePhotos(body.photos === undefined ? [] : body.photos, []);
+  validatePhotoInput(body.photos === undefined ? [] : body.photos);
   return fields;
 }
 
-function toStoreItem(store, baseUrl) {
+function toStoreItem(store, baseUrl, photoDocuments = []) {
   const owner = store.ownerId;
-  const photos = photoItems(store, baseUrl, 'stores');
+  const photos = photoItems(store, baseUrl, 'stores', photoDocuments);
   return {
     id: String(store._id),
     ownerId: owner && typeof owner.username === 'string' ? {
@@ -106,46 +106,53 @@ function toStoreItem(store, baseUrl) {
   };
 }
 
+async function storeItems(stores, baseUrl, session) {
+  const photos = await loadPhotoMetadata('store', stores.map(store => store._id), session);
+  return stores.map(store => toStoreItem(store, baseUrl, photos.get(String(store._id)) ?? []));
+}
+
 async function listPublicStores(baseUrl) {
   const stores = await Store.find({}).populate({ path: 'ownerId', select: OWNER_FIELDS, match: { deletedAt: null } })
     .sort({ createdAt: -1, _id: -1 }).lean();
-  return stores.filter(store => store.ownerId).map(store => toStoreItem(store, baseUrl));
+  return storeItems(stores.filter(store => store.ownerId), baseUrl);
 }
 
 async function listOwnedStores(auth, baseUrl) {
   const stores = await Store.find({ ownerId: auth.userId }).populate({ path: 'ownerId', select: OWNER_FIELDS, match: { deletedAt: null } })
     .sort({ createdAt: -1, _id: -1 }).lean();
-  return stores.filter(store => store.ownerId).map(store => toStoreItem(store, baseUrl));
+  return storeItems(stores.filter(store => store.ownerId), baseUrl);
 }
 
 async function getStore(id, baseUrl) {
   requireId(id, 'store');
   const store = await Store.findById(id).populate({ path: 'ownerId', select: OWNER_FIELDS, match: { deletedAt: null } }).lean();
   if (!store || !store.ownerId) throw new ServiceError(404, 'Store not found.');
-  return toStoreItem(store, baseUrl);
+  return (await storeItems([store], baseUrl))[0];
 }
 
 async function getStorePhoto(id, photoId) {
   requireId(id, 'store');
   if (photoId !== undefined) requireId(photoId, 'photo');
-  const store = await Store.findById(id).select('+photos.imageData').lean();
+  const store = await Store.findById(id).select('_id ownerId').lean();
   if (!store || !(await User.exists({ _id: store.ownerId, deletedAt: null }))) return null;
-  return photoImage(store, photoId);
+  return getResourcePhotoImage('store', store._id, photoId);
 }
 
 async function createStore(auth, body, baseUrl) {
   try {
     const fields = parseStore(body);
+    const input = body.photos === undefined ? [] : body.photos;
     await Store.init();
     // The session is the only source of ownership. Closure locks the same account,
     // so no store can be published after its owner's account has been closed.
     return await withActiveAccountWrite(auth, [], async session => {
       const [created] = await Store.create([{ ...fields, ownerId: auth.userId }], { session });
+      const photos = await replaceResourcePhotos('store', created._id, input, session);
       const store = await Store.findById(created._id).session(session).populate({
         path: 'ownerId', select: OWNER_FIELDS, match: { deletedAt: null }, options: { session },
       }).lean();
       if (!store || !store.ownerId) throw new ServiceError(404, 'Store not found.');
-      return toStoreItem(store, baseUrl);
+      return toStoreItem(store, baseUrl, photos);
     });
   } catch (error) {
     if (error.name === 'ValidationError') {

@@ -1,5 +1,6 @@
 const Event = require('../models/Event');
 const User = require('../models/User');
+const UserProfile = require('../models/UserProfile');
 const UserPreferences = require('../models/UserPreferences');
 const NotificationSettings = require('../models/NotificationSettings');
 const { NOTIFICATION_DEFAULTS } = NotificationSettings;
@@ -77,11 +78,13 @@ async function updatePreferences(auth, body) {
 }
 
 async function notificationResponse(userId, stored) {
-  const account = await User.findOne({ _id: userId, deletedAt: null }).select('email phone').lean();
+  const account = await User.findOne({ _id: userId, deletedAt: null }).select('email').lean();
   if (!account) throw new ActiveAccountWriteError(401, 'Please log in again.');
+  const profile = await UserProfile.findOne({ userId }).select('phone').lean();
+  if (!profile) throw new ServiceError(503, 'Your account profile is unavailable. Please try again later.');
   return {
     settings: { ...NOTIFICATION_DEFAULTS, ...(stored?.settings ?? {}) },
-    contacts: { email: account.email ?? '', phone: account.phone ?? '' },
+    contacts: { email: account.email ?? '', phone: profile?.phone ?? '' },
   };
 }
 

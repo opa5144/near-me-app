@@ -1,5 +1,5 @@
 const friendService = require('../services/friendService');
-const { getAuthContext, sendServiceError } = require('./controllerUtils');
+const { getAuthContext, apiBaseUrl, sendServiceError } = require('./controllerUtils');
 
 function sendFriendError(res, error, fallback) {
   if (sendServiceError(res, error)) return;
@@ -8,7 +8,7 @@ function sendFriendError(res, error, fallback) {
 
 async function getNetwork(req, res) {
   try {
-    const network = await friendService.fetchFriendsNetwork(getAuthContext(req).userId);
+    const network = await friendService.fetchFriendsNetwork(getAuthContext(req).userId, apiBaseUrl(req));
     return res.json(network);
   } catch (error) {
     return sendFriendError(res, error, 'Server error fetching friends');

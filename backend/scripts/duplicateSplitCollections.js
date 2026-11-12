@@ -16,6 +16,9 @@ const models = {
 };
 const TARGET_NAMES = Object.freeze(['UserProfiles', 'AccountSecurity', 'UserAvatars', 'EventPhotos', 'StorePhotos']);
 const SOURCE_NAMES = ['AccountList', 'eventList', 'StoreList'];
+// Historical utility retired after cutover and physical legacy-field cleanup.
+// Originals can no longer reconstruct destinations; current split data stays authoritative.
+const COPY_PHASE_COMPLETE = true;
 const INDEXES = {
   UserProfiles: { userId: 1 }, AccountSecurity: { userId: 1 }, UserAvatars: { userId: 1 },
   EventPhotos: { eventId: 1, displayOrder: 1 }, StorePhotos: { storeId: 1, displayOrder: 1 },
@@ -197,51 +200,45 @@ async function prepare(snapshot) {
   return plan;
 }
 
-async function compareTargets(db, plan, existingNames, session) {
+async function compareTargets(db, plan, existingNames, session, allowRefresh = false) {
   const missing = {};
   const matched = {};
+  const changed = {};
   for (const name of TARGET_NAMES) {
     const actual = existingNames.has(name) ? await readDocuments(db, name, session) : [];
     const expected = new Map(plan[name].map(document => [String(document._id), document]));
     const present = new Set();
+    changed[name] = [];
     for (const document of actual) {
       const id = String(document._id);
-      if (!expected.has(id) || canonical(document) !== canonical(expected.get(id))) {
+      if (!expected.has(id)) {
         throw new CopyError('Existing ' + name + ' data conflicts with this copy; nothing will be overwritten.');
+      }
+      if (canonical(document) !== canonical(expected.get(id))) {
+        if (!allowRefresh) throw new CopyError('Existing ' + name + ' data conflicts with this copy; nothing will be overwritten.');
+        changed[name].push(expected.get(id));
       }
       present.add(id);
     }
     missing[name] = plan[name].filter(document => !present.has(String(document._id)));
     matched[name] = present.size;
   }
-  return { missing, matched };
+  return { missing, matched, changed };
 }
 
 function protectWindowsBackup(root, directory) {
   if (process.platform !== 'win32') return;
-  // Explicit NTFS ACLs are needed on Windows; POSIX file modes alone do not restrict access.
-  const script = [
-    "$ErrorActionPreference = 'Stop'",
-    "$root = [System.IO.Path]::GetFullPath($env:SPLIT_COPY_BACKUP_ROOT)",
-    "$folder = [System.IO.Path]::GetFullPath($env:SPLIT_COPY_BACKUP_PATH)",
-    "if (-not $folder.StartsWith($root + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) { throw 'Invalid backup directory' }",
-    "$owner = [System.Security.Principal.WindowsIdentity]::GetCurrent().User",
-    "foreach ($target in @($root, $folder)) {",
-    "  $acl = New-Object System.Security.AccessControl.DirectorySecurity",
-    "  $acl.SetOwner($owner)",
-    "  $acl.SetAccessRuleProtection($true, $false)",
-    "  foreach ($sid in @($owner, [System.Security.Principal.SecurityIdentifier]::new('S-1-5-18'), [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-544'))) {",
-    "    $rule = [System.Security.AccessControl.FileSystemAccessRule]::new($sid, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')",
-    "    $acl.AddAccessRule($rule)",
-    "  }",
-    "  Set-Acl -LiteralPath $target -AclObject $acl",
-    "}",
-  ].join('\n');
+  // Change only the DACL, not owner/audit sections that require SeSecurityPrivilege.
+  if (!directory.startsWith(root + path.sep)) throw new CopyError('Invalid private backup directory.');
   try {
-    execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
-      env: { ...process.env, SPLIT_COPY_BACKUP_ROOT: root, SPLIT_COPY_BACKUP_PATH: directory },
-      stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
-    });
+    const identity = execFileSync('whoami.exe', ['/user', '/fo', 'csv', '/nh'], { encoding: 'utf8', windowsHide: true });
+    const sid = identity.match(/S-\d+(?:-\d+)+/)?.[0];
+    if (!sid) throw new Error('Missing user identity.');
+    for (const target of [root, directory]) {
+      execFileSync('icacls.exe', [target, '/inheritance:r', '/grant:r',
+        '*' + sid + ':(OI)(CI)F', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F'],
+      { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    }
   } catch { throw new CopyError('Could not restrict the private backup directory; no data was exported or copied.'); }
 }
 
@@ -269,8 +266,15 @@ function backup(originals, originalMetadata, destinations, database) {
 
 async function main() {
   const args = process.argv.slice(2);
-  if (args.some(arg => !['--plan', '--apply'].includes(arg)) || args.length > 1) throw new CopyError('Use --plan or --apply.');
-  const apply = args[0] === '--apply';
+  if (args.some(arg => !['--plan', '--apply', '--refresh-plan', '--refresh'].includes(arg)) || args.length > 1) {
+    throw new CopyError('Use --plan, --apply, --refresh-plan, or --refresh.');
+  }
+  // Refresh is an explicit, separately authorized reconciliation of destinations only.
+  const refresh = ['--refresh-plan', '--refresh'].includes(args[0]);
+  const apply = ['--apply', '--refresh'].includes(args[0]);
+  if (COPY_PHASE_COMPLETE) {
+    throw new CopyError('Historical copy and refresh commands are retired after legacy-field cleanup. Current split collections are authoritative; original fields cannot reconstruct them.');
+  }
   if (!process.env.MONGO_URI) throw new CopyError('MONGO_URI is not configured.');
   const client = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 12000, connectTimeoutMS: 10000, maxPoolSize: 3 });
   const deadline = setTimeout(() => { console.error(JSON.stringify({ error: 'ConnectionTimeout', writesStarted: false })); process.exit(1); }, 35000);
@@ -286,12 +290,13 @@ async function main() {
     const originals = await readSnapshot(client, db, originalNames);
     const plan = await prepare(originals);
     const existingNames = new Set(listed.map(item => item.name));
-    const comparison = await compareTargets(db, plan, existingNames);
+    const comparison = await compareTargets(db, plan, existingNames, undefined, refresh);
     const summary = {
-      mode: apply ? 'apply' : 'plan', database: db.databaseName,
+      mode: refresh ? (apply ? 'refresh' : 'refresh-plan') : (apply ? 'apply' : 'plan'), database: db.databaseName,
       originalCounts: Object.fromEntries(originalNames.map(name => [name, originals[name].length])),
       destinations: Object.fromEntries(TARGET_NAMES.map(name => [name, {
-        expected: plan[name].length, alreadyMatching: comparison.matched[name], toInsert: comparison.missing[name].length,
+        expected: plan[name].length, alreadyMatching: comparison.matched[name] - comparison.changed[name].length,
+        toInsert: comparison.missing[name].length, toRefresh: comparison.changed[name].length,
       }])),
     };
     if (!apply) { console.log(JSON.stringify(summary, null, 2)); return; }
@@ -306,6 +311,7 @@ async function main() {
     }
     const session = client.startSession();
     let inserted;
+    let refreshed;
     try {
       await session.withTransaction(async () => {
         for (const name of SOURCE_NAMES) {
@@ -313,12 +319,18 @@ async function main() {
             throw new CopyError('Source data changed after backup; rerun with a fresh snapshot.');
           }
         }
-        const current = await compareTargets(db, plan, new Set(TARGET_NAMES), session);
+        const current = await compareTargets(db, plan, new Set(TARGET_NAMES), session, refresh);
         inserted = {};
+        refreshed = {};
         for (const name of TARGET_NAMES) {
           const documents = current.missing[name];
           if (documents.length) await collection(db, name).insertMany(documents, { session, ordered: true });
           inserted[name] = documents.length;
+          for (const replacement of current.changed[name]) {
+            const result = await collection(db, name).replaceOne({ _id: replacement._id }, replacement, { session });
+            if (result.matchedCount !== 1) throw new CopyError('A destination changed during reconciliation; refresh was aborted.');
+          }
+          refreshed[name] = current.changed[name].length;
         }
         // A separate fresh read detects source writes hidden by this transaction's snapshot.
         for (const name of SOURCE_NAMES) {
@@ -338,7 +350,7 @@ async function main() {
       metadataUnchanged: canonical(originalMetadata[name]) === canonical(metadataAfter[name]),
     }]));
     const originalsUnchanged = Object.values(originalChecks).every(check => check.documentsUnchanged && check.metadataUnchanged);
-    const report = { ...summary, completedAt: new Date().toISOString(), backupPath, inserted, copiesCommitted: true, originalsUnchanged,
+    const report = { ...summary, completedAt: new Date().toISOString(), backupPath, inserted, refreshed, copiesCommitted: true, originalsUnchanged,
       verifiedCounts: Object.fromEntries(TARGET_NAMES.map(name => [name, verified.matched[name]])), originalChecks };
     fs.writeFileSync(path.join(backupPath, 'copy-report.json'), JSON.stringify(report, null, 2), { flag: 'wx', mode: 0o600 });
     console.log(JSON.stringify(report, null, 2));

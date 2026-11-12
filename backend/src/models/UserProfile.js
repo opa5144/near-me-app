@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-// Staged schema only: existing account reads/writes remain unchanged and automatic DDL is disabled.
+// Active account contact/profile data; collection/index provisioning stays explicit.
 const userProfileSchema = new mongoose.Schema({
     userId: {type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true},
     phone: {

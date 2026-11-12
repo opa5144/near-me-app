@@ -1,18 +1,24 @@
 # Staged database models
 
+Current status: the subsequent [code cutover](split-collection-cutover.md) now
+uses these collections. The staging and copy notes below describe earlier phases.
+Active services use the separate collections. The subsequent approved
+[legacy-field cleanup](legacy-field-cleanup.md) removed duplicated original
+fields after a fresh backup and successful integrity verification.
+
 The initial stage added five model definitions for the proposed collection split. It
-does not switch the application to the new layout. Existing models, controllers,
-services, route wiring, and database records continue using the current layout.
+did not switch the application to the new layout. At that point, existing models,
+controllers, services, route wiring and records continued using the original layout.
 
 During that initial model-only stage, no backup, migration, copy, cleanup, account
 update, image rewrite, or collection creation was run. No database connection was
 opened for that stage. A later approved [additive copy](split-collection-copy.md)
 has now populated the new collections without changing the originals. The new files
-are not imported by startup or existing services. Their schemas explicitly set
+were not initially imported by startup or existing services. Their schemas set
 `autoCreate: false` and `autoIndex: false` to prevent automatic collection/index
-creation if they are imported while connected in the future. They are ordinary
-Mongoose models, not a read-only connection: a later deliberate write or explicit
-index/collection creation would still need authorization and rollout work.
+creation even when imported while connected. They are now imported by the active
+services after the approved rollout. Automatic DDL remains disabled; these are
+ordinary writable Mongoose models, not a read-only connection.
 
 ## New model definitions
 
@@ -39,39 +45,43 @@ support the existing five-photo limit, with position 0 as the cover. These index
 were declarations only in the initial stage. The subsequent additive copy
 explicitly created these indexes on the five new collections only.
 
-MongoDB does not enforce the references themselves. The later service rollout
-must retain active-owner checks, ownership-derived IDs, transactional writes,
-and ordering validation. `unique` is an index declaration rather than a Mongoose
+MongoDB does not enforce the references themselves. The service rollout retains
+active-owner checks, ownership-derived IDs, transactional writes and ordering
+validation. `unique` is an index declaration rather than a Mongoose
 validator; global uniqueness requires those indexes to be explicitly provisioned.
 
-## Current behavior remains active
+## Behavior during the model-only stage (historical)
 
-- Account identity, profile, avatar, and security fields remain in `AccountList`
-  through the unchanged User model and services.
-- `deletedAt` and the account-wide `archiveWriteVersion` transaction fence remain
-  in the existing User model. This stage does not relocate account-closure locks.
-- Event photos remain embedded or in the supported legacy image fields.
-- Store photos remain embedded, and business hours remain embedded in stores.
-- City subscriptions remain embedded in UserPreferences.
-- No current account IDs, sessions, event IDs, store IDs, or photo IDs are changed.
-- The `activities` and `EventList` collections are not removed or altered.
+- Account identity, profile, avatar and security fields were still read from
+  `AccountList` through the original User model and services.
+- `deletedAt` and the account-wide `archiveWriteVersion` transaction fence stayed
+  in the User model; the model-only stage did not relocate account-closure locks.
+- Event photos were embedded or stored in legacy single-image fields.
+- Store photos were embedded; business hours were part of store metadata.
+- City subscriptions stayed embedded in UserPreferences.
+- Account, session, event, store and photo IDs were not changed by model staging.
+- The `activities` and `EventList` collections were not removed or altered.
 
 Adding these files alone did not create the collections in Atlas. The subsequent
-approved copy created/populated them, but current application services still do
-not read or write them. Copies are a snapshot, not an automatically synchronized
-replacement for the original data.
+approved copy created/populated them. The code cutover subsequently made the new
+collections authoritative for their split data. The initial copies were snapshots;
+after cutover, current services read and write the separate collections directly.
 
-## Later approval required
+## Rollout and cleanup
 
-The future coordinated rollout will need a current backup, reconciliation of any
-source changes since copying, and updates to services and serializers. The
-additive copy script verifies existing exact matches and refuses conflicts; it
-does not silently refresh existing copies. Authentication version checks, MFA, lockouts, session revocation,
-and account-closure transactions must be changed together with the security data
-location. Photo migration must preserve legacy images and IDs/references before
-any old image fields are removed. Those tasks are intentionally deferred.
+The coordinated rollout required a current backup, explicitly approved
+reconciliation, and updates to services and serializers. Authentication versions,
+MFA, lockouts, revocation and account-closure transactions moved together with the
+security authority. Photo reads and future writes moved to the new collections
+without a runtime fallback to original media. See the cutover report for details.
+
+The historical copy script is retired in all modes after physical cleanup;
+removed or stale originals must not overwrite newer authoritative data. That
+separate approved operation is recorded in the cleanup report. This staging
+document describes the original model rollout and is not a copy/seed runbook.
 
 The initial model-only work used source/diff inspection without tests, app startup,
 or database calls. The later additive copy performed the authorized data preflight,
 backup, writes to new collections, and integrity verification documented separately.
-Application services and original database records remain unchanged.
+Application services were changed by the later code cutover, not by model staging.
+Any later source-field cleanup has its own backup and verification record.

@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-// Staged only: existing event/photo storage stays unchanged until a later rollout.
+// Active event media is stored separately from the untouched eventList metadata.
 const eventPhotoSchema = new mongoose.Schema({
   eventId: { type: mongoose.Schema.Types.ObjectId, ref: 'Event', required: true },
   imageData: {
@@ -17,8 +17,8 @@ const eventPhotoSchema = new mongoose.Schema({
   },
 }, { timestamps: true, collection: 'EventPhotos', autoCreate: false, autoIndex: false });
 
-// Pending explicit index creation: five bounded, unique slots limit each event
-// to five photos only after this index is built. No count query belongs here.
+// The rollout provisions this index explicitly; application startup must not create it.
+// Five bounded unique slots limit each event without an unsafe count query.
 eventPhotoSchema.index({ eventId: 1, displayOrder: 1 }, { unique: true });
 
 module.exports = mongoose.model('EventPhoto', eventPhotoSchema);

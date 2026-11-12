@@ -4,6 +4,7 @@ const EventSelection = require('../models/EventSelection');
 const { toEventItem } = require('./eventData');
 const { withActiveAccountWrite } = require('./activeAccountWrite');
 const { ServiceError } = require('./serviceError');
+const { loadPhotoMetadata } = require('./photoCollectionService');
 
 function requireId(value, label) {
   if (typeof value !== 'string' || !/^[a-f0-9]{24}$/i.test(value) || !mongoose.isObjectIdOrHexString(value)) {
@@ -20,9 +21,9 @@ function selectionItem(selection) {
   };
 }
 
-function bookingItem(selection, baseUrl) {
+function bookingItem(selection, baseUrl, photos = []) {
   // History uses current event details, rather than claiming to store a purchase snapshot.
-  return { id: String(selection._id), ...selectionItem(selection), event: toEventItem(selection.eventId, baseUrl) };
+  return { id: String(selection._id), ...selectionItem(selection), event: toEventItem(selection.eventId, baseUrl, photos) };
 }
 
 function pastEventPopulation(now) {
@@ -46,7 +47,8 @@ async function getBookingHistory(auth, baseUrl) {
   const visible = selections.filter(selection => selection.eventId?.hostId);
   visible.sort((a, b) => new Date(b.eventId.endsAt).getTime() - new Date(a.eventId.endsAt).getTime() ||
     String(b._id).localeCompare(String(a._id)));
-  return visible.map(selection => bookingItem(selection, baseUrl));
+  const photos = await loadPhotoMetadata('event', visible.map(selection => selection.eventId._id));
+  return visible.map(selection => bookingItem(selection, baseUrl, photos.get(String(selection.eventId._id)) ?? []));
 }
 
 async function getBooking(auth, id, baseUrl) {
@@ -54,7 +56,8 @@ async function getBooking(auth, id, baseUrl) {
   const selection = await EventSelection.findOne({ _id: id, ...selectedBy(auth.userId) })
     .populate(pastEventPopulation(new Date())).lean();
   if (!selection?.eventId?.hostId) throw new ServiceError(404, 'Booking not found.');
-  return bookingItem(selection, baseUrl);
+  const photos = await loadPhotoMetadata('event', [selection.eventId._id]);
+  return bookingItem(selection, baseUrl, photos.get(String(selection.eventId._id)) ?? []);
 }
 
 function selectionChanges(body) {

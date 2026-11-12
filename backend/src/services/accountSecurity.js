@@ -5,9 +5,13 @@ const argon2 = require('argon2');
 const OTPAuth = require('otpauth');
 const QRCode = require('qrcode');
 const User = require('../models/User');
+const AccountSecurity = require('../models/AccountSecurity');
 const AuthSession = require('../models/AuthSession');
 const AuthChallenge = require('../models/AuthChallenge');
-const { createSession, authVersionFilter, SessionStateError } = require('./sessionService');
+const { createSession, SessionStateError } = require('./sessionService');
+const { authVersionFilter } = require('./accountState');
+const { withActiveAccountWrite } = require('./activeAccountWrite');
+const { readUserProfile } = require('./accountReadService');
 const { ServiceError } = require('./serviceError');
 
 const MAX_FAILURES = 5;
@@ -15,7 +19,7 @@ const COOLDOWN_MS = 5 * 60 * 1000;
 const LOGIN_CHALLENGE_MS = 5 * 60 * 1000;
 const SETUP_CHALLENGE_MS = 10 * 60 * 1000;
 const SECURITY_FIELDS = [
-  '_id firstName lastName username email avatarUrl deletedAt',
+  '_id userId',
   '+passwordHash +authVersion +mfaEnabled +mfaSecretEncrypted +mfaRecoveryCodeHashes',
   '+mfaLastUsedStep +mfaFailedAttempts +mfaLockedUntil',
   '+securityPasswordFailedAttempts +securityPasswordLockedUntil',
@@ -30,9 +34,9 @@ class SecurityError extends ServiceError {
 
 function versionOf(user) { return user.authVersion ?? 0; }
 
-function activeQuery(user, conditions = []) {
+function securityQuery(user, conditions = []) {
   return {
-    _id: user._id, deletedAt: null,
+    userId: user._id,
     $and: [authVersionFilter(versionOf(user)), ...conditions],
   };
 }
@@ -41,12 +45,23 @@ function unlocked(field, now = new Date()) {
   return { $or: [{ [field]: null }, { [field]: { $lte: now } }] };
 }
 
-async function loadAccount(userId, authVersion) {
-  const user = await User.findOne({
-    _id: userId, deletedAt: null, ...authVersionFilter(authVersion),
-  }).select(SECURITY_FIELDS);
-  if (!user) throw new SecurityError(403, 'Your account security changed. Please sign in again.');
-  return user;
+function withSecurity(user, security) {
+  const values = typeof security.toObject === 'function' ? security.toObject() : security;
+  // A security row has its own _id; every cryptographic/challenge identity remains the original User ID.
+  return { ...user, ...values, _id: user._id, userId: user._id };
+}
+
+async function loadAccount(userId, authVersion, { session } = {}) {
+  const identityQuery = User.findOne({ _id: userId, deletedAt: null })
+    .select('_id firstName lastName username email deletedAt');
+  if (session) identityQuery.session(session);
+  const identity = await identityQuery.lean();
+  if (!identity) throw new SecurityError(403, 'Your account security changed. Please sign in again.');
+  const security = AccountSecurity.findOne({ userId, ...authVersionFilter(authVersion) }).select(SECURITY_FIELDS);
+  if (session) security.session(session);
+  const state = await security.lean();
+  if (!state) throw new SecurityError(403, 'Your account security changed. Please sign in again.');
+  return withSecurity(identity, state);
 }
 
 function securityBody(body) {
@@ -56,10 +71,12 @@ function securityBody(body) {
   return body;
 }
 
-function publicUser(user) {
+async function publicUser(user, baseUrl) {
+  const profile = await readUserProfile(user._id, baseUrl);
+  if (!profile) throw new SessionStateError();
   return {
-    _id: user._id, firstName: user.firstName, lastName: user.lastName,
-    username: user.username, email: user.email, avatarUrl: user.avatarUrl ?? '',
+    _id: user._id, firstName: profile.firstName, lastName: profile.lastName,
+    username: profile.username, email: profile.email, avatarUrl: profile.avatarUrl ?? '',
   };
 }
 
@@ -85,13 +102,14 @@ async function rejectProof(user, field, message, kind = 'mfa') {
     $cond: [expiredLock, 1, { $add: [{ $ifNull: ['$' + counter, 0] }, 1] }],
   };
   const reachesLimit = { $gte: [nextCount, MAX_FAILURES] };
-  // One atomic pipeline increments the shared counter and activates the cooldown at attempt five.
-  const updated = await User.findOneAndUpdate(activeQuery(user, [unlocked(lock, now)]), [{
-    $set: {
-      [counter]: { $cond: [reachesLimit, 0, nextCount] },
-      [lock]: { $cond: [reachesLimit, new Date(now.getTime() + COOLDOWN_MS), null] },
-    },
-  }], { new: true, updatePipeline: true }).select(SECURITY_FIELDS);
+  // Commit the fenced counter update before throwing; throwing in the callback would roll it back.
+  const updated = await withActiveAccountWrite({ userId: user._id, authVersion: versionOf(user) }, [],
+    async session => AccountSecurity.findOneAndUpdate(securityQuery(user, [unlocked(lock, now)]), [{
+      $set: {
+        [counter]: { $cond: [reachesLimit, 0, nextCount] },
+        [lock]: { $cond: [reachesLimit, new Date(now.getTime() + COOLDOWN_MS), null] },
+      },
+    }], { new: true, updatePipeline: true, session }).select(SECURITY_FIELDS));
   if (!updated) {
     const current = await loadAccount(user._id, versionOf(user));
     throwIfLocked(current, kind);
@@ -109,17 +127,18 @@ async function verifyCurrentPassword(user, currentPassword) {
   if (Array.from(currentPassword).length > 128 || !(await argon2.verify(user.passwordHash, currentPassword))) {
     return rejectProof(user, 'currentPassword', 'Current password is incorrect.', 'password');
   }
-  const updated = await User.findOneAndUpdate(activeQuery(user, [
-    unlocked('securityPasswordLockedUntil'),
-  ]), { $set: { securityPasswordFailedAttempts: 0, securityPasswordLockedUntil: null } }, {
-    new: true,
-  }).select(SECURITY_FIELDS);
+  const updated = await withActiveAccountWrite({ userId: user._id, authVersion: versionOf(user) }, [],
+    async session => AccountSecurity.findOneAndUpdate(securityQuery(user, [
+      unlocked('securityPasswordLockedUntil'),
+    ]), { $set: { securityPasswordFailedAttempts: 0, securityPasswordLockedUntil: null } }, {
+      new: true, session,
+    }).select(SECURITY_FIELDS));
   if (!updated) {
     const current = await loadAccount(user._id, versionOf(user));
     throwIfLocked(current, 'password');
     throw new SecurityError(403, 'Your account security changed. Please sign in again.');
   }
-  return updated;
+  return withSecurity(user, updated);
 }
 
 function encryptionKey() {
@@ -227,14 +246,15 @@ async function verifyMfaProof(user, body) {
     update = { $set: { mfaLastUsedStep: step, mfaFailedAttempts: 0, mfaLockedUntil: null } };
   }
   // Conditional updates make each OTP step and each recovery hash usable only once, even concurrently.
-  const updated = await User.findOneAndUpdate(activeQuery(user, conditions), update, { new: true })
-    .select(SECURITY_FIELDS);
+  const updated = await withActiveAccountWrite({ userId: user._id, authVersion: versionOf(user) }, [],
+    async session => AccountSecurity.findOneAndUpdate(securityQuery(user, conditions), update, { new: true, session })
+      .select(SECURITY_FIELDS));
   if (!updated) {
     return rejectProof(user, field, field === 'code'
       ? 'Authenticator code is incorrect, expired, or already used.'
       : 'Recovery code is invalid or has already been used.');
   }
-  return updated;
+  return withSecurity(user, updated);
 }
 
 async function sensitiveProof(auth, body) {
@@ -249,10 +269,11 @@ async function createChallenge(user, purpose, duration, extra = {}) {
   const token = randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + duration);
   await AuthChallenge.init();
-  await AuthChallenge.create({
-    userId: user._id, authVersion: versionOf(user), purpose,
-    tokenHash: challengeHash(token), expiresAt, ...extra,
-  });
+  await withActiveAccountWrite({ userId: user._id, authVersion: versionOf(user) }, [],
+    async session => AuthChallenge.create([{
+      userId: user._id, authVersion: versionOf(user), purpose,
+      tokenHash: challengeHash(token), expiresAt, ...extra,
+    }], { session }));
   return { token, expiresAt: expiresAt.toISOString() };
 }
 
@@ -285,15 +306,17 @@ async function cleanupAuthentication(userId, version, all = false) {
 }
 
 async function rotateAccount(user, changes, unset = {}, conditions = []) {
-  const updated = await User.findOneAndUpdate(activeQuery(user, conditions), {
-    $set: changes, $inc: { authVersion: 1 },
-    ...(Object.keys(unset).length ? { $unset: unset } : {}),
-  }, { new: true, runValidators: true }).select(SECURITY_FIELDS);
-  if (!updated) {
+  const state = await withActiveAccountWrite({ userId: user._id, authVersion: versionOf(user) }, [],
+    async session => AccountSecurity.findOneAndUpdate(securityQuery(user, conditions), {
+      $set: changes, $inc: { authVersion: 1 },
+      ...(Object.keys(unset).length ? { $unset: unset } : {}),
+    }, { new: true, runValidators: true, session }).select(SECURITY_FIELDS));
+  if (!state) {
     const current = await loadAccount(user._id, versionOf(user));
     throwIfLocked(current, 'mfa');
     throw new SecurityError(403, 'Your account security changed. Please sign in again.');
   }
+  const updated = withSecurity(user, state);
   await cleanupAuthentication(updated._id, versionOf(updated));
   const session = await createSession(updated._id, versionOf(updated));
   return { user: updated, session };
@@ -389,11 +412,19 @@ async function closeAccount(auth, input) {
     throw new SecurityError(400, 'Confirm permanent account closure.', { confirmation: 'Type DELETE to permanently close your account.' });
   }
   const user = await sensitiveProof(auth, body);
-  const closed = await User.findOneAndUpdate(activeQuery(user), {
-    $set: { deletedAt: new Date() }, $inc: { authVersion: 1 },
-  }, { new: true }).select('+authVersion');
-  if (!closed) throw new SecurityError(403, 'Your account security changed. Please sign in again.');
-  await cleanupAuthentication(closed._id, versionOf(closed), true);
+  const closed = await withActiveAccountWrite({ userId: user._id, authVersion: versionOf(user) }, [], async session => {
+    // Identity closure and credential revocation commit together under the same account fence.
+    const state = await AccountSecurity.findOneAndUpdate(securityQuery(user), {
+      $inc: { authVersion: 1 },
+    }, { new: true, session }).select('+authVersion');
+    if (!state) throw new SecurityError(403, 'Your account security changed. Please sign in again.');
+    const identity = await User.updateOne({ _id: user._id, deletedAt: null }, {
+      $set: { deletedAt: new Date() },
+    }, { session });
+    if (!identity.matchedCount) throw new SecurityError(403, 'Your account security changed. Please sign in again.');
+    return state;
+  });
+  await cleanupAuthentication(user._id, versionOf(closed), true);
 }
 
 async function beginLoginMfa(user) {
@@ -404,18 +435,19 @@ async function beginLoginMfa(user) {
   return { mfaRequired: true, challengeToken: challenge.token, expiresAt: challenge.expiresAt };
 }
 
-async function completeLoginMfa({ challengeToken, code, recoveryCode }) {
+async function completeLoginMfa({ challengeToken, code, recoveryCode }, baseUrl) {
   try {
     const challenge = await readChallenge(challengeToken, 'login-mfa');
     const user = await loadAccount(challenge.userId, challenge.authVersion);
     if (!user.mfaEnabled) throw new SecurityError(403, 'Your account security changed. Please sign in again.');
     const verified = await verifyMfaProof(user, { code, recoveryCode });
     await consumeChallenge(challenge);
+    const profile = await publicUser(verified, baseUrl);
     const session = await createSession(verified._id, versionOf(verified));
-    return { user: publicUser(verified), session };
+    return { user: profile, session };
   } catch (error) {
     // A version change invalidates the whole challenge, so the client must restart its password step.
-    if (error instanceof SessionStateError || (error instanceof SecurityError && error.status === 403)) {
+    if (error instanceof SessionStateError || (error instanceof ServiceError && [401, 403].includes(error.status))) {
       throw new SecurityError(410, 'Your sign-in verification is no longer valid. Please start again.');
     }
     throw error;
