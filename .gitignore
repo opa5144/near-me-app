@@ -10,6 +10,9 @@ web-build/
 .env
 .env.local
 
+# Private database snapshots and copy reports
+backend/.local-backups/
+
 # Operating system / IDE
 .DS_Store
 Thumbs.db
