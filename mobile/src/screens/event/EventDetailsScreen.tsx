@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Image, Linking, Platform, Pressable, ScrollView, Share, StyleSheet, View, Modal, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Calendar from 'expo-calendar/legacy';
 import { EventItem } from '../../data/events';
 import { AppButton } from '../../components/AppButton';
 import { AppText } from '../../components/AppText';
@@ -86,19 +87,28 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
   };
 
   const handleAddToCalendar = async () => {
-    const nativeCalendarUrl = Platform.select({
-      ios: 'calshow:',
-      android: 'content://com.android.calendar/time/',
-    });
+    // Build the event times from the saved start/end (assumes event.startsAt / event.endsAt are ISO strings)
+    const start = new Date(event.startsAt);
+    const end = new Date(event.endsAt);
+    const hasTimes = Number.isFinite(start.getTime()) && Number.isFinite(end.getTime());
+    const location = `${event.venue}, ${event.address || event.location}`;
 
     try {
-      if (nativeCalendarUrl && (await Linking.canOpenURL(nativeCalendarUrl))) {
-        await Linking.openURL(nativeCalendarUrl);
+      if (hasTimes) {
+        // Opens the native calendar's "new event" screen pre-filled; user only has to press Add/Save
+        await Calendar.createEventInCalendarAsync({
+          title: event.title,
+          notes: event.description,
+          location,
+          startDate: start,
+          endDate: end,
+        });
       } else {
+        // Fallback if the saved times can't be parsed: Google Calendar template link
         const title = encodeURIComponent(event.title);
         const details = encodeURIComponent(event.description);
-        const location = encodeURIComponent(`${event.venue}, ${event.address || event.location}`);
-        const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&details=${details}&location=${location}`;
+        const loc = encodeURIComponent(location);
+        const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&details=${details}&location=${loc}`;
         await Linking.openURL(url);
       }
     } catch (err) {
