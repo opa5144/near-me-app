@@ -21,7 +21,7 @@ export function CategoryFilter({ categories, selectedCategory, onSelectCategory 
     >
       {categories.map(category => {
         const selected = Array.isArray(selectedCategory)
-          ? selectedCategory.includes(category)
+          ? (category === 'All' ? selectedCategory.length === 0 : selectedCategory.includes(category))
           : selectedCategory === category;
 
         return (

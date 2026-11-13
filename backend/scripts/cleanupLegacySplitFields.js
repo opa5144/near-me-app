@@ -5,7 +5,6 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { createHash, randomUUID } = require('node:crypto');
 const { MongoClient, BSON, ObjectId } = require('mongodb');
-require('dotenv').config({ path: path.resolve(__dirname, '../.env'), quiet: true });
 
 const FIELDS = Object.freeze({
   AccountList: Object.freeze([
@@ -226,7 +225,10 @@ function writePrivate(filename, contents) {
   finally { fs.closeSync(descriptor); }
 }
 
-function backup(data, collectionMetadata, database) {
+function backup(data, collectionMetadata, database, prefix = 'legacy-cleanup') {
+  if (!['legacy-cleanup', 'category-events-import', 'event-categories-venues'].includes(prefix)) {
+    throw new CleanupError('This private backup operation is not allowlisted.');
+  }
   const root = path.resolve(__dirname, '../.local-backups');
   const ignoreFile = fs.readFileSync(path.resolve(__dirname, '../../.gitignore'), 'utf8');
   if (!ignoreFile.split(/\r?\n/).includes('backend/.local-backups/')) {
@@ -234,7 +236,7 @@ function backup(data, collectionMetadata, database) {
   }
   fs.mkdirSync(root, { recursive: true, mode: 0o700 });
   if (fs.lstatSync(root).isSymbolicLink()) throw new CleanupError('The private backup directory cannot be a link.');
-  const directory = path.join(root, 'legacy-cleanup-' + new Date().toISOString().replace(/[:.]/g, '-') + '-' + randomUUID());
+  const directory = path.join(root, prefix + '-' + new Date().toISOString().replace(/[:.]/g, '-') + '-' + randomUUID());
   fs.mkdirSync(directory, { mode: 0o700 });
   protectBackup(root, directory);
   const collections = [];
@@ -261,12 +263,19 @@ function backup(data, collectionMetadata, database) {
     collections.push({ name, filename, count, sha256: sha256(persisted) });
   }
   writePrivate(path.join(directory, 'manifest.ejson'), BSON.EJSON.stringify({
-    database, createdAt: new Date(), allowedFields: FIELDS, collectionMetadata, collections,
+    database, createdAt: new Date(), operation: prefix,
+    ...(prefix === 'legacy-cleanup' ? { allowedFields: FIELDS } : prefix === 'category-events-import'
+      ? { insertOnlyCollections: ['eventList', 'EventPhotos'] }
+      : { updateOnlyCollections: ['eventList'], allowedFields: { eventList: [
+        'categories', 'category', 'place', 'address', 'placeId', 'latitude', 'longitude', 'timeZone', 'description',
+      ] }, descriptionScope: 'Exact approved notice replacement on explicitly flagged category-demo-2026-11-12 seeds only.' }),
+    collectionMetadata, collections,
   }, null, 2, { relaxed: false }));
   return directory;
 }
 
 async function main() {
+  require('dotenv').config({ path: path.resolve(__dirname, '../.env'), quiet: true });
   const args = process.argv.slice(2);
   if (args.length > 1 || args.some(arg => !['--plan', '--apply'].includes(arg))) {
     throw new CleanupError('Use --plan (read only) or --apply (backup and approved field cleanup).');
@@ -359,7 +368,12 @@ async function main() {
   } finally { clearTimeout(deadline); await client.close(); }
 }
 
-main().catch(error => {
+module.exports = {
+  backup, snapshot, readSnapshot, metadata, canonical, fingerprint, assertSnapshot,
+  BSON_OPTIONS, TRANSACTION_OPTIONS, writePrivate,
+};
+
+if (require.main === module) main().catch(error => {
   console.error(JSON.stringify({
     error: error.name, code: error.code ?? null, ...operation,
     message: error instanceof CleanupError ? error.message : 'Cleanup stopped; connection details and document values are omitted.',

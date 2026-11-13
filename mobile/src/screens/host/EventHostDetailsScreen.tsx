@@ -1,21 +1,28 @@
-import React from 'react';
-import { Alert, Linking, Platform, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, Linking, Platform, Pressable, RefreshControl, ScrollView, Share, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { EventItem } from '../../data/events';
 import { AppText } from '../../components/AppText';
 import { PhotoCollection } from '../../components/PhotoCollection';
 import { useTheme } from '../../context/ThemeContext';
-import { useEvents } from '../../context/EventsContext';
+import { FieldError } from '../../components/FieldError';
+import { openEventMaps } from '../../utils/eventMaps';
 
 // Host details screen modeled after EventDetailsScreen, adding analytics and host management actions.
-export function EventHostDetailsScreen({ event, onEditEvent, onBack }: { event: EventItem; onEditEvent: () => void; onBack: () => void }) {
+export function EventHostDetailsScreen({ event, onEditEvent, onBack, onRefresh, refreshing, refreshError }: {
+  event: EventItem;
+  onEditEvent: () => void;
+  onBack: () => void;
+  onRefresh: () => void;
+  refreshing: boolean;
+  refreshError: string | null;
+}) {
   const { colors } = useTheme();
-  const { viewedEventIds, interestedEventIds } = useEvents();
-  
-
-  // Calculate stats for this specific event
-  const viewCount = viewedEventIds.includes(event.id) ? 1 : 0;
-  const interestedCount = interestedEventIds.includes(event.id) ? 1 : 0;
+  const [mapError, setMapError] = useState<string | null>(null);
+  const [openingMap, setOpeningMap] = useState(false);
+  // These are saved choices across active accounts, not the host's personal flags.
+  const interestedCount = event.interestedCount ?? 0;
+  const attendingCount = event.attendingCount ?? 0;
 
   // Function to share event details via native share sheet
   const handleShare = async () => {
@@ -28,26 +35,14 @@ export function EventHostDetailsScreen({ event, onEditEvent, onBack }: { event: 
     }
   };
 
-  // Function to jump out of your app directly into native Maps (Google Maps app / Apple Maps app / browser fallback)
+  // Open the saved venue through the shared Maps link and show action failures here.
   const handleOpenMaps = async () => {
-    const query = encodeURIComponent(`${event.venue}, ${event.address || event.location}`);
-    const googleMapsAppUrl = `comgooglemaps://?q=${query}`;
-    const appleMapsUrl = `maps:0,0?q=${query}`;
-    const webMapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`;
-
+    if (openingMap) return;
+    setMapError(null); setOpeningMap(true);
     try {
-      if (await Linking.canOpenURL(googleMapsAppUrl)) {
-        await Linking.openURL(googleMapsAppUrl);
-        return;
-      }
-      if (Platform.OS === 'ios' && (await Linking.canOpenURL(appleMapsUrl))) {
-        await Linking.openURL(appleMapsUrl);
-        return;
-      }
-      await Linking.openURL(webMapsUrl);
-    } catch (err) {
-      console.error('An error occurred opening maps', err);
-    }
+      await openEventMaps(event);
+    } catch (reason) { setMapError(reason instanceof Error ? reason.message : 'Maps could not be opened. Please try again.'); }
+    finally { setOpeningMap(false); }
   };
 
   // Function to open the device's native calendar app directly via system intents
@@ -73,7 +68,9 @@ export function EventHostDetailsScreen({ event, onEditEvent, onBack }: { event: 
   };
 
   return (
-    <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]}>
+    <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh}
+        tintColor={colors.primary} colors={[colors.primary]} />}>
       {/* Top Header Bar with Back Link & Share Button */}
       <View style={styles.topBar}>
         <AppText onPress={onBack} style={[styles.back, { color: colors.primary }]}>‹  Back to dashboard</AppText>
@@ -81,21 +78,30 @@ export function EventHostDetailsScreen({ event, onEditEvent, onBack }: { event: 
           <Ionicons name="share-social-outline" size={16} color={colors.primary} />
         </Pressable>
       </View>
+      {refreshError && <View style={{ marginBottom: 12 }}>
+        <AppText accessibilityRole="alert" style={{ color: colors.text }}>{refreshError}</AppText>
+        <Pressable accessibilityRole="button" onPress={onRefresh} style={{ paddingVertical: 8 }}>
+          <AppText style={{ color: colors.primary }}>Retry</AppText>
+        </Pressable>
+      </View>}
       
       <PhotoCollection photos={event.photos ?? []} fallbackUri={event.bannerImage} title={event.title}
         emoji={event.emoji} accent={event.accent} mode="hero" />
-        <AppText style={[styles.photoCategory, { color: colors.primary }]}>{event.category.toUpperCase()} EVENT • HOST VIEW</AppText>
+      <View style={styles.categoryList}>
+        {event.categories.map(category => <AppText key={category} style={[styles.photoCategory, { color: colors.primary, borderColor: colors.primary }]}>{category.toUpperCase()}</AppText>)}
+        <AppText style={{ color: colors.muted, fontSize: 11 }}>EVENT • HOST VIEW</AppText>
+      </View>
 
 
       {/* Host Analytics Performance Summary */}
       <View style={[styles.metricsContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.metricItem}>
-          <AppText style={[styles.metricValue, { color: colors.text }]}>{viewCount}</AppText>
-          <AppText style={[styles.metricLabel, { color: colors.muted }]}>VIEWS</AppText>
+          <AppText style={[styles.metricValue, { color: colors.text }]}>{refreshing ? '…' : refreshError ? '—' : attendingCount}</AppText>
+          <AppText style={[styles.metricLabel, { color: colors.muted }]}>ATTENDING</AppText>
         </View>
         <View style={[styles.metricDivider, { backgroundColor: colors.border }]} />
         <View style={styles.metricItem}>
-          <AppText style={[styles.metricValue, { color: colors.text }]}>{interestedCount}</AppText>
+          <AppText style={[styles.metricValue, { color: colors.text }]}>{refreshing ? '…' : refreshError ? '—' : interestedCount}</AppText>
           <AppText style={[styles.metricLabel, { color: colors.muted }]}>INTERESTED</AppText>
         </View>
       </View>
@@ -127,11 +133,13 @@ export function EventHostDetailsScreen({ event, onEditEvent, onBack }: { event: 
         </View>
         <Pressable 
           onPress={handleOpenMaps}
+          disabled={openingMap}
           style={[styles.mapButton, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Ionicons name="navigate-outline" size={13} color={colors.primary} />
-          <AppText style={[styles.mapButtonText, { color: colors.primary }]}>Map</AppText>
+          <AppText style={[styles.mapButtonText, { color: colors.primary }]}>{openingMap ? 'Opening...' : 'Map'}</AppText>
         </Pressable>
       </View>
+      <FieldError message={mapError} />
 
       {/* Host Action Control */}
       <Pressable 
@@ -154,7 +162,8 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 13 },
   back: { fontWeight: '800', fontSize: 13 },
   shareButton: { width: 34, height: 34, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  photoCategory: { fontSize: 11, fontWeight: '700', marginBottom: 12 },
+  categoryList: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 12 },
+  photoCategory: { fontSize: 11, fontWeight: '700', borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
   metricsContainer: { flexDirection: 'row', borderRadius: 16, borderWidth: 1, padding: 12, marginBottom: 18, alignItems: 'center' },
   metricItem: { flex: 1, alignItems: 'center' },
   metricValue: { fontSize: 18, fontWeight: '900' },

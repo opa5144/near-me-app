@@ -5,6 +5,7 @@ const { parseCreateEvent, toEventItem, EventInputError } = require('./eventData'
 const { withActiveAccountWrite } = require('./activeAccountWrite');
 const { ServiceError } = require('./serviceError');
 const { loadPhotoMetadata, getResourcePhotoImage, replaceResourcePhotos } = require('./photoCollectionService');
+const { loadEventAudienceCounts } = require('./eventAudienceService');
 
 function requireEventId(id) {
   if (typeof id !== 'string' || !/^[a-f0-9]{24}$/i.test(id) || !mongoose.isObjectIdOrHexString(id)) {
@@ -20,7 +21,10 @@ function eventWriteError(error) {
 
 async function eventItems(events, baseUrl, session) {
   const photos = await loadPhotoMetadata('event', events.map(event => event._id), session);
-  return events.map(event => toEventItem(event, baseUrl, photos.get(String(event._id)) ?? []));
+  // Keep operations sequential when this helper runs inside a transaction.
+  const audience = await loadEventAudienceCounts(events.map(event => event._id), session);
+  return events.map(event => toEventItem(event, baseUrl, photos.get(String(event._id)) ?? [],
+    audience.get(String(event._id)) ?? { interestedCount: 0, attendingCount: 0 }));
 }
 
 async function listPublicEvents(baseUrl) {
@@ -86,7 +90,7 @@ async function createEvent(auth, body, baseUrl) {
       const populated = await Event.findById(event._id).session(session).populate({
         path: 'hostId', select: 'firstName lastName username', options: { session },
       }).lean();
-      return toEventItem(populated, baseUrl, photos);
+      return toEventItem(populated, baseUrl, photos, { interestedCount: 0, attendingCount: 0 });
     });
   } catch (error) {
     throw eventWriteError(error);
@@ -111,7 +115,9 @@ async function updateEvent(auth, id, body, baseUrl) {
       if (!updated) throw new ServiceError(404, 'Event not found.');
       if (photoInput !== undefined) {
         const photos = await replaceResourcePhotos('event', updated._id, photoInput, session);
-        return toEventItem(updated, baseUrl, photos);
+        const audience = await loadEventAudienceCounts([updated._id], session);
+        return toEventItem(updated, baseUrl, photos,
+          audience.get(String(updated._id)) ?? { interestedCount: 0, attendingCount: 0 });
       }
       // Omission preserves the new collection unchanged; original media is never consulted.
       return (await eventItems([updated], baseUrl, session))[0];

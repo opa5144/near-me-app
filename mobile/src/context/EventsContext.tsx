@@ -196,6 +196,10 @@ export function EventsProvider({ children }: { children: ReactNode }) {
       selectionValues.current = next;
       // Commit only the server response; failed saves never pretend to be persisted.
       setSelections(next);
+      // Invalidate list requests that began before this choice committed. Reload
+      // aggregate totals from the server rather than estimating audience counts.
+      ++mutationVersion.current;
+      void refreshEvents();
     } catch (reason: unknown) {
       if (mounted.current) {
         const message = selectionError(reason);
@@ -214,7 +218,7 @@ export function EventsProvider({ children }: { children: ReactNode }) {
         }
       }
     }
-  }, [refreshSelections]);
+  }, [refreshSelections, refreshEvents]);
 
   // Void callbacks preserve existing consumers and handle async failures centrally.
   const toggleInterested = useCallback((id: string) => { void toggleSelection(id, 'interested'); }, [toggleSelection]);

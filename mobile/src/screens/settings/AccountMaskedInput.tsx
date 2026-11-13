@@ -38,7 +38,7 @@ export function formatPhoneNumber(value: string): string {
 }
 
 export function formatDateOfBirth(value: string): string {
-  return formatGroups(digitsOnly(value).slice(0, 8), [4, 2, 2], ['-', '-']);
+  return formatGroups(digitsOnly(value).slice(0, 8), [2, 2, 4], ['/', '/']);
 }
 
 function formatValue(mask: AccountInputMask, value: string): string {

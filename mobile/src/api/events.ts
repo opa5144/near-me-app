@@ -1,5 +1,7 @@
 import { api } from './client';
 import type { EventItem } from '../data/events';
+import { normalizeEventCategories } from '../data/events';
+import { formatEventDate } from '../utils/dateFormat';
 import type { PhotoInput } from './photos';
 export type { EventItem };
 
@@ -7,7 +9,7 @@ export type { EventItem };
 // hostId is deliberately absent: the backend derives it from the Bearer session.
 export interface CreateEventRequest {
   title: string;
-  category: string;
+  categories: string[];
   description: string;
   price: number;
   startsAt: string; // ISO timestamp, including its UTC offset (normally toISOString()).
@@ -24,33 +26,40 @@ export interface CreateEventRequest {
 
 export type UpdateEventRequest = Partial<CreateEventRequest>;
 
+type ApiEventItem = Omit<EventItem, 'categories'> & { categories?: unknown; category?: unknown };
+
+function normalizeEvent(event: ApiEventItem): EventItem {
+  const { category, ...fields } = event;
+  return { ...fields, categories: normalizeEventCategories(event.categories, category), date: formatEventDate(event.startsAt, event.timeZone) };
+}
+
 // Home/Search share this public list; the backend formats each EventItem response.
 export async function fetchEvents(): Promise<EventItem[]> {
-  const response = await api.get<{ events: EventItem[] }>('/events');
-  return response.data.events;
+  const response = await api.get<{ events: ApiEventItem[] }>('/events');
+  return response.data.events.map(normalizeEvent);
 }
 // The shared client attaches Authorization; ownership is filtered by the server.
 export async function fetchMyEvents(): Promise<EventItem[]> {
-  const response = await api.get<{ events: EventItem[] }>('/events/mine');
-  return response.data.events;
+  const response = await api.get<{ events: ApiEventItem[] }>('/events/mine');
+  return response.data.events.map(normalizeEvent);
 }
 // Details always reload by the database ID instead of trusting a copied list item.
-export async function fetchEvent(id: string): Promise<EventItem> {
-  const response = await api.get<{ event: EventItem }>('/events/' + encodeURIComponent(id));
-  return response.data.event;
+export async function fetchEvent(id: string, signal?: AbortSignal): Promise<EventItem> {
+  const response = await api.get<{ event: ApiEventItem }>('/events/' + encodeURIComponent(id), { signal });
+  return normalizeEvent(response.data.event);
 }
 // Return the saved server record so shared state uses its real ID and image URL.
 // Image payloads get a longer timeout than the client's normal text-only requests.
 export async function createEvent(input: CreateEventRequest): Promise<EventItem> {
-  const response = await api.post<{ event: EventItem }>('/events', input, { timeout: 30000 });
-  return response.data.event;
+  const response = await api.post<{ event: ApiEventItem }>('/events', input, { timeout: 30000 });
+  return normalizeEvent(response.data.event);
 }
 
 // Update an existing event record by ID with optional payload fields.
 export async function updateEvent(id: string, input: UpdateEventRequest): Promise<EventItem> {
-  const response = await api.patch<{ event?: EventItem } | EventItem>('/events/' + encodeURIComponent(id), input, { timeout: 30000 });
+  const response = await api.patch<{ event?: ApiEventItem } | ApiEventItem>('/events/' + encodeURIComponent(id), input, { timeout: 30000 });
   const data = response.data;
-  return ('event' in data && data.event) ? data.event : (data as EventItem);
+  return normalizeEvent(('event' in data && data.event) ? data.event : (data as ApiEventItem));
 }
 // Independent saved choices belong to the authenticated account, never a client-supplied user ID.
 export interface EventSelection {
@@ -61,8 +70,9 @@ export interface EventSelection {
 
 export interface BookingHistoryItem extends EventSelection {
   id: string; // The selection record ID, used by the private history detail route.
-  event: EventItem & { timeZone?: string };
+  event: EventItem;
 }
+type ApiBookingHistoryItem = Omit<BookingHistoryItem, 'event'> & { event: ApiEventItem };
 
 export async function fetchEventSelections(signal?: AbortSignal): Promise<EventSelection[]> {
   const response = await api.get<{ selections: EventSelection[] }>('/event-selections', { signal });
@@ -81,13 +91,14 @@ export async function saveEventSelection(
 
 // History contains ended events with a real saved selection; no sample bookings are fabricated.
 export async function fetchBookingHistory(signal?: AbortSignal): Promise<BookingHistoryItem[]> {
-  const response = await api.get<{ bookings: BookingHistoryItem[] }>('/event-selections/history', { signal });
-  return response.data.bookings;
+  const response = await api.get<{ bookings: ApiBookingHistoryItem[] }>('/event-selections/history', { signal });
+  return response.data.bookings.map(booking => ({ ...booking, event: normalizeEvent(booking.event) }));
 }
 
 export async function fetchBookingHistoryDetails(id: string, signal?: AbortSignal): Promise<BookingHistoryItem> {
-  const response = await api.get<{ booking: BookingHistoryItem }>(
+  const response = await api.get<{ booking: ApiBookingHistoryItem }>(
     '/event-selections/history/' + encodeURIComponent(id), { signal },
   );
-  return response.data.booking;
+  const booking = response.data.booking;
+  return { ...booking, event: normalizeEvent(booking.event) };
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import type { TextInputProps } from 'react-native';
 import axios from 'axios';
 import { AppButton } from '../../components/AppButton';
@@ -17,16 +17,20 @@ type LoginFieldProps = Omit<TextInputProps, 'secureTextEntry' | 'multiline'> & {
   error?: string;
 };
 
-// Keep validation beside its input without changing the shared input component.
-function LoginField({ error, style, ...props }: LoginFieldProps) {
-  const { theme } = useTheme();
-  const errorColor = theme === 'dark' ? '#FF8A80' : '#C62828';
-  return (
-    <View style={styles.field}>
-      <AppTextInput {...props} style={[style, error ? [styles.invalidInput, { borderColor: errorColor }] : null]} />
-      {error && <Text accessibilityRole="alert" style={[styles.fieldError, { color: errorColor }]}>{error}</Text>}
-    </View>
-  );
+// Shared input feedback stays directly beneath the complete password/input row.
+function LoginField(props: LoginFieldProps) {
+  return <AppTextInput {...props} />;
+}
+
+function validateField(field: LoginFieldName, value: string): string | undefined {
+  if (field === 'email') {
+    if (!value.trim()) return 'Email is required.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) return 'Enter a valid email address.';
+  }
+  if (field === 'password' && !value) return 'Password is required.';
+  if (field === 'code' && !/^\d{6}$/.test(value)) return 'Enter all six digits.';
+  if (field === 'recoveryCode' && !value.trim()) return 'Enter a recovery code.';
+  return undefined;
 }
 
 function countdown(seconds: number): string {
@@ -128,7 +132,14 @@ export function LoginScreen({ onLogin, onNavigateToSignup }: LoginScreenProps) {
       }
     }
     setFieldErrors(errors);
-    setFormError(errorMessage(error, fallback));
+    setFormError(Object.keys(errors).length ? null : errorMessage(error, fallback));
+  }
+
+  // These are local format checks only; credentials and proofs go to the server
+  // only when Login or Verify is pressed, so leaving a field uses no attempts.
+  function showFieldError(field: LoginFieldName, value: string) {
+    const message = validateField(field, value);
+    if (message) setFieldErrors(current => ({ ...current, [field]: message }));
   }
 
   function clearFieldError(field: LoginFieldName) {
@@ -144,8 +155,10 @@ export function LoginScreen({ onLogin, onNavigateToSignup }: LoginScreenProps) {
     // Ref guards also cover two taps before the disabled button rerenders.
     if (loginInFlight.current || Date.now() < lockedUntilRef.current) return;
     const errors: FieldErrors = {};
-    if (!form.email.trim()) errors.email = 'Email is required.';
-    if (!form.password) errors.password = 'Password is required.';
+    for (const field of ['email', 'password'] as const) {
+      const message = validateField(field, form[field]);
+      if (message) errors[field] = message;
+    }
     setFieldErrors(errors);
     setFormError(null);
     if (Object.keys(errors).length) return;
@@ -183,8 +196,8 @@ export function LoginScreen({ onLogin, onNavigateToSignup }: LoginScreenProps) {
       return;
     }
     const errors: FieldErrors = {};
-    if (proofMode === 'code' && !/^\d{6}$/.test(code)) errors.code = 'Enter all six digits.';
-    if (proofMode === 'recoveryCode' && !recoveryCode.trim()) errors.recoveryCode = 'Enter a recovery code.';
+    const message = validateField(proofMode, proofMode === 'code' ? code : recoveryCode);
+    if (message) errors[proofMode] = message;
     setFieldErrors(errors);
     setFormError(null);
     if (Object.keys(errors).length) return;
@@ -241,11 +254,13 @@ export function LoginScreen({ onLogin, onNavigateToSignup }: LoginScreenProps) {
         {proofMode === 'code' ? <LoginField
           label="Authenticator code" value={code} error={fieldErrors.code}
           onChangeText={value => { setCode(value.replace(/\D/g, '').slice(0, 6)); clearFieldError('code'); }}
+          onBlur={() => showFieldError('code', code)}
           keyboardType="number-pad" autoComplete="one-time-code" textContentType="oneTimeCode"
           editable={!blocked} autoCorrect={false} autoCapitalize="none"
         /> : <LoginField
           label="Recovery code" value={recoveryCode} error={fieldErrors.recoveryCode}
           onChangeText={value => { setRecoveryCode(value.slice(0, 128)); clearFieldError('recoveryCode'); }}
+          onBlur={() => showFieldError('recoveryCode', recoveryCode)}
           maxLength={128} autoComplete="off" autoCorrect={false} autoCapitalize="none" editable={!blocked}
         />}
         <Text style={[styles.instructions, { color: colors.muted }]}>
@@ -262,9 +277,11 @@ export function LoginScreen({ onLogin, onNavigateToSignup }: LoginScreenProps) {
       </> : <>
         <LoginField label="Email" value={form.email} error={fieldErrors.email}
           onChangeText={value => { setForm(current => ({ ...current, email: value })); clearFieldError('email'); }}
+          onBlur={() => showFieldError('email', form.email)}
           autoCapitalize="none" keyboardType="email-address" autoComplete="email" editable={!blocked} />
         <LoginField label="Password" value={form.password} error={fieldErrors.password}
           onChangeText={value => { setForm(current => ({ ...current, password: value })); clearFieldError('password'); }}
+          onBlur={() => showFieldError('password', form.password)}
           autoCapitalize="none" autoComplete="current-password" isPassword editable={!blocked} />
         <AppButton title={isLoggingIn ? 'Logging in...' : 'Login'} onPress={handleLogin}
           disabled={blocked || !form.email.trim() || !form.password} />
@@ -278,9 +295,6 @@ export function LoginScreen({ onLogin, onNavigateToSignup }: LoginScreenProps) {
 
 const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 32, flexGrow: 1 },
-  field: { marginBottom: 4 },
-  invalidInput: { borderWidth: 1, borderRadius: 12 },
-  fieldError: { fontSize: 12, marginTop: -8, marginBottom: 16 },
   instructions: { fontSize: 13, lineHeight: 20, marginBottom: 16 },
   notice: { fontSize: 13, lineHeight: 20, marginBottom: 16 },
   link: { alignItems: 'center', paddingVertical: 16 },

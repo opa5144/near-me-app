@@ -8,6 +8,7 @@ import { PhotoCollection } from '../../components/PhotoCollection';
 import { fetchBookingHistoryDetails } from '../../api/events';
 import type { BookingHistoryItem } from '../../api/events';
 import { useTheme } from '../../context/ThemeContext';
+import { formatEventDate } from '../../utils/dateFormat';
 
 type BookingHistoryDetailsScreenProps = {
   navigation: any;
@@ -18,12 +19,13 @@ function savedTimestamp(value: string, timeZone?: string): string {
   const instant = new Date(value);
   if (!Number.isFinite(instant.getTime())) return 'Unavailable';
   try {
-    return new Intl.DateTimeFormat(undefined, {
-      year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+    const clock = new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric', minute: '2-digit',
       ...(timeZone ? { timeZone } : {}),
     }).format(instant);
+    return `${formatEventDate(value, timeZone)} ${clock}`;
   } catch {
-    return instant.toLocaleString();
+    return `${formatEventDate(value)} ${instant.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
   }
 }
 
@@ -90,7 +92,7 @@ export function BookingHistoryDetailsScreen({ navigation, route }: BookingHistor
         <PhotoCollection photos={event.photos ?? []} fallbackUri={event.bannerImage} title={event.title}
           emoji={event.emoji} accent={event.accent} mode="hero" />
         <Text style={[styles.title, { color: colors.text }]}>{event.title}</Text>
-        <DetailRow label="Category" value={event.category} />
+        <DetailRow label="Categories" value={event.categories.join(' · ')} />
         <DetailRow label="Price" value={event.price} />
         <DetailRow label="Starts" value={savedTimestamp(event.startsAt, event.timeZone)} />
         <DetailRow label="Ends" value={savedTimestamp(event.endsAt, event.timeZone)} />

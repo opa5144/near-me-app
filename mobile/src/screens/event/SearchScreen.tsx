@@ -14,6 +14,7 @@ export function SearchScreen({ events, onOpenEvent }: { events: EventItem[]; onO
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
   const toggleCategory = (category: string) => {
+    if (category === 'All') { setSelectedCategories([]); return; }
     setSelectedCategories(prev =>
       prev.includes(category)
         ? prev.filter(item => item !== category)
@@ -22,8 +23,8 @@ export function SearchScreen({ events, onOpenEvent }: { events: EventItem[]; onO
   };
 
   const filtered = useMemo(() => events.filter(event =>
-    (selectedCategories.length === 0 || selectedCategories.includes(event.category)) &&
-    `${event.title} ${event.venue} ${event.category}`.toLowerCase().includes(query.toLowerCase()),
+    (selectedCategories.length === 0 || event.categories.some(category => selectedCategories.includes(category))) &&
+    `${event.title} ${event.venue} ${event.categories.join(' ')}`.toLowerCase().includes(query.toLowerCase()),
   ), [events, selectedCategories, query]);
 
   return (

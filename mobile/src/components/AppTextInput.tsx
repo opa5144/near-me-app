@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import type {TextInputProps} from 'react-native';
 import { useTheme } from '../context/ThemeContext';
+import { FieldError } from './FieldError';
 
 type AppTextInputProps = Omit< 
     TextInputProps,
@@ -34,7 +35,6 @@ export function AppTextInput({
         <View style={styles.container}>
             <View style={styles.labelRow}>
                 <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
-                {error && <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.error, { color: errorColor }]}>{error}</Text>}
             </View>
             
             <View style={[styles.field, { backgroundColor: colors.surface, borderColor: error ? errorColor : colors.border }]}>
@@ -64,6 +64,7 @@ export function AppTextInput({
                     </Pressable>
                 )}
             </View>
+            <FieldError message={error} />
         </View>
     );
 }
@@ -77,7 +78,6 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     labelRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', gap: 8, marginBottom: 8 },
-    error: { fontSize: 12, flexShrink: 1 },
     field: {
         flexDirection: 'row',
         alignItems: 'center',

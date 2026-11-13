@@ -6,11 +6,13 @@ import { useFocusEffect } from '@react-navigation/native';
 import { isAxiosError } from 'axios';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { AppButton } from '../../components/AppButton';
+import { FieldError } from '../../components/FieldError';
 import { useTheme } from '../../context/ThemeContext';
 import { fetchUserProfile, updateUserProfile } from '../../api/client';
 import type { UpdateUserProfileRequest, UserProfileErrorResponse, UserProfileResponse } from '../../api/client';
 import { AccountMaskedInput, formatPhoneNumber } from './AccountMaskedInput';
 import type { AccountInputMask } from './AccountMaskedInput';
+import { formatCalendarDate, parseDisplayDate } from '../../utils/dateFormat';
 
 type AccountFieldName = keyof UpdateUserProfileRequest;
 type AccountFieldErrors = Partial<Record<AccountFieldName, string>>;
@@ -20,22 +22,33 @@ type AccountFieldProps = TextInputProps & {
   label: string;
   error?: string;
   mask?: AccountInputMask;
+  autoGrow?: boolean;
 };
 
 // This label/input pair belongs to Account Settings and follows its active theme.
-function AccountField({ label, error, mask, style, ...inputProps }: AccountFieldProps) {
+function AccountField({ label, error, mask, style, autoGrow = false, ...inputProps }: AccountFieldProps) {
   const { colors, theme } = useTheme();
+  const [contentHeight, setContentHeight] = useState(90);
   const errorColor = theme === 'dark' ? '#FF8A80' : '#C62828';
   const fieldProps = {
     accessibilityLabel: label,
     placeholderTextColor: colors.muted,
     underlineColorAndroid: 'transparent',
     ...inputProps,
+    ...(autoGrow ? {
+      scrollEnabled: false,
+      onContentSizeChange: (event: Parameters<NonNullable<TextInputProps['onContentSizeChange']>>[0]) => {
+        // Let the surrounding page scroll; the bio itself grows and shrinks with its text.
+        setContentHeight(Math.max(90, Math.ceil(event.nativeEvent.contentSize.height)));
+        inputProps.onContentSizeChange?.(event);
+      },
+    } : {}),
     style: [
       styles.input,
       { backgroundColor: colors.surface, borderColor: error ? errorColor : colors.border, color: colors.text },
       inputProps.multiline && styles.bioInput,
       style,
+      autoGrow && { height: contentHeight },
     ],
   };
 
@@ -43,11 +56,6 @@ function AccountField({ label, error, mask, style, ...inputProps }: AccountField
     <View>
       <View style={styles.labelRow}>
         <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
-        {error && (
-          <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.fieldError, { color: errorColor }]}>
-            {error}
-          </Text>
-        )}
       </View>
       {mask ? (
         <AccountMaskedInput
@@ -57,6 +65,7 @@ function AccountField({ label, error, mask, style, ...inputProps }: AccountField
           onChangeText={value => inputProps.onChangeText?.(value)}
         />
       ) : <TextInput {...fieldProps} />}
+      <FieldError message={error} />
     </View>
   );
 }
@@ -68,7 +77,7 @@ function accountValues(user: UserProfileResponse['user']): UpdateUserProfileRequ
     email: user.email,
     // Reformat a complete saved number without truncating invalid older records.
     phone: /^(?:\d{11}|\d \d{3}-\d{3}-\d{4})$/.test(phone) ? formatPhoneNumber(phone) : phone,
-    dob: user.dob ?? '',
+    dob: formatCalendarDate(user.dob ?? ''),
     bio: user.bio ?? '',
   };
 }
@@ -85,12 +94,9 @@ function validateField(field: AccountFieldName, value: string): string | undefin
   } else if (field === 'phone') {
     if (trimmed && !/^\d \d{3}-\d{3}-\d{4}$/.test(trimmed)) return 'Enter all 11 digits.';
   } else if (field === 'dob' && trimmed) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return 'Use YYYY-MM-DD.';
-    const date = new Date(trimmed + 'T00:00:00.000Z');
-    if (trimmed.startsWith('0000-') || !Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== trimmed) {
-      return 'Enter a real date.';
-    }
-    if (trimmed > new Date().toISOString().slice(0, 10)) return 'Date of birth cannot be in the future.';
+    const canonical = parseDisplayDate(trimmed);
+    if (!canonical) return 'Enter a real date in MM/DD/YYYY format.';
+    if (canonical > new Date().toISOString().slice(0, 10)) return 'Date of birth cannot be in the future.';
   } else if (field === 'bio' && value.length > 2000) {
     return 'Use 2,000 characters or fewer.';
   }
@@ -154,7 +160,7 @@ export function AccountScreen({ navigation }: any) {
         const values = accountValues(user);
         setProfile(user);
         setForm(values);
-        setFieldErrors(validateForm(values));
+        setFieldErrors({});
       } catch (error: unknown) {
         if (viewVersion.current !== version || controller.signal.aborted) return;
         setLoadError(accountErrorMessage(error, 'Unable to load your account. Please try again.'));
@@ -173,20 +179,24 @@ export function AccountScreen({ navigation }: any) {
     };
   }, [loadAttempt]));
 
-  function showFieldError(field: AccountFieldName, value: string, edited = false) {
+  function showFieldError(field: AccountFieldName, value: string) {
     setFieldErrors(current => {
       const next = { ...current };
       const message = validateField(field, value);
       if (message) next[field] = message;
       // A blur alone must not dismiss a server error such as an already-used email.
-      else if (edited) delete next[field];
       return next;
     });
   }
 
   function editField(field: AccountFieldName, value: string) {
     setForm(current => ({ ...current, [field]: value }));
-    showFieldError(field, value, true);
+    // Editing only clears stale feedback; validation waits until this field exits.
+    setFieldErrors(current => {
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
     setSaveError(null);
     setSaveSuccess(false);
   }
@@ -205,7 +215,7 @@ export function AccountScreen({ navigation }: any) {
       username: form.username.trim(),
       email: form.email.trim().toLowerCase(),
       phone: form.phone.trim(),
-      dob: form.dob.trim(),
+      dob: form.dob.trim() ? parseDisplayDate(form.dob)! : '',
       bio: form.bio.trim(),
     };
     setIsSaving(true);
@@ -228,7 +238,9 @@ export function AccountScreen({ navigation }: any) {
       if (isAxiosError<UserProfileErrorResponse>(error)) {
         for (const field of ACCOUNT_FIELDS) {
           const message = error.response?.data?.errors?.[field];
-          if (typeof message === 'string' && message.trim()) serverErrors[field] = message;
+          if (typeof message === 'string' && message.trim()) {
+            serverErrors[field] = field === 'dob' ? message.replace(/YYYY-MM-DD/g, 'MM/DD/YYYY') : message;
+          }
         }
       }
       if (Object.keys(serverErrors).length) setFieldErrors(serverErrors);
@@ -315,7 +327,7 @@ export function AccountScreen({ navigation }: any) {
             value={form.dob}
             onChangeText={value => editField('dob', value)}
             onBlur={() => showFieldError('dob', form.dob)}
-            placeholder="YYYY-MM-DD"
+            placeholder="MM/DD/YYYY"
             keyboardType="number-pad"
             autoCapitalize="none"
             autoCorrect={false}
@@ -328,7 +340,7 @@ export function AccountScreen({ navigation }: any) {
             onChangeText={value => editField('bio', value)}
             onBlur={() => showFieldError('bio', form.bio)}
             multiline
-            numberOfLines={3}
+            autoGrow
             maxLength={2000}
             editable={!isSaving}
           />
@@ -353,7 +365,6 @@ const styles = StyleSheet.create({
   avatarImage: { width: 70, height: 70, borderRadius: 35, marginBottom: 8 },
   labelRow: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', gap: 8, marginBottom: 6, marginTop: 12 },
   label: { fontSize: 12, fontWeight: '700' },
-  fieldError: { fontSize: 12, flexShrink: 1 },
   input: { borderWidth: 1, borderRadius: 10, padding: 12, fontSize: 13 },
   bioInput: { minHeight: 90, textAlignVertical: 'top' },
   status: { paddingVertical: 32, gap: 16 },

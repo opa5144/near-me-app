@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { usePreventRemove } from '@react-navigation/native';
-import { isAxiosError } from 'axios';
 import { AppButton } from '../../components/AppButton';
 import { ScreenHeader } from '../../components/ScreenHeader';
+import { FieldError } from '../../components/FieldError';
 import { BusinessHoursEditor, businessDays } from '../../components/BusinessHoursEditor';
 import type { BusinessHoursData } from '../../components/BusinessHoursEditor';
 import { LocationComponent } from '../../components/LocationInputField';
@@ -15,6 +15,8 @@ import { createStore } from '../../api/stores';
 import type { CreateStoreRequest, StoreItem } from '../../api/stores';
 import { categories } from '../../data/events';
 import { useTheme } from '../../context/ThemeContext';
+import { clockTime, hasHostErrors, hostRequestError, mergeHostFieldErrors, validateStoreDraft } from './hostFormUtils';
+import type { HostFieldErrors, StoreDraft } from './hostFormUtils';
 
 const storeCategories = categories.filter(category => category !== 'All');
 const initialHours = (): BusinessHoursData => Object.fromEntries(businessDays.map(day => {
@@ -24,13 +26,11 @@ const initialHours = (): BusinessHoursData => Object.fromEntries(businessDays.ma
   closeTime.setHours(17, 0, 0, 0);
   return [day, { open: false, openTime, closeTime }];
 })) as BusinessHoursData;
-const clockTime = (value: Date) => `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`;
 
 type Props = { onBack: () => void; onCreated?: (store: StoreItem) => void };
 
 export function CreateStoreScreen({ onBack, onCreated }: Props) {
-  const { colors, theme } = useTheme();
-  const errorColor = theme === 'dark' ? '#FF8A80' : '#C62828';
+  const { colors } = useTheme();
   const [storeName, setStoreName] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [description, setDescription] = useState('');
@@ -41,9 +41,11 @@ export function CreateStoreScreen({ onBack, onCreated }: Props) {
   const [photoBusy, setPhotoBusy] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<HostFieldErrors>({});
   const [publishedStore, setPublishedStore] = useState<StoreItem | null>(null);
   const mounted = useRef(true);
   const saving = useRef(false);
+  const photoBusyRef = useRef(false);
   const completed = useRef(false);
   const returned = useRef(false);
   usePreventRemove(isSaving, () => {});
@@ -59,20 +61,19 @@ export function CreateStoreScreen({ onBack, onCreated }: Props) {
     else onBack();
   }, [publishedStore, isSaving, onCreated, onBack]);
 
+  const draft: StoreDraft = { name: storeName, description, categories: selectedCategories, venue: selectedVenue, timeZone, hours, photos };
+  const validateFields = (fields: string[], changes: Partial<StoreDraft> = {}) => {
+    const next = validateStoreDraft({ ...draft, ...changes });
+    setErrors(current => mergeHostFieldErrors(current, next, fields));
+  };
+  const validateHours = (value: BusinessHoursData) => validateFields(['businessHours', ...businessDays.map(day => `hours.${day}`)], { hours: value });
+
   const handlePublish = async () => {
-    if (saving.current || completed.current || photoBusy) return;
+    if (saving.current || completed.current || photoBusyRef.current) return;
     setError(null);
-    if (!storeName.trim()) return setError('Enter your business name.');
-    if (!selectedCategories.length) return setError('Choose at least one vendor category.');
-    if (!description.trim()) return setError('Describe your store.');
-    if (!selectedVenue?.name.trim() || !selectedVenue.address.trim()) return setError('Select your store address from the location search.');
-    try { new Intl.DateTimeFormat('en-US', { timeZone: timeZone.trim() }).format(new Date()); }
-    catch { return setError('Enter a valid business timezone, such as America/New_York.'); }
-    for (const day of businessDays) {
-      if (hours[day].open && clockTime(hours[day].openTime) === clockTime(hours[day].closeTime)) {
-        return setError(`${day}: opening and closing times must be different.`);
-      }
-    }
+    const nextErrors = validateStoreDraft(draft);
+    setErrors(nextErrors);
+    if (hasHostErrors(nextErrors) || !selectedVenue) return;
     saving.current = true;
     Keyboard.dismiss();
     setIsSaving(true);
@@ -95,10 +96,8 @@ export function CreateStoreScreen({ onBack, onCreated }: Props) {
       setPublishedStore(store);
     } catch (reason: unknown) {
       if (!mounted.current) return;
-      const data = isAxiosError<{ message?: string; errors?: Record<string, string> }>(reason) ? reason.response?.data : undefined;
-      const fields = data?.errors ? Object.values(data.errors).filter(value => typeof value === 'string').join('\n') : '';
-      setError(fields || data?.message || (reason instanceof Error && !isAxiosError(reason) ? reason.message : undefined)
-        || 'Your store could not be published. Check your connection and try again.');
+      const feedback = hostRequestError(reason, 'Your store could not be published. Check your connection and try again.');
+      setErrors(feedback.errors); setError(feedback.message);
     } finally {
       saving.current = false;
       if (mounted.current) setIsSaving(false);
@@ -113,8 +112,9 @@ export function CreateStoreScreen({ onBack, onCreated }: Props) {
         <ScreenHeader eyebrow="Your business" title="Create Store" subtitle="Publish your store, photos, and weekly opening hours." />
         <View pointerEvents={isSaving ? 'none' : 'auto'}>
           <Text style={[styles.label, { color: colors.text }]}>Business Name</Text>
-          <TextInput value={storeName} onChangeText={setStoreName} editable={!isSaving} maxLength={150} placeholder="e.g. Clover Bakery"
+          <TextInput value={storeName} onChangeText={setStoreName} onBlur={() => validateFields(['name'])} editable={!isSaving} maxLength={150} placeholder="e.g. Clover Bakery"
             accessibilityLabel="Business name" placeholderTextColor={colors.muted} style={inputStyle} />
+          <FieldError message={errors.name} />
 
           <Text style={[styles.label, { color: colors.text }]}>Vendor Categories</Text>
           <Text style={[styles.hint, { color: colors.muted }]}>Choose all that apply.</Text>
@@ -122,32 +122,44 @@ export function CreateStoreScreen({ onBack, onCreated }: Props) {
             {storeCategories.map(category => {
               const selected = selectedCategories.includes(category);
               return <TouchableOpacity key={category} accessibilityRole="checkbox" accessibilityState={{ checked: selected }}
-                onPress={() => setSelectedCategories(current => selected ? current.filter(value => value !== category) : [...current, category])}
+                onPress={() => {
+                  const next = selected ? selectedCategories.filter(value => value !== category) : [...selectedCategories, category];
+                  setSelectedCategories(next); validateFields(['categories', 'category'], { categories: next });
+                }} disabled={isSaving}
                 style={[styles.category, { borderColor: selected ? colors.primary : colors.border, backgroundColor: selected ? colors.primary : colors.surface }]}>
                 <Text style={{ color: selected ? '#FFFFFF' : colors.text }}>{selected ? '✓ ' : ''}{category}</Text>
               </TouchableOpacity>;
             })}
           </View>
+          <FieldError message={errors.categories || errors.category} />
 
           <Text style={[styles.label, { color: colors.text }]}>Store Description</Text>
-          <TextInput value={description} onChangeText={setDescription} editable={!isSaving} maxLength={5000} multiline numberOfLines={5}
+          <TextInput value={description} onChangeText={setDescription} onBlur={() => validateFields(['description'])} editable={!isSaving} maxLength={5000} multiline numberOfLines={5}
             textAlignVertical="top" accessibilityLabel="Store description" placeholder="Share your specialties with customers…"
             placeholderTextColor={colors.muted} style={[...inputStyle, styles.description]} />
+          <FieldError message={errors.description} />
 
           <Text style={[styles.label, { color: colors.text }]}>Store Address</Text>
-          <LocationComponent onVenueSelected={setSelectedVenue} onSelectionCleared={() => setSelectedVenue(null)} />
+          <LocationComponent onVenueSelected={venue => { setSelectedVenue(venue); validateFields(['location'], { venue }); }}
+            onSelectionCleared={() => setSelectedVenue(null)} error={errors.location}
+            onBlur={() => validateFields(['location'])} disabled={isSaving} />
 
           <Text style={[styles.label, { color: colors.text }]}>Business Timezone</Text>
-          <TextInput value={timeZone} onChangeText={setTimeZone} editable={!isSaving} autoCapitalize="none" autoCorrect={false}
+          <TextInput value={timeZone} onChangeText={setTimeZone} onBlur={() => validateFields(['timeZone'])} editable={!isSaving} autoCapitalize="none" autoCorrect={false}
             accessibilityLabel="Business timezone" placeholder="America/New_York" placeholderTextColor={colors.muted} style={inputStyle} />
+          <FieldError message={errors.timeZone} />
           <Text style={[styles.hint, { color: colors.muted }]}>Use the timezone where your store is located.</Text>
 
           <Text style={[styles.label, { color: colors.text }]}>Business Hours</Text>
           <Text style={[styles.hint, { color: colors.muted }]}>Set each day to open or closed. A closing time before opening means the next day.</Text>
-          <BusinessHoursEditor hours={hours} onChange={setHours} />
-          <PhotoPickerField label="Store Photos" photos={photos} onChange={setPhotos} disabled={isSaving} onBusyChange={setPhotoBusy} />
+          <BusinessHoursEditor hours={hours} onChange={setHours} disabled={isSaving}
+            error={errors.businessHours} dayErrors={Object.fromEntries(businessDays.map(day => [day, errors[`hours.${day}`]]))}
+            onBlur={validateHours} />
+          <PhotoPickerField label="Store Photos" photos={photos} onChange={setPhotos} disabled={isSaving}
+            onBusyChange={busy => { photoBusyRef.current = busy; setPhotoBusy(busy); }}
+            error={errors.photos} onBlur={value => validateFields(['photos'], { photos: value })} />
         </View>
-        {error && <Text accessibilityRole="alert" style={[styles.error, { color: errorColor }]}>{error}</Text>}
+        <FieldError message={error} />
         <AppButton title={isSaving ? 'Publishing…' : photoBusy ? 'Preparing photo…' : 'Publish Store'}
           onPress={() => void handlePublish()} disabled={isSaving || photoBusy} style={styles.submit} />
       </ScrollView>
@@ -172,7 +184,6 @@ const styles = StyleSheet.create({
   hint: { fontSize: 12, lineHeight: 18, marginBottom: 12, marginTop: 5 },
   categories: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   category: { borderWidth: 1, borderRadius: 18, paddingVertical: 9, paddingHorizontal: 14 },
-  error: { marginVertical: 14, fontSize: 13, lineHeight: 19 },
   submit: { marginTop: 18 },
   busyOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#00000066' },
   busyPanel: { padding: 24, borderRadius: 18, gap: 14, alignItems: 'center' },

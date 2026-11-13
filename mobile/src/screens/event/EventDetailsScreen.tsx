@@ -8,6 +8,8 @@ import { PhotoCollection } from '../../components/PhotoCollection';
 import { useTheme } from '../../context/ThemeContext';
 import { PublicProfileScreen } from '../settings/PublicProfileScreen'; 
 import { fetchUserProfile } from '../../api/client';
+import { FieldError } from '../../components/FieldError';
+import { openEventMaps } from '../../utils/eventMaps';
 
 type EventDetailsScreenProps = {
   event: EventItem;
@@ -29,6 +31,8 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
   onBack, navigation }: EventDetailsScreenProps) {
   const { colors, theme } = useTheme();
   const errorColor = theme === 'dark' ? '#FF8A80' : '#C62828';
+  const [mapError, setMapError] = useState<string | null>(null);
+  const [openingMap, setOpeningMap] = useState(false);
   
   // A screen left open becomes read-only as soon as the saved end time passes.
   const [hasEnded, setHasEnded] = useState(() => {
@@ -73,24 +77,12 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
   };
 
   const handleOpenMaps = async () => {
-    const query = encodeURIComponent(`${event.venue}, ${event.address || event.location}`);
-    const googleMapsAppUrl = `comgooglemaps://?q=${query}`;
-    const appleMapsUrl = `maps:0,0?q=${query}`;
-    const webMapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`;
-
+    if (openingMap) return;
+    setMapError(null); setOpeningMap(true);
     try {
-      if (await Linking.canOpenURL(googleMapsAppUrl)) {
-        await Linking.openURL(googleMapsAppUrl);
-        return;
-      }
-      if (Platform.OS === 'ios' && (await Linking.canOpenURL(appleMapsUrl))) {
-        await Linking.openURL(appleMapsUrl);
-        return;
-      }
-      await Linking.openURL(webMapsUrl);
-    } catch (err) {
-      console.error('An error occurred opening maps', err);
-    }
+      await openEventMaps(event);
+    } catch (reason) { setMapError(reason instanceof Error ? reason.message : 'Maps could not be opened. Please try again.'); }
+    finally { setOpeningMap(false); }
   };
 
   const handleAddToCalendar = async () => {
@@ -139,7 +131,10 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
       
       <PhotoCollection photos={event.photos ?? []} fallbackUri={event.bannerImage} title={event.title}
         emoji={event.emoji} accent={event.accent} mode="hero" />
-        <AppText style={[styles.photoCategory, { color: colors.primary }]}>{event.category.toUpperCase()} EVENT</AppText>
+      <View style={styles.categoryList}>
+        {event.categories.map(category => <AppText key={category} style={[styles.photoCategory, { color: colors.primary, borderColor: colors.primary }]}>{category.toUpperCase()}</AppText>)}
+        <AppText style={{ color: colors.muted, fontSize: 11 }}>EVENT</AppText>
+      </View>
 
 
       <View style={styles.titleRow}>
@@ -189,11 +184,13 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
         </View>
         <Pressable 
           onPress={handleOpenMaps}
+          disabled={openingMap}
           style={[styles.mapButton, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Ionicons name="navigate-outline" size={13} color={colors.primary} />
-          <AppText style={[styles.mapButtonText, { color: colors.primary }]}>Map</AppText>
+          <AppText style={[styles.mapButtonText, { color: colors.primary }]}>{openingMap ? 'Opening...' : 'Map'}</AppText>
         </Pressable>
       </View>
+      <FieldError message={mapError} />
 
       {selectionError && <View style={styles.selectionNotice}>
         <AppText accessibilityRole="alert" style={{ color: errorColor }}>{selectionError}</AppText>
@@ -201,11 +198,15 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
       </View>}
       {selectionsLoading && <AppText style={[styles.selectionNotice, { color: colors.muted }]}>Loading your saved choices...</AppText>}
       {hasEnded && <AppText style={[styles.selectionNotice, { color: colors.muted }]}>This event has ended. Your saved choices are read-only.</AppText>}
-      <AppButton title={interested ? 'Interested' : "I'm Interested"} onPress={onToggleInterested}
-        disabled={selectionDisabled} variant={interested ? 'primary' : 'secondary'} style={styles.button} />
-      <AppButton title={selectionSaving ? 'Saving choices...' : attending ? 'Attending' : "I'll Attend"}
-        onPress={onToggleAttending} disabled={selectionDisabled} variant={attending ? 'primary' : 'secondary'}
-        style={styles.attendingButton} />
+      <View style={styles.selectionRow}>
+        <AppButton title={interested ? 'Interested' : "I'm Interested"} onPress={onToggleInterested}
+          disabled={selectionDisabled} variant={interested ? 'primary' : 'secondary'} style={styles.selectionButton}
+          textStyle={styles.selectionButtonText} />
+        <AppButton title={attending ? 'Attending' : "I'll Attend"}
+          onPress={onToggleAttending} disabled={selectionDisabled} variant={attending ? 'primary' : 'secondary'}
+          style={styles.selectionButton} textStyle={styles.selectionButtonText} />
+      </View>
+      {selectionSaving && <AppText accessibilityLiveRegion="polite" style={{ color: colors.muted, marginBottom: 12 }}>Saving choices...</AppText>}
       
       <AppText style={[styles.section, { color: colors.text }]}>About Event</AppText>
       <AppText style={[styles.description, { color: colors.muted }]}>{event.description}</AppText>
@@ -245,7 +246,8 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 13 },
   back: { fontWeight: '800', fontSize: 13 },
   shareButton: { width: 34, height: 34, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  photoCategory: { fontSize: 11, fontWeight: '700', marginBottom: 12 },
+  categoryList: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 12 },
+  photoCategory: { fontSize: 11, fontWeight: '700', borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
   titleRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', marginBottom: 17 },
   title: { flex: 1, fontSize: 23, fontWeight: '900', lineHeight: 28 },
   price: { fontSize: 15, fontWeight: '900', marginTop: 4 },
@@ -256,8 +258,9 @@ const styles = StyleSheet.create({
   infoText: { flex: 1 },
   infoMain: { fontSize: 12, fontWeight: '800' },
   infoSub: { fontSize: 11, marginTop: 3 },
-  button: { marginTop: 17, marginBottom: 10 },
-  attendingButton: { marginBottom: 22 },
+  selectionRow: { flexDirection: 'row', gap: 10, marginTop: 17, marginBottom: 22 },
+  selectionButton: { flex: 1, minWidth: 0, paddingHorizontal: 10 },
+  selectionButtonText: { fontSize: 13, textAlign: 'center' },
   selectionNotice: { marginTop: 12, marginBottom: 8 },
   section: { fontSize: 16, fontWeight: '900', marginTop: 6, marginBottom: 9 },
   description: { fontSize: 12, lineHeight: 19, marginBottom: 20 },

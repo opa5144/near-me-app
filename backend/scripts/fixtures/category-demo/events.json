@@ -1,0 +1,1331 @@
+{
+  "seedPrefix": "category-demo-2026-11-12",
+  "referenceDate": "2026-11-12",
+  "owners": [
+    "6ae7814e7d5f88664b48dc90",
+    "6ae7ad81d75d3755e55f82d3",
+    "6aeb4f6c9b286ace01de1aea"
+  ],
+  "events": [
+    {
+      "seedKey": "category-demo-2026-11-12:music:01",
+      "hostId": "6ae7814e7d5f88664b48dc90",
+      "title": "City Lights Live Session",
+      "description": "Enjoy a relaxed live-music gathering with local sounds, space to meet other music fans, and short breaks between sets.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 0,
+      "startsAt": "2026-11-14T23:00:00.000Z",
+      "endsAt": "2026-11-15T02:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "6 Delancey Street, New York, NY 10002",
+      "place": "The Bowery Ballroom",
+      "latitude": 40.720406499999996,
+      "longitude": -73.9933583,
+      "photoIds": [
+        "4218024",
+        "1179581"
+      ],
+      "categories": [
+        "Music"
+      ],
+      "placeId": "ChIJLQUUOYZZwokR1BfSFbM-XB4"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:dance:01",
+      "hostId": "6ae7ad81d75d3755e55f82d3",
+      "title": "Contemporary Dance Foundations",
+      "description": "Explore movement in a welcoming studio setting. A facilitator guides warm-ups and simple combinations; beginners can take everything at their own pace.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 8,
+      "startsAt": "2026-11-15T23:00:00.000Z",
+      "endsAt": "2026-11-16T00:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "405 West 55th Street, New York, NY 10019",
+      "place": "The Ailey Studios",
+      "latitude": 40.766977499999996,
+      "longitude": -73.9868935,
+      "photoIds": [
+        "6926598",
+        "3901642"
+      ],
+      "categories": [
+        "Dance"
+      ],
+      "placeId": "ChIJFwGquVlYwokRndl-cEkFoXQ"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:food:01",
+      "hostId": "6aeb4f6c9b286ace01de1aea",
+      "title": "Neighborhood Street Food Social",
+      "description": "Discover a rotating selection of sample dishes, chat about ingredients, and share a relaxed community table. Ask the organizer about dietary needs before attending.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 12.5,
+      "startsAt": "2026-11-16T17:00:00.000Z",
+      "endsAt": "2026-11-16T20:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "75 Ninth Avenue, New York, NY 10011",
+      "place": "Chelsea Market",
+      "latitude": 40.7424396,
+      "longitude": -74.0061439,
+      "photoIds": [
+        "40841030",
+        "33952900"
+      ],
+      "categories": [
+        "Food"
+      ],
+      "placeId": "ChIJw2lMFL9ZwokRosAtly52YX4"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:film:01",
+      "hostId": "6ae7814e7d5f88664b48dc90",
+      "title": "Independent Film Discovery",
+      "description": "Settle in for a community screening and an optional conversation afterward. The session includes an introduction, a short interval, and time to meet fellow film fans.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 15,
+      "startsAt": "2026-11-17T23:00:00.000Z",
+      "endsAt": "2026-11-18T01:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "323 Sixth Avenue, New York, NY 10014",
+      "place": "IFC Center",
+      "latitude": 40.731205599999996,
+      "longitude": -74.0016722,
+      "photoIds": [
+        "7991141",
+        "7234222"
+      ],
+      "categories": [
+        "Film"
+      ],
+      "placeId": "ChIJjSKIz5NZwokRTS3NUw8-59o"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:workshop:01",
+      "hostId": "6ae7ad81d75d3755e55f82d3",
+      "title": "First Spin Pottery Session",
+      "description": "Create a small clay piece with step-by-step guidance. Basic materials and shared tools are included; wear clothes suitable for a hands-on studio session.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 18,
+      "startsAt": "2026-11-18T19:00:00.000Z",
+      "endsAt": "2026-11-18T21:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "16 Jones Street, New York, NY 10014",
+      "place": "Greenwich House Pottery West Village",
+      "latitude": 40.7318995,
+      "longitude": -74.0023487,
+      "photoIds": [
+        "40895355",
+        "34461165"
+      ],
+      "categories": [
+        "Workshop"
+      ],
+      "placeId": "ChIJ-ehevpNZwokRTJuBEcBPvjs"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:art:01",
+      "hostId": "6aeb4f6c9b286ace01de1aea",
+      "title": "Neighborhood Gallery Walk",
+      "description": "Spend time with color, materials, and creative ideas in a friendly community setting. Meet other art enthusiasts and take part in an optional guided discussion.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 20,
+      "startsAt": "2026-11-19T20:00:00.000Z",
+      "endsAt": "2026-11-19T22:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "99 Gansevoort Street, New York, NY 10014",
+      "place": "Whitney Museum of American Art",
+      "latitude": 40.7395877,
+      "longitude": -74.0088629,
+      "photoIds": [
+        "33158978",
+        "34342836"
+      ],
+      "categories": [
+        "Art"
+      ],
+      "placeId": "ChIJN3MJ6pRYwokRiXg91flSP8Y"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:music:02",
+      "hostId": "6ae7ad81d75d3755e55f82d3",
+      "title": "After Hours Acoustic Room",
+      "description": "Enjoy a relaxed live-music gathering with local sounds, space to meet other music fans, and short breaks between sets.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 8,
+      "startsAt": "2026-11-20T23:00:00.000Z",
+      "endsAt": "2026-11-21T02:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "319 Frost Street, Brooklyn, NY 11222",
+      "place": "Brooklyn Steel",
+      "latitude": 40.719357699999996,
+      "longitude": -73.9387939,
+      "photoIds": [
+        "1179581",
+        "518389"
+      ],
+      "categories": [
+        "Music"
+      ],
+      "placeId": "ChIJ__8Pf01ZwokRyFh1eqIcjWk"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:dance:02",
+      "hostId": "6aeb4f6c9b286ace01de1aea",
+      "title": "Open Studio Movement Session",
+      "description": "Explore movement in a welcoming studio setting. A facilitator guides warm-ups and simple combinations; beginners can take everything at their own pace.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 12.5,
+      "startsAt": "2026-11-21T23:00:00.000Z",
+      "endsAt": "2026-11-22T00:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "322 West 45th Street, New York, NY 10036",
+      "place": "Broadway Dance Center",
+      "latitude": 40.7594546,
+      "longitude": -73.9896373,
+      "photoIds": [
+        "3901642",
+        "6926606"
+      ],
+      "categories": [
+        "Dance"
+      ],
+      "placeId": "ChIJ__8DklNYwokRKckAK1LuB3w"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:food:02",
+      "hostId": "6ae7814e7d5f88664b48dc90",
+      "title": "Pasta Makers Tasting Table",
+      "description": "Discover a rotating selection of sample dishes, chat about ingredients, and share a relaxed community table. Ask the organizer about dietary needs before attending.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 15,
+      "startsAt": "2026-11-22T17:00:00.000Z",
+      "endsAt": "2026-11-22T20:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "88 Essex Street, New York, NY 10002",
+      "place": "Essex Market",
+      "latitude": 40.7180004,
+      "longitude": -73.98819,
+      "photoIds": [
+        "33952900",
+        "18281664"
+      ],
+      "categories": [
+        "Food"
+      ],
+      "placeId": "ChIJ7fydz4BZwokRl6FuOJM5QPU"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:film:02",
+      "hostId": "6ae7ad81d75d3755e55f82d3",
+      "title": "Short Stories on Screen",
+      "description": "Settle in for a community screening and an optional conversation afterward. The session includes an introduction, a short interval, and time to meet fellow film fans.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 18,
+      "startsAt": "2026-11-23T23:00:00.000Z",
+      "endsAt": "2026-11-24T01:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "209 West Houston Street, New York, NY 10014",
+      "place": "Film Forum",
+      "latitude": 40.7284097,
+      "longitude": -74.00433,
+      "photoIds": [
+        "7234222",
+        "7991184"
+      ],
+      "categories": [
+        "Film"
+      ],
+      "placeId": "ChIJW3q6Yo1ZwokRwnpMeNyWLFs"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:workshop:02",
+      "hostId": "6aeb4f6c9b286ace01de1aea",
+      "title": "Hand-Built Mug Workshop",
+      "description": "Create a small clay piece with step-by-step guidance. Basic materials and shared tools are included; wear clothes suitable for a hands-on studio session.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 20,
+      "startsAt": "2026-11-24T19:00:00.000Z",
+      "endsAt": "2026-11-24T21:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "80 Eighth Avenue, 6th Floor, Suite 601, New York, NY 10011",
+      "place": "Greenwich House Pottery Chelsea",
+      "latitude": 40.7398638,
+      "longitude": -74.0021836,
+      "photoIds": [
+        "34461165",
+        "27837210"
+      ],
+      "categories": [
+        "Workshop"
+      ],
+      "placeId": "ChIJZZcH3ZtZwokRjZvYm0XUVWs"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:art:02",
+      "hostId": "6ae7814e7d5f88664b48dc90",
+      "title": "Color and Canvas Afternoon",
+      "description": "Spend time with color, materials, and creative ideas in a friendly community setting. Meet other art enthusiasts and take part in an optional guided discussion.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 25,
+      "startsAt": "2026-11-25T20:00:00.000Z",
+      "endsAt": "2026-11-25T22:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "11 West 53rd Street, New York, NY 10019",
+      "place": "The Museum of Modern Art",
+      "latitude": 40.7614327,
+      "longitude": -73.97762159999999,
+      "photoIds": [
+        "34342836",
+        "36713830"
+      ],
+      "categories": [
+        "Art"
+      ],
+      "placeId": "ChIJKxDbe_lYwokRVf__s8CPn-o"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:music:03",
+      "hostId": "6aeb4f6c9b286ace01de1aea",
+      "title": "Riverside Indie Showcase",
+      "description": "Enjoy a relaxed live-music gathering with local sounds, space to meet other music fans, and short breaks between sets.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 12.5,
+      "startsAt": "2026-11-26T23:00:00.000Z",
+      "endsAt": "2026-11-27T02:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "6 Delancey Street, New York, NY 10002",
+      "place": "The Bowery Ballroom",
+      "latitude": 40.720406499999996,
+      "longitude": -73.9933583,
+      "photoIds": [
+        "518389",
+        "1416969"
+      ],
+      "categories": [
+        "Music"
+      ],
+      "placeId": "ChIJLQUUOYZZwokR1BfSFbM-XB4"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:dance:03",
+      "hostId": "6ae7814e7d5f88664b48dc90",
+      "title": "Ballet Barre Basics",
+      "description": "Explore movement in a welcoming studio setting. A facilitator guides warm-ups and simple combinations; beginners can take everything at their own pace.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 15,
+      "startsAt": "2026-11-27T23:00:00.000Z",
+      "endsAt": "2026-11-28T00:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "405 West 55th Street, New York, NY 10019",
+      "place": "The Ailey Studios",
+      "latitude": 40.766977499999996,
+      "longitude": -73.9868935,
+      "photoIds": [
+        "6926606",
+        "3901643"
+      ],
+      "categories": [
+        "Dance"
+      ],
+      "placeId": "ChIJFwGquVlYwokRndl-cEkFoXQ"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:food:03",
+      "hostId": "6ae7ad81d75d3755e55f82d3",
+      "title": "Community Supper Market",
+      "description": "Discover a rotating selection of sample dishes, chat about ingredients, and share a relaxed community table. Ask the organizer about dietary needs before attending.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 18,
+      "startsAt": "2026-11-28T17:00:00.000Z",
+      "endsAt": "2026-11-28T20:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "75 Ninth Avenue, New York, NY 10011",
+      "place": "Chelsea Market",
+      "latitude": 40.7424396,
+      "longitude": -74.0061439,
+      "photoIds": [
+        "18281664",
+        "17442712"
+      ],
+      "categories": [
+        "Food"
+      ],
+      "placeId": "ChIJw2lMFL9ZwokRosAtly52YX4"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:film:03",
+      "hostId": "6aeb4f6c9b286ace01de1aea",
+      "title": "Community Cinema Evening",
+      "description": "Settle in for a community screening and an optional conversation afterward. The session includes an introduction, a short interval, and time to meet fellow film fans.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 20,
+      "startsAt": "2026-11-29T23:00:00.000Z",
+      "endsAt": "2026-11-30T01:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "323 Sixth Avenue, New York, NY 10014",
+      "place": "IFC Center",
+      "latitude": 40.731205599999996,
+      "longitude": -74.0016722,
+      "photoIds": [
+        "7991184",
+        "7234219"
+      ],
+      "categories": [
+        "Film"
+      ],
+      "placeId": "ChIJjSKIz5NZwokRTS3NUw8-59o"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:workshop:03",
+      "hostId": "6ae7814e7d5f88664b48dc90",
+      "title": "Clay Trinket Tray Studio",
+      "description": "Create a small clay piece with step-by-step guidance. Basic materials and shared tools are included; wear clothes suitable for a hands-on studio session.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 25,
+      "startsAt": "2026-11-30T19:00:00.000Z",
+      "endsAt": "2026-11-30T21:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "16 Jones Street, New York, NY 10014",
+      "place": "Greenwich House Pottery West Village",
+      "latitude": 40.7318995,
+      "longitude": -74.0023487,
+      "photoIds": [
+        "27837210",
+        "37303189"
+      ],
+      "categories": [
+        "Workshop"
+      ],
+      "placeId": "ChIJ-ehevpNZwokRTJuBEcBPvjs"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:art:03",
+      "hostId": "6ae7ad81d75d3755e55f82d3",
+      "title": "Artists Open Studio Social",
+      "description": "Spend time with color, materials, and creative ideas in a friendly community setting. Meet other art enthusiasts and take part in an optional guided discussion.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 30,
+      "startsAt": "2026-12-01T20:00:00.000Z",
+      "endsAt": "2026-12-01T22:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "99 Gansevoort Street, New York, NY 10014",
+      "place": "Whitney Museum of American Art",
+      "latitude": 40.7395877,
+      "longitude": -74.0088629,
+      "photoIds": [
+        "36713830",
+        "36713860"
+      ],
+      "categories": [
+        "Art"
+      ],
+      "placeId": "ChIJN3MJ6pRYwokRiXg91flSP8Y"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:music:04",
+      "hostId": "6ae7814e7d5f88664b48dc90",
+      "title": "Neighborhood Jazz Evening",
+      "description": "Enjoy a relaxed live-music gathering with local sounds, space to meet other music fans, and short breaks between sets.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 15,
+      "startsAt": "2026-12-02T23:00:00.000Z",
+      "endsAt": "2026-12-03T02:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "319 Frost Street, Brooklyn, NY 11222",
+      "place": "Brooklyn Steel",
+      "latitude": 40.719357699999996,
+      "longitude": -73.9387939,
+      "photoIds": [
+        "1416969",
+        "167587"
+      ],
+      "categories": [
+        "Music"
+      ],
+      "placeId": "ChIJ__8Pf01ZwokRyFh1eqIcjWk"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:dance:04",
+      "hostId": "6ae7ad81d75d3755e55f82d3",
+      "title": "Creative Movement Social",
+      "description": "Explore movement in a welcoming studio setting. A facilitator guides warm-ups and simple combinations; beginners can take everything at their own pace.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 18,
+      "startsAt": "2026-12-03T23:00:00.000Z",
+      "endsAt": "2026-12-04T00:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "322 West 45th Street, New York, NY 10036",
+      "place": "Broadway Dance Center",
+      "latitude": 40.7594546,
+      "longitude": -73.9896373,
+      "photoIds": [
+        "3901643",
+        "6715947"
+      ],
+      "categories": [
+        "Dance"
+      ],
+      "placeId": "ChIJ__8DklNYwokRKckAK1LuB3w"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:food:04",
+      "hostId": "6aeb4f6c9b286ace01de1aea",
+      "title": "Seasonal Flavors Gathering",
+      "description": "Discover a rotating selection of sample dishes, chat about ingredients, and share a relaxed community table. Ask the organizer about dietary needs before attending.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 20,
+      "startsAt": "2026-12-04T17:00:00.000Z",
+      "endsAt": "2026-12-04T20:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "88 Essex Street, New York, NY 10002",
+      "place": "Essex Market",
+      "latitude": 40.7180004,
+      "longitude": -73.98819,
+      "photoIds": [
+        "17442712",
+        "22880519"
+      ],
+      "categories": [
+        "Food"
+      ],
+      "placeId": "ChIJ7fydz4BZwokRl6FuOJM5QPU"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:film:04",
+      "hostId": "6ae7814e7d5f88664b48dc90",
+      "title": "Documentary and Discussion",
+      "description": "Settle in for a community screening and an optional conversation afterward. The session includes an introduction, a short interval, and time to meet fellow film fans.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 25,
+      "startsAt": "2026-12-05T23:00:00.000Z",
+      "endsAt": "2026-12-06T01:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "209 West Houston Street, New York, NY 10014",
+      "place": "Film Forum",
+      "latitude": 40.7284097,
+      "longitude": -74.00433,
+      "photoIds": [
+        "7234219",
+        "7991112"
+      ],
+      "categories": [
+        "Film"
+      ],
+      "placeId": "ChIJW3q6Yo1ZwokRwnpMeNyWLFs"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:workshop:04",
+      "hostId": "6ae7ad81d75d3755e55f82d3",
+      "title": "Ceramic Bowl Making Lab",
+      "description": "Create a small clay piece with step-by-step guidance. Basic materials and shared tools are included; wear clothes suitable for a hands-on studio session.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 30,
+      "startsAt": "2026-12-06T19:00:00.000Z",
+      "endsAt": "2026-12-06T21:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "80 Eighth Avenue, 6th Floor, Suite 601, New York, NY 10011",
+      "place": "Greenwich House Pottery Chelsea",
+      "latitude": 40.7398638,
+      "longitude": -74.0021836,
+      "photoIds": [
+        "37303189",
+        "18688162"
+      ],
+      "categories": [
+        "Workshop"
+      ],
+      "placeId": "ChIJZZcH3ZtZwokRjZvYm0XUVWs"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:art:04",
+      "hostId": "6aeb4f6c9b286ace01de1aea",
+      "title": "Creative Sketchbook Session",
+      "description": "Spend time with color, materials, and creative ideas in a friendly community setting. Meet other art enthusiasts and take part in an optional guided discussion.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 35,
+      "startsAt": "2026-12-07T20:00:00.000Z",
+      "endsAt": "2026-12-07T22:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "11 West 53rd Street, New York, NY 10019",
+      "place": "The Museum of Modern Art",
+      "latitude": 40.7614327,
+      "longitude": -73.97762159999999,
+      "photoIds": [
+        "36713860",
+        "36764950"
+      ],
+      "categories": [
+        "Art"
+      ],
+      "placeId": "ChIJKxDbe_lYwokRVf__s8CPn-o"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:music:05",
+      "hostId": "6ae7ad81d75d3755e55f82d3",
+      "title": "Fresh Sounds Local Stage",
+      "description": "Enjoy a relaxed live-music gathering with local sounds, space to meet other music fans, and short breaks between sets.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 18,
+      "startsAt": "2026-12-08T23:00:00.000Z",
+      "endsAt": "2026-12-09T02:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "6 Delancey Street, New York, NY 10002",
+      "place": "The Bowery Ballroom",
+      "latitude": 40.720406499999996,
+      "longitude": -73.9933583,
+      "photoIds": [
+        "167587",
+        "4218024"
+      ],
+      "categories": [
+        "Music"
+      ],
+      "placeId": "ChIJLQUUOYZZwokR1BfSFbM-XB4"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:dance:05",
+      "hostId": "6aeb4f6c9b286ace01de1aea",
+      "title": "Dance Studio Discovery",
+      "description": "Explore movement in a welcoming studio setting. A facilitator guides warm-ups and simple combinations; beginners can take everything at their own pace.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 20,
+      "startsAt": "2026-12-09T23:00:00.000Z",
+      "endsAt": "2026-12-10T00:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "405 West 55th Street, New York, NY 10019",
+      "place": "The Ailey Studios",
+      "latitude": 40.766977499999996,
+      "longitude": -73.9868935,
+      "photoIds": [
+        "6715947",
+        "6926598"
+      ],
+      "categories": [
+        "Dance"
+      ],
+      "placeId": "ChIJFwGquVlYwokRndl-cEkFoXQ"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:food:05",
+      "hostId": "6ae7814e7d5f88664b48dc90",
+      "title": "Global Bites Food Fair",
+      "description": "Discover a rotating selection of sample dishes, chat about ingredients, and share a relaxed community table. Ask the organizer about dietary needs before attending.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 25,
+      "startsAt": "2026-12-10T17:00:00.000Z",
+      "endsAt": "2026-12-10T20:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "75 Ninth Avenue, New York, NY 10011",
+      "place": "Chelsea Market",
+      "latitude": 40.7424396,
+      "longitude": -74.0061439,
+      "photoIds": [
+        "22880519",
+        "40841030"
+      ],
+      "categories": [
+        "Food"
+      ],
+      "placeId": "ChIJw2lMFL9ZwokRosAtly52YX4"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:film:05",
+      "hostId": "6ae7ad81d75d3755e55f82d3",
+      "title": "The Neighborhood Film Club",
+      "description": "Settle in for a community screening and an optional conversation afterward. The session includes an introduction, a short interval, and time to meet fellow film fans.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 30,
+      "startsAt": "2026-12-11T23:00:00.000Z",
+      "endsAt": "2026-12-12T01:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "323 Sixth Avenue, New York, NY 10014",
+      "place": "IFC Center",
+      "latitude": 40.731205599999996,
+      "longitude": -74.0016722,
+      "photoIds": [
+        "7991112",
+        "7991141"
+      ],
+      "categories": [
+        "Film"
+      ],
+      "placeId": "ChIJjSKIz5NZwokRTS3NUw8-59o"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:workshop:05",
+      "hostId": "6aeb4f6c9b286ace01de1aea",
+      "title": "Pottery Wheel Discovery",
+      "description": "Create a small clay piece with step-by-step guidance. Basic materials and shared tools are included; wear clothes suitable for a hands-on studio session.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 35,
+      "startsAt": "2026-12-12T19:00:00.000Z",
+      "endsAt": "2026-12-12T21:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "16 Jones Street, New York, NY 10014",
+      "place": "Greenwich House Pottery West Village",
+      "latitude": 40.7318995,
+      "longitude": -74.0023487,
+      "photoIds": [
+        "18688162",
+        "40895355"
+      ],
+      "categories": [
+        "Workshop"
+      ],
+      "placeId": "ChIJ-ehevpNZwokRTJuBEcBPvjs"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:art:05",
+      "hostId": "6ae7814e7d5f88664b48dc90",
+      "title": "Local Makers Art Showcase",
+      "description": "Spend time with color, materials, and creative ideas in a friendly community setting. Meet other art enthusiasts and take part in an optional guided discussion.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 10,
+      "startsAt": "2026-12-13T20:00:00.000Z",
+      "endsAt": "2026-12-13T22:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "99 Gansevoort Street, New York, NY 10014",
+      "place": "Whitney Museum of American Art",
+      "latitude": 40.7395877,
+      "longitude": -74.0088629,
+      "photoIds": [
+        "36764950",
+        "33158978"
+      ],
+      "categories": [
+        "Art"
+      ],
+      "placeId": "ChIJN3MJ6pRYwokRiXg91flSP8Y"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:music:06",
+      "hostId": "6aeb4f6c9b286ace01de1aea",
+      "title": "Golden Hour Live Set",
+      "description": "Enjoy a relaxed live-music gathering with local sounds, space to meet other music fans, and short breaks between sets.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 20,
+      "startsAt": "2026-12-14T23:00:00.000Z",
+      "endsAt": "2026-12-15T02:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "319 Frost Street, Brooklyn, NY 11222",
+      "place": "Brooklyn Steel",
+      "latitude": 40.719357699999996,
+      "longitude": -73.9387939,
+      "photoIds": [
+        "4218024",
+        "1179581"
+      ],
+      "categories": [
+        "Music"
+      ],
+      "placeId": "ChIJ__8Pf01ZwokRyFh1eqIcjWk"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:dance:06",
+      "hostId": "6ae7814e7d5f88664b48dc90",
+      "title": "Stretch and Flow Dance Lab",
+      "description": "Explore movement in a welcoming studio setting. A facilitator guides warm-ups and simple combinations; beginners can take everything at their own pace.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 25,
+      "startsAt": "2026-12-15T23:00:00.000Z",
+      "endsAt": "2026-12-16T00:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "322 West 45th Street, New York, NY 10036",
+      "place": "Broadway Dance Center",
+      "latitude": 40.7594546,
+      "longitude": -73.9896373,
+      "photoIds": [
+        "6926598",
+        "3901642"
+      ],
+      "categories": [
+        "Dance"
+      ],
+      "placeId": "ChIJ__8DklNYwokRKckAK1LuB3w"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:food:06",
+      "hostId": "6ae7ad81d75d3755e55f82d3",
+      "title": "Weekend Chef Showcase",
+      "description": "Discover a rotating selection of sample dishes, chat about ingredients, and share a relaxed community table. Ask the organizer about dietary needs before attending.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 30,
+      "startsAt": "2026-12-16T17:00:00.000Z",
+      "endsAt": "2026-12-16T20:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "88 Essex Street, New York, NY 10002",
+      "place": "Essex Market",
+      "latitude": 40.7180004,
+      "longitude": -73.98819,
+      "photoIds": [
+        "40841030",
+        "33952900"
+      ],
+      "categories": [
+        "Food"
+      ],
+      "placeId": "ChIJ7fydz4BZwokRl6FuOJM5QPU"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:film:06",
+      "hostId": "6aeb4f6c9b286ace01de1aea",
+      "title": "World Cinema Spotlight",
+      "description": "Settle in for a community screening and an optional conversation afterward. The session includes an introduction, a short interval, and time to meet fellow film fans.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 35,
+      "startsAt": "2026-12-17T23:00:00.000Z",
+      "endsAt": "2026-12-18T01:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "209 West Houston Street, New York, NY 10014",
+      "place": "Film Forum",
+      "latitude": 40.7284097,
+      "longitude": -74.00433,
+      "photoIds": [
+        "7991141",
+        "7234222"
+      ],
+      "categories": [
+        "Film"
+      ],
+      "placeId": "ChIJW3q6Yo1ZwokRwnpMeNyWLFs"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:workshop:06",
+      "hostId": "6ae7814e7d5f88664b48dc90",
+      "title": "Texture and Clay Workshop",
+      "description": "Create a small clay piece with step-by-step guidance. Basic materials and shared tools are included; wear clothes suitable for a hands-on studio session.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 10,
+      "startsAt": "2026-12-18T19:00:00.000Z",
+      "endsAt": "2026-12-18T21:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "80 Eighth Avenue, 6th Floor, Suite 601, New York, NY 10011",
+      "place": "Greenwich House Pottery Chelsea",
+      "latitude": 40.7398638,
+      "longitude": -74.0021836,
+      "photoIds": [
+        "40895355",
+        "34461165"
+      ],
+      "categories": [
+        "Workshop"
+      ],
+      "placeId": "ChIJZZcH3ZtZwokRjZvYm0XUVWs"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:art:06",
+      "hostId": "6ae7ad81d75d3755e55f82d3",
+      "title": "Brushwork and Color Lab",
+      "description": "Spend time with color, materials, and creative ideas in a friendly community setting. Meet other art enthusiasts and take part in an optional guided discussion.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 0,
+      "startsAt": "2026-12-19T20:00:00.000Z",
+      "endsAt": "2026-12-19T22:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "11 West 53rd Street, New York, NY 10019",
+      "place": "The Museum of Modern Art",
+      "latitude": 40.7614327,
+      "longitude": -73.97762159999999,
+      "photoIds": [
+        "33158978",
+        "34342836"
+      ],
+      "categories": [
+        "Art"
+      ],
+      "placeId": "ChIJKxDbe_lYwokRVf__s8CPn-o"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:music:07",
+      "hostId": "6ae7814e7d5f88664b48dc90",
+      "title": "Soul and Strings Session",
+      "description": "Enjoy a relaxed live-music gathering with local sounds, space to meet other music fans, and short breaks between sets.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 25,
+      "startsAt": "2026-12-20T23:00:00.000Z",
+      "endsAt": "2026-12-21T02:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "6 Delancey Street, New York, NY 10002",
+      "place": "The Bowery Ballroom",
+      "latitude": 40.720406499999996,
+      "longitude": -73.9933583,
+      "photoIds": [
+        "1179581",
+        "518389"
+      ],
+      "categories": [
+        "Music"
+      ],
+      "placeId": "ChIJLQUUOYZZwokR1BfSFbM-XB4"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:dance:07",
+      "hostId": "6ae7ad81d75d3755e55f82d3",
+      "title": "Community Choreography Session",
+      "description": "Explore movement in a welcoming studio setting. A facilitator guides warm-ups and simple combinations; beginners can take everything at their own pace.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 30,
+      "startsAt": "2026-12-21T23:00:00.000Z",
+      "endsAt": "2026-12-22T00:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "405 West 55th Street, New York, NY 10019",
+      "place": "The Ailey Studios",
+      "latitude": 40.766977499999996,
+      "longitude": -73.9868935,
+      "photoIds": [
+        "3901642",
+        "6926606"
+      ],
+      "categories": [
+        "Dance"
+      ],
+      "placeId": "ChIJFwGquVlYwokRndl-cEkFoXQ"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:food:07",
+      "hostId": "6aeb4f6c9b286ace01de1aea",
+      "title": "Comfort Food Pop-Up",
+      "description": "Discover a rotating selection of sample dishes, chat about ingredients, and share a relaxed community table. Ask the organizer about dietary needs before attending.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 35,
+      "startsAt": "2026-12-22T17:00:00.000Z",
+      "endsAt": "2026-12-22T20:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "75 Ninth Avenue, New York, NY 10011",
+      "place": "Chelsea Market",
+      "latitude": 40.7424396,
+      "longitude": -74.0061439,
+      "photoIds": [
+        "33952900",
+        "18281664"
+      ],
+      "categories": [
+        "Food"
+      ],
+      "placeId": "ChIJw2lMFL9ZwokRosAtly52YX4"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:film:07",
+      "hostId": "6ae7814e7d5f88664b48dc90",
+      "title": "Emerging Filmmakers Showcase",
+      "description": "Settle in for a community screening and an optional conversation afterward. The session includes an introduction, a short interval, and time to meet fellow film fans.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 10,
+      "startsAt": "2026-12-23T23:00:00.000Z",
+      "endsAt": "2026-12-24T01:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "323 Sixth Avenue, New York, NY 10014",
+      "place": "IFC Center",
+      "latitude": 40.731205599999996,
+      "longitude": -74.0016722,
+      "photoIds": [
+        "7234222",
+        "7991184"
+      ],
+      "categories": [
+        "Film"
+      ],
+      "placeId": "ChIJjSKIz5NZwokRTS3NUw8-59o"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:workshop:07",
+      "hostId": "6ae7ad81d75d3755e55f82d3",
+      "title": "Creative Ceramics Social",
+      "description": "Create a small clay piece with step-by-step guidance. Basic materials and shared tools are included; wear clothes suitable for a hands-on studio session.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 0,
+      "startsAt": "2026-12-24T19:00:00.000Z",
+      "endsAt": "2026-12-24T21:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "16 Jones Street, New York, NY 10014",
+      "place": "Greenwich House Pottery West Village",
+      "latitude": 40.7318995,
+      "longitude": -74.0023487,
+      "photoIds": [
+        "34461165",
+        "27837210"
+      ],
+      "categories": [
+        "Workshop"
+      ],
+      "placeId": "ChIJ-ehevpNZwokRTJuBEcBPvjs"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:art:07",
+      "hostId": "6aeb4f6c9b286ace01de1aea",
+      "title": "Contemporary Art Conversation",
+      "description": "Spend time with color, materials, and creative ideas in a friendly community setting. Meet other art enthusiasts and take part in an optional guided discussion.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 8,
+      "startsAt": "2026-12-25T20:00:00.000Z",
+      "endsAt": "2026-12-25T22:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "99 Gansevoort Street, New York, NY 10014",
+      "place": "Whitney Museum of American Art",
+      "latitude": 40.7395877,
+      "longitude": -74.0088629,
+      "photoIds": [
+        "34342836",
+        "36713830"
+      ],
+      "categories": [
+        "Art"
+      ],
+      "placeId": "ChIJN3MJ6pRYwokRiXg91flSP8Y"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:music:08",
+      "hostId": "6ae7ad81d75d3755e55f82d3",
+      "title": "Late Night Rhythm Room",
+      "description": "Enjoy a relaxed live-music gathering with local sounds, space to meet other music fans, and short breaks between sets.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 30,
+      "startsAt": "2026-12-26T23:00:00.000Z",
+      "endsAt": "2026-12-27T02:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "319 Frost Street, Brooklyn, NY 11222",
+      "place": "Brooklyn Steel",
+      "latitude": 40.719357699999996,
+      "longitude": -73.9387939,
+      "photoIds": [
+        "518389",
+        "1416969"
+      ],
+      "categories": [
+        "Music"
+      ],
+      "placeId": "ChIJ__8Pf01ZwokRyFh1eqIcjWk"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:dance:08",
+      "hostId": "6aeb4f6c9b286ace01de1aea",
+      "title": "Ballet for Curious Beginners",
+      "description": "Explore movement in a welcoming studio setting. A facilitator guides warm-ups and simple combinations; beginners can take everything at their own pace.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 35,
+      "startsAt": "2026-12-27T23:00:00.000Z",
+      "endsAt": "2026-12-28T00:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "322 West 45th Street, New York, NY 10036",
+      "place": "Broadway Dance Center",
+      "latitude": 40.7594546,
+      "longitude": -73.9896373,
+      "photoIds": [
+        "6926606",
+        "3901643"
+      ],
+      "categories": [
+        "Dance"
+      ],
+      "placeId": "ChIJ__8DklNYwokRKckAK1LuB3w"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:food:08",
+      "hostId": "6ae7814e7d5f88664b48dc90",
+      "title": "Fresh Harvest Tasting Room",
+      "description": "Discover a rotating selection of sample dishes, chat about ingredients, and share a relaxed community table. Ask the organizer about dietary needs before attending.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 10,
+      "startsAt": "2026-12-28T17:00:00.000Z",
+      "endsAt": "2026-12-28T20:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "88 Essex Street, New York, NY 10002",
+      "place": "Essex Market",
+      "latitude": 40.7180004,
+      "longitude": -73.98819,
+      "photoIds": [
+        "18281664",
+        "17442712"
+      ],
+      "categories": [
+        "Food"
+      ],
+      "placeId": "ChIJ7fydz4BZwokRl6FuOJM5QPU"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:film:08",
+      "hostId": "6ae7ad81d75d3755e55f82d3",
+      "title": "Big Screen Classics Social",
+      "description": "Settle in for a community screening and an optional conversation afterward. The session includes an introduction, a short interval, and time to meet fellow film fans.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 0,
+      "startsAt": "2026-12-29T23:00:00.000Z",
+      "endsAt": "2026-12-30T01:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "209 West Houston Street, New York, NY 10014",
+      "place": "Film Forum",
+      "latitude": 40.7284097,
+      "longitude": -74.00433,
+      "photoIds": [
+        "7991184",
+        "7234219"
+      ],
+      "categories": [
+        "Film"
+      ],
+      "placeId": "ChIJW3q6Yo1ZwokRwnpMeNyWLFs"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:workshop:08",
+      "hostId": "6aeb4f6c9b286ace01de1aea",
+      "title": "Handcrafted Planter Session",
+      "description": "Create a small clay piece with step-by-step guidance. Basic materials and shared tools are included; wear clothes suitable for a hands-on studio session.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 8,
+      "startsAt": "2026-12-30T19:00:00.000Z",
+      "endsAt": "2026-12-30T21:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "80 Eighth Avenue, 6th Floor, Suite 601, New York, NY 10011",
+      "place": "Greenwich House Pottery Chelsea",
+      "latitude": 40.7398638,
+      "longitude": -74.0021836,
+      "photoIds": [
+        "27837210",
+        "37303189"
+      ],
+      "categories": [
+        "Workshop"
+      ],
+      "placeId": "ChIJZZcH3ZtZwokRjZvYm0XUVWs"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:art:08",
+      "hostId": "6ae7814e7d5f88664b48dc90",
+      "title": "Paint and Palette Social",
+      "description": "Spend time with color, materials, and creative ideas in a friendly community setting. Meet other art enthusiasts and take part in an optional guided discussion.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 12.5,
+      "startsAt": "2026-12-31T20:00:00.000Z",
+      "endsAt": "2026-12-31T22:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "11 West 53rd Street, New York, NY 10019",
+      "place": "The Museum of Modern Art",
+      "latitude": 40.7614327,
+      "longitude": -73.97762159999999,
+      "photoIds": [
+        "36713830",
+        "36713860"
+      ],
+      "categories": [
+        "Art"
+      ],
+      "placeId": "ChIJKxDbe_lYwokRVf__s8CPn-o"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:music:09",
+      "hostId": "6aeb4f6c9b286ace01de1aea",
+      "title": "The Community Soundcheck",
+      "description": "Enjoy a relaxed live-music gathering with local sounds, space to meet other music fans, and short breaks between sets.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 35,
+      "startsAt": "2027-01-01T23:00:00.000Z",
+      "endsAt": "2027-01-02T02:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "6 Delancey Street, New York, NY 10002",
+      "place": "The Bowery Ballroom",
+      "latitude": 40.720406499999996,
+      "longitude": -73.9933583,
+      "photoIds": [
+        "1416969",
+        "167587"
+      ],
+      "categories": [
+        "Music"
+      ],
+      "placeId": "ChIJLQUUOYZZwokR1BfSFbM-XB4"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:dance:09",
+      "hostId": "6ae7814e7d5f88664b48dc90",
+      "title": "Expressive Dance Evening",
+      "description": "Explore movement in a welcoming studio setting. A facilitator guides warm-ups and simple combinations; beginners can take everything at their own pace.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 10,
+      "startsAt": "2027-01-02T23:00:00.000Z",
+      "endsAt": "2027-01-03T00:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "405 West 55th Street, New York, NY 10019",
+      "place": "The Ailey Studios",
+      "latitude": 40.766977499999996,
+      "longitude": -73.9868935,
+      "photoIds": [
+        "3901643",
+        "6715947"
+      ],
+      "categories": [
+        "Dance"
+      ],
+      "placeId": "ChIJFwGquVlYwokRndl-cEkFoXQ"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:food:09",
+      "hostId": "6ae7ad81d75d3755e55f82d3",
+      "title": "Shared Table Food Festival",
+      "description": "Discover a rotating selection of sample dishes, chat about ingredients, and share a relaxed community table. Ask the organizer about dietary needs before attending.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 0,
+      "startsAt": "2027-01-03T17:00:00.000Z",
+      "endsAt": "2027-01-03T20:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "75 Ninth Avenue, New York, NY 10011",
+      "place": "Chelsea Market",
+      "latitude": 40.7424396,
+      "longitude": -74.0061439,
+      "photoIds": [
+        "17442712",
+        "22880519"
+      ],
+      "categories": [
+        "Food"
+      ],
+      "placeId": "ChIJw2lMFL9ZwokRosAtly52YX4"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:film:09",
+      "hostId": "6aeb4f6c9b286ace01de1aea",
+      "title": "Short Film Double Feature",
+      "description": "Settle in for a community screening and an optional conversation afterward. The session includes an introduction, a short interval, and time to meet fellow film fans.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 8,
+      "startsAt": "2027-01-04T23:00:00.000Z",
+      "endsAt": "2027-01-05T01:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "323 Sixth Avenue, New York, NY 10014",
+      "place": "IFC Center",
+      "latitude": 40.731205599999996,
+      "longitude": -74.0016722,
+      "photoIds": [
+        "7234219",
+        "7991112"
+      ],
+      "categories": [
+        "Film"
+      ],
+      "placeId": "ChIJjSKIz5NZwokRTS3NUw8-59o"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:workshop:09",
+      "hostId": "6ae7814e7d5f88664b48dc90",
+      "title": "Clay Forms for Beginners",
+      "description": "Create a small clay piece with step-by-step guidance. Basic materials and shared tools are included; wear clothes suitable for a hands-on studio session.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 12.5,
+      "startsAt": "2027-01-05T19:00:00.000Z",
+      "endsAt": "2027-01-05T21:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "16 Jones Street, New York, NY 10014",
+      "place": "Greenwich House Pottery West Village",
+      "latitude": 40.7318995,
+      "longitude": -74.0023487,
+      "photoIds": [
+        "37303189",
+        "18688162"
+      ],
+      "categories": [
+        "Workshop"
+      ],
+      "placeId": "ChIJ-ehevpNZwokRTJuBEcBPvjs"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:art:09",
+      "hostId": "6ae7ad81d75d3755e55f82d3",
+      "title": "Community Art Discovery",
+      "description": "Spend time with color, materials, and creative ideas in a friendly community setting. Meet other art enthusiasts and take part in an optional guided discussion.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 15,
+      "startsAt": "2027-01-06T20:00:00.000Z",
+      "endsAt": "2027-01-06T22:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "99 Gansevoort Street, New York, NY 10014",
+      "place": "Whitney Museum of American Art",
+      "latitude": 40.7395877,
+      "longitude": -74.0088629,
+      "photoIds": [
+        "36713860",
+        "36764950"
+      ],
+      "categories": [
+        "Art"
+      ],
+      "placeId": "ChIJN3MJ6pRYwokRiXg91flSP8Y"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:music:10",
+      "hostId": "6ae7814e7d5f88664b48dc90",
+      "title": "Winter Warm-Up Concert",
+      "description": "Enjoy a relaxed live-music gathering with local sounds, space to meet other music fans, and short breaks between sets.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 10,
+      "startsAt": "2027-01-07T23:00:00.000Z",
+      "endsAt": "2027-01-08T02:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "319 Frost Street, Brooklyn, NY 11222",
+      "place": "Brooklyn Steel",
+      "latitude": 40.719357699999996,
+      "longitude": -73.9387939,
+      "photoIds": [
+        "167587",
+        "4218024"
+      ],
+      "categories": [
+        "Music"
+      ],
+      "placeId": "ChIJ__8Pf01ZwokRyFh1eqIcjWk"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:dance:10",
+      "hostId": "6ae7ad81d75d3755e55f82d3",
+      "title": "All Levels Dance Jam",
+      "description": "Explore movement in a welcoming studio setting. A facilitator guides warm-ups and simple combinations; beginners can take everything at their own pace.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 0,
+      "startsAt": "2027-01-08T23:00:00.000Z",
+      "endsAt": "2027-01-09T00:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "322 West 45th Street, New York, NY 10036",
+      "place": "Broadway Dance Center",
+      "latitude": 40.7594546,
+      "longitude": -73.9896373,
+      "photoIds": [
+        "6715947",
+        "6926598"
+      ],
+      "categories": [
+        "Dance"
+      ],
+      "placeId": "ChIJ__8DklNYwokRKckAK1LuB3w"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:food:10",
+      "hostId": "6aeb4f6c9b286ace01de1aea",
+      "title": "Evening Small Plates Social",
+      "description": "Discover a rotating selection of sample dishes, chat about ingredients, and share a relaxed community table. Ask the organizer about dietary needs before attending.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 8,
+      "startsAt": "2027-01-09T17:00:00.000Z",
+      "endsAt": "2027-01-09T20:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "88 Essex Street, New York, NY 10002",
+      "place": "Essex Market",
+      "latitude": 40.7180004,
+      "longitude": -73.98819,
+      "photoIds": [
+        "22880519",
+        "40841030"
+      ],
+      "categories": [
+        "Food"
+      ],
+      "placeId": "ChIJ7fydz4BZwokRl6FuOJM5QPU"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:film:10",
+      "hostId": "6ae7814e7d5f88664b48dc90",
+      "title": "Winter Cinema Gathering",
+      "description": "Settle in for a community screening and an optional conversation afterward. The session includes an introduction, a short interval, and time to meet fellow film fans.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 12.5,
+      "startsAt": "2027-01-10T23:00:00.000Z",
+      "endsAt": "2027-01-11T01:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "209 West Houston Street, New York, NY 10014",
+      "place": "Film Forum",
+      "latitude": 40.7284097,
+      "longitude": -74.00433,
+      "photoIds": [
+        "7991112",
+        "7991141"
+      ],
+      "categories": [
+        "Film"
+      ],
+      "placeId": "ChIJW3q6Yo1ZwokRwnpMeNyWLFs"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:workshop:10",
+      "hostId": "6ae7ad81d75d3755e55f82d3",
+      "title": "Community Pottery Studio",
+      "description": "Create a small clay piece with step-by-step guidance. Basic materials and shared tools are included; wear clothes suitable for a hands-on studio session.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 15,
+      "startsAt": "2027-01-11T19:00:00.000Z",
+      "endsAt": "2027-01-11T21:00:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "80 Eighth Avenue, 6th Floor, Suite 601, New York, NY 10011",
+      "place": "Greenwich House Pottery Chelsea",
+      "latitude": 40.7398638,
+      "longitude": -74.0021836,
+      "photoIds": [
+        "18688162",
+        "40895355"
+      ],
+      "categories": [
+        "Workshop"
+      ],
+      "placeId": "ChIJZZcH3ZtZwokRjZvYm0XUVWs"
+    },
+    {
+      "seedKey": "category-demo-2026-11-12:art:10",
+      "hostId": "6aeb4f6c9b286ace01de1aea",
+      "title": "Winter Studio Exhibition",
+      "description": "Spend time with color, materials, and creative ideas in a friendly community setting. Meet other art enthusiasts and take part in an optional guided discussion.\n\nDEMO EVENT: This is fictional sample data for exploring NearMe. The venue and address are real, but this event's title, date, program, and price are fictional demo data. No scheduled booking, admission, or venue endorsement is implied. The real stock photographs illustrate the category and do not document this event.",
+      "price": 18,
+      "startsAt": "2027-01-12T20:00:00.000Z",
+      "endsAt": "2027-01-12T22:30:00.000Z",
+      "timeZone": "America/New_York",
+      "address": "11 West 53rd Street, New York, NY 10019",
+      "place": "The Museum of Modern Art",
+      "latitude": 40.7614327,
+      "longitude": -73.97762159999999,
+      "photoIds": [
+        "36764950",
+        "33158978"
+      ],
+      "categories": [
+        "Art"
+      ],
+      "placeId": "ChIJKxDbe_lYwokRVf__s8CPn-o"
+    }
+  ]
+}

@@ -73,6 +73,7 @@ export function HomeScreen({
             <Text style={[styles.upcomingMeta, { color: colors.muted }]}>
               {nextEvent.date} · {nextEvent.time}
             </Text>
+            <Text style={[styles.tilePrice, { color: colors.primary }]}>{nextEvent.price}</Text>
 
             <Text style={[styles.upcomingMeta, { color: colors.muted }]}>
               {nextEvent.venue}
@@ -143,8 +144,9 @@ export function HomeScreen({
             </Text>
 
             <Text style={[styles.featuredMeta, { color: colors.muted }]}>
-              {event.date} · {event.price}
+              {event.date}
             </Text>
+            <Text style={[styles.tilePrice, { color: colors.primary }]}>{event.price}</Text>
 
             <Text
               onPress={() => onOpenEvent(event)}
@@ -297,6 +299,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginTop: 5
   },
+  tilePrice: { fontSize: 12, fontWeight: '800', marginTop: 5, marginBottom: 4 },
   detailsLink: {
     fontSize: 11,
     fontWeight: '800',

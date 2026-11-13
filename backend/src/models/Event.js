@@ -1,11 +1,21 @@
 const mongoose = require('mongoose');
+const { EVENT_CATEGORIES } = require('../constants/eventCategories');
 
 // Store each event in eventList, with a User reference identifying its host.
 // Dates are absolute instants; timeZone controls how those instants appear to viewers.
 const eventSchema = new mongoose.Schema({
   hostId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   title: { type: String, required: true, trim: true, maxlength: 150 },
-  category: { type: String, required: true, enum: ['Music', 'Dance', 'Food', 'Film', 'Workshop', 'Art'] },
+  categories: {
+    type: [{ type: String, enum: EVENT_CATEGORIES }], required: true, default: undefined,
+    validate: {
+      validator: values => Array.isArray(values) && values.length >= 1 &&
+        values.length <= EVENT_CATEGORIES.length && new Set(values).size === values.length,
+      message: 'Choose one or more supported categories without duplicates.',
+    },
+  },
+  // Recognize older documents during the migration. New API writes use categories.
+  category: { type: String, enum: EVENT_CATEGORIES },
   price: { type: Number, required: true, min: 0 },
   startsAt: { type: Date, required: true },
   endsAt: { type: Date, required: true },

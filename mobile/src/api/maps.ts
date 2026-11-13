@@ -24,42 +24,27 @@ export const createSessionToken = () =>
 export async function fetchPlaceSuggestions(input: string, sessionToken: string, signal?: AbortSignal): Promise<PlaceSuggestion[]> {
   if (input.trim().length < 3) return [];
 
-  try {
-    const response = await api.post<any>('/maps/autocomplete', { input, sessionToken }, { signal });
-    const data = response.data;
-    
-    return (data.suggestions ?? [])
-      .filter((s: any) => s.placePrediction)
-      .map((s: any) => ({
-        placeId: s.placePrediction.placeId,
-        primary: s.placePrediction.structuredFormat?.mainText?.text ?? s.placePrediction.text.text,
-        secondary: s.placePrediction.structuredFormat?.secondaryText?.text ?? '',
-        full: s.placePrediction.text.text,
-      }));
-  } catch (e: any) {
-    if (e?.name === 'AbortError' || e?.message === 'canceled') throw e; 
-    
-    // FULL ERROR INSPECTION: This prints the exact backend/Google error response
-    console.error('MAPS AUTOCOMPLETE ERROR:', e.response?.data || e.message);
-    return []; 
-  }
+  // Let the input distinguish a failed lookup from a successful empty result.
+  const response = await api.post<any>('/maps/autocomplete', { input, sessionToken }, { signal });
+  const data = response.data;
+  return (data.suggestions ?? [])
+    .filter((s: any) => s.placePrediction)
+    .map((s: any) => ({
+      placeId: s.placePrediction.placeId,
+      primary: s.placePrediction.structuredFormat?.mainText?.text ?? s.placePrediction.text.text,
+      secondary: s.placePrediction.structuredFormat?.secondaryText?.text ?? '',
+      full: s.placePrediction.text.text,
+    }));
 }
 
-export async function fetchPlaceDetails(placeId: string, sessionToken: string): Promise<EventPlace | null> {
-  try {
-    const response = await api.get<any>(`/maps/places/${encodeURIComponent(placeId)}?sessionToken=${sessionToken}`);
-    const data = response.data;
-    
-    return {
-      placeId: data.id,
-      name: data.displayName?.text ?? '',
-      address: data.formattedAddress ?? '',
-      latitude: data.location.latitude,
-      longitude: data.location.longitude,
-    };
-  } catch (e: any) {
-    // EXPOSE PLACE DETAILS ERROR INSTEAD OF RETURNING NULL SILENTLY
-    console.error('MAPS PLACE DETAILS ERROR:', e.response?.data || e.message);
-    return null;
-  }
+export async function fetchPlaceDetails(placeId: string, sessionToken: string): Promise<EventPlace> {
+  const response = await api.get<any>(`/maps/places/${encodeURIComponent(placeId)}?sessionToken=${sessionToken}`);
+  const data = response.data;
+  return {
+    placeId: data.id,
+    name: data.displayName?.text ?? '',
+    address: data.formattedAddress ?? '',
+    latitude: data.location.latitude,
+    longitude: data.location.longitude,
+  };
 }

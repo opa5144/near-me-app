@@ -1,12 +1,13 @@
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { isAxiosError } from 'axios';
 
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 
 import { BottomTabBar, TabName } from '../components/BottomTabBar';
 import { ScreenContainer } from '../components/ScreenContainer';
@@ -341,42 +342,58 @@ function EventDetailsRoute({ route, navigation }: NativeStackScreenProps<RootSta
 
 function EventHostDetailsRoute({ route, navigation }: NativeStackScreenProps<RootStackParamList, 'EventHostDetail'>) {
   const { colors } = useTheme();
+  const { selectionsSavingEventIds } = useEvents();
   const eventId = route.params?.eventId;
+  const selectionSaving = selectionsSavingEventIds.includes(eventId ?? '');
   const [event, setEvent] = useState<EventItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     let active = true;
-    setEvent(null);
-    setError(null);
-    setIsLoading(true);
-
-    if (!eventId) {
-      setError('Event not found.');
-      setIsLoading(false);
-      return () => { active = false; };
-    }
-
-    void fetchEvent(eventId)
-      .then(found => { if (active) setEvent(found); })
-      .catch((reason: unknown) => {
-        if (!active) return;
-
-        const status = isAxiosError(reason) ? reason.response?.status : undefined;
-        setError(status === 400 || status === 404
-          ? 'Event not found. It may have been removed.'
-          : 'Could not load this event. Check your connection and try again.');
-      })
-      .finally(() => { if (active) setIsLoading(false); });
-
-    return () => { active = false; };
-  }, [eventId, attempt]);
+    let requestNumber = 0;
+    let controller: AbortController | undefined;
+    const load = () => {
+      const request = ++requestNumber;
+      controller?.abort();
+      setEvent(current => current?.id === eventId ? current : null);
+      setError(null);
+      setIsLoading(true);
+      if (!eventId) {
+        setError('Event not found.');
+        setIsLoading(false);
+        return;
+      }
+      // A choice can still be saving when the host navigates here. Its completion
+      // reruns this focused effect so a pre-save response cannot become the total.
+      if (selectionSaving) return;
+      const pending = new AbortController();
+      controller = pending;
+      void fetchEvent(eventId, pending.signal)
+        .then(found => {
+          if (active && request === requestNumber && !pending.signal.aborted) setEvent(found);
+        })
+        .catch((reason: unknown) => {
+          if (!active || request !== requestNumber || pending.signal.aborted) return;
+          const status = isAxiosError(reason) ? reason.response?.status : undefined;
+          if (status === 400 || status === 404) setEvent(null);
+          setError(status === 400 || status === 404
+            ? 'Event not found. It may have been removed.'
+            : 'Could not refresh this event and its totals. Check your connection and try again.');
+        })
+        .finally(() => {
+          if (active && request === requestNumber && !pending.signal.aborted) setIsLoading(false);
+        });
+    };
+    load();
+    const appState = AppState.addEventListener('change', state => { if (state === 'active') load(); });
+    return () => { active = false; controller?.abort(); appState.remove(); };
+  }, [eventId, attempt, selectionSaving]));
 
   const goBack = () => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MainTabs');
 
-  if (isLoading || !event) {
+  if (!event) {
     return (
       <ScreenContainer>
         <View style={styles.empty}>
@@ -405,6 +422,9 @@ function EventHostDetailsRoute({ route, navigation }: NativeStackScreenProps<Roo
       event={event}
       onEditEvent={() => navigation.navigate('EditEvent', { eventId: event.id })}
       onBack={goBack}
+      onRefresh={() => setAttempt(current => current + 1)}
+      refreshing={isLoading}
+      refreshError={error}
     />
   );
 }

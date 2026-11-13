@@ -1,6 +1,6 @@
 # Event storage and creation
 
-The Atlas collection `eventList` holds event metadata: title, category, numeric
+The Atlas collection `eventList` holds event metadata: title, categories, numeric
 price, start/end timestamps, timezone, address, place, description, and the
 hosting account ID. Photo records live separately in `EventPhotos`, linked by
 `eventId`. Active services never read embedded or single-image fields from
@@ -44,10 +44,16 @@ discovery or accept changes to Interested/Attending selections.
 | GET | `/api/auth/me` | Safe combined signed-in account details. |
 | POST | `/api/auth/logout` | Invalidate the current session. |
 
-Event responses contain display strings for dates, times and prices alongside
-canonical ISO timestamps and numeric `priceAmount`. Dates include a year and are
-formatted in the event's saved timezone. Creation preserves cents and validates
+Events accept one to six distinct category names in `categories`. A response-only
+first-category alias supports older clients. Current forms, filtering and displays
+use the complete array. Event responses contain display strings for dates, times
+and prices alongside canonical ISO timestamps and numeric `priceAmount`. Dates
+use MM/DD/YYYY in the event's saved timezone. Creation preserves cents and validates
 future starts, minimum duration, and overnight schedules.
+
+The later [real-venue/category/date update](real-venues-categories-and-dates.md)
+records the backed-up migration and verified Google venue data. Stored timestamps
+and event/selection/photo IDs remain unchanged.
 
 ## Photo contract
 

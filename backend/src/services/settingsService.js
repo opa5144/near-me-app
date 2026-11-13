@@ -1,4 +1,4 @@
-const Event = require('../models/Event');
+const { EVENT_CATEGORIES } = require('../constants/eventCategories');
 const User = require('../models/User');
 const UserProfile = require('../models/UserProfile');
 const UserPreferences = require('../models/UserPreferences');
@@ -8,7 +8,7 @@ const { withActiveAccountWrite, ActiveAccountWriteError } = require('./activeAcc
 const { validPlaceId, searchCities, fetchCity, displayCities } = require('./cityPreferences');
 const { ServiceError } = require('./serviceError');
 
-const categories = [...Event.schema.path('category').enumValues];
+const categories = [...EVENT_CATEGORIES];
 const categoryDefaults = () => Object.fromEntries(categories.map(category => [category, false]));
 
 function plainCategories(value) {

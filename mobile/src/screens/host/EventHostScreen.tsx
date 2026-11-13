@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { EventItem } from '../../data/events';
 import { EventCard } from '../../components/EventCard';
@@ -34,11 +34,16 @@ export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateSt
   onOpenStore: (store: StoreItem) => void;
 }) {
   const { colors, theme } = useTheme();
-  const { viewedEventIds, interestedEventIds } = useEvents();
+  const { refreshEvents, isLoading } = useEvents();
   const [stores, setStores] = useState<StoreItem[]>([]);
   const [storesLoading, setStoresLoading] = useState(true);
   const [storesError, setStoresError] = useState<string | null>(null);
   const [storeAttempt, setStoreAttempt] = useState(0);
+
+  // Other accounts can change their choices while this screen is away.
+  useFocusEffect(useCallback(() => {
+    void refreshEvents();
+  }, [refreshEvents]));
 
   // Reload on returning from Create Store; ownership is filtered by the backend session.
   useFocusEffect(useCallback(() => {
@@ -57,12 +62,13 @@ export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateSt
   }, [storeAttempt]));
 
   const totalEvents = events.length;
-  const hostEventIds = events.map(e => e.id);
-  const totalUniqueViews = viewedEventIds.filter(id => hostEventIds.includes(id)).length;
-  const totalInterested = interestedEventIds.filter(id => hostEventIds.includes(id)).length;
+  const totalInterested = events.reduce((total, event) => total + (event.interestedCount ?? 0), 0);
+  const totalAttending = events.reduce((total, event) => total + (event.attendingCount ?? 0), 0);
   
   return (
-    <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
+    <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}
+      refreshControl={<RefreshControl refreshing={isLoading} tintColor={colors.primary} colors={[colors.primary]}
+        onRefresh={() => { void refreshEvents(); setStoreAttempt(current => current + 1); }} />}>
       <ScreenHeader eyebrow="Your hosting" title="Host Dashboard" subtitle="Manage and monitor your events and stores." />
       
       <View style={styles.actionRow}>
@@ -77,27 +83,24 @@ export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateSt
           <AppText variant="bodyMedium" color={colors.muted} style={styles.labelToken}>TOTAL EVENTS</AppText>
         </View>
         <View style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <AppText variant="headerMedium" style={styles.valueToken}>{totalUniqueViews}</AppText>
-          <AppText variant="bodyMedium" color={colors.muted} style={styles.labelToken}>UNIQUE VIEWS</AppText>
+          <AppText variant="headerMedium" style={styles.valueToken}>{isLoading ? '…' : totalAttending}</AppText>
+          <AppText variant="bodyMedium" color={colors.muted} style={styles.labelToken}>ATTENDING</AppText>
         </View>
         <View style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <AppText variant="headerMedium" style={styles.valueToken}>{totalInterested}</AppText>
+          <AppText variant="headerMedium" style={styles.valueToken}>{isLoading ? '…' : totalInterested}</AppText>
           <AppText variant="bodyMedium" color={colors.muted} style={styles.labelToken}>INTERESTED</AppText>
         </View>
       </View>
 
       <AppText variant="bodyLarge" style={[styles.section, { color: colors.text }]}>Your Events</AppText>
       {events.length ? events.map(event => {
-        const viewCount = viewedEventIds.includes(event.id) ? 1 : 0;
-        const interestedCount = interestedEventIds.includes(event.id) ? 1 : 0;
-
         return (
           <EventCard
             key={event.id}
             event={event}
             horizontal
-            views={viewCount}
-            interested={interestedCount}
+            interestedCount={event.interestedCount}
+            attendingCount={event.attendingCount}
             onPress={() => onOpenEvent(event)}
           />
         );

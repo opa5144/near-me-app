@@ -5,6 +5,7 @@ import { useFocusEffect, usePreventRemove } from '@react-navigation/native';
 import { isAxiosError } from 'axios';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { AppButton } from '../../components/AppButton';
+import { FieldError } from '../../components/FieldError';
 import { useTheme } from '../../context/ThemeContext';
 import { beginMfaSetup, changePassword, confirmMfaSetup, deleteOwnAccount, disableMfa, fetchSecurityStatus, regenerateRecoveryCodes } from '../../api/security';
 import type { MfaSetupResult, SecurityErrorField, SecurityErrorResponse, SecurityProof, SecurityStatus } from '../../api/security';
@@ -24,12 +25,12 @@ function SecurityField({ label, error, secret = false, disabled = false, style, 
     <View style={styles.field}>
       <View style={styles.labelRow}>
         <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
-        {error && <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.fieldError, { color: errorColor }]}>{error}</Text>}
       </View>
       <View style={[styles.inputRow, { backgroundColor: colors.surface, borderColor: error ? errorColor : colors.border }]}>
         <TextInput accessibilityLabel={label} placeholderTextColor={colors.muted} autoCapitalize="none" autoCorrect={false} {...inputProps} editable={!disabled} secureTextEntry={secret && !visible} style={[styles.input, { color: colors.text }, style]} />
         {secret && <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${visible ? 'Hide' : 'Show'} ${label.toLowerCase()}`} onPress={() => setVisible(current => !current)} disabled={disabled} style={styles.visibilityButton}><Text style={[styles.visibilityText, { color: colors.primary }]}>{visible ? 'Hide' : 'Show'}</Text></TouchableOpacity>}
       </View>
+      <FieldError message={error} />
     </View>
   );
 }
@@ -120,8 +121,34 @@ export function SecurityScreen({ navigation }: any) {
 
   function editField(field: SecurityErrorField, value: string) {
     setForm(current => ({ ...current, [field]: value }));
+    // No validation runs while typing; the next field exit checks the new value.
     setErrors(current => { const next = { ...current }; delete next[field]; return next; });
     setFailure(null); setMessage(null);
+  }
+  function validateField(field: SecurityErrorField | 'setupCode', value: string): string | undefined {
+    if (field === 'currentPassword') {
+      if (!value) return 'Current password is required.';
+      if (Array.from(value).length > 128) return 'Use 128 characters or fewer.';
+    } else if (field === 'newPassword') {
+      if (!value) return 'New password is required.';
+      const length = Array.from(value).length;
+      if (length < 15 || length > 128) return 'Use 15 to 128 characters.';
+    } else if (field === 'confirmPassword') {
+      if (!value) return 'Confirm your new password.';
+      if (value !== form.newPassword) return 'Passwords do not match.';
+    } else if (field === 'code' && !/^\d{6}$/.test(value)) return 'Enter the six-digit code.';
+    else if (field === 'recoveryCode' && !value.trim()) return 'Enter a recovery code.';
+    else if (field === 'confirmation' && value !== 'DELETE') return 'Type DELETE exactly to confirm.';
+    else if (field === 'setupCode') {
+      if (!setup || Date.now() >= Date.parse(setup.expiresAt)) return 'Setup expired. Cancel and start again.';
+      if (!/^\d{6}$/.test(value)) return 'Enter the six-digit code from your authenticator.';
+    }
+    return undefined;
+  }
+  function showFieldError(field: SecurityErrorField | 'setupCode') {
+    // Leaving a proof field checks its shape, never its validity with the server.
+    const message = validateField(field, field === 'setupCode' ? setupCode : form[field]);
+    if (message) setErrors(current => ({ ...current, [field]: message }));
   }
   function selectProofMode(mode: 'code' | 'recoveryCode') {
     setProofMode(mode); setForm(current => ({ ...current, code: '', recoveryCode: '' }));
@@ -129,11 +156,11 @@ export function SecurityScreen({ navigation }: any) {
   }
   function proofErrors(): FieldErrors {
     const next: FieldErrors = {};
-    if (!form.currentPassword) next.currentPassword = 'Current password is required.';
-    else if (Array.from(form.currentPassword).length > 128) next.currentPassword = 'Use 128 characters or fewer.';
+    const passwordError = validateField('currentPassword', form.currentPassword);
+    if (passwordError) next.currentPassword = passwordError;
     if (status?.mfaEnabled) {
-      if (proofMode === 'code' && !/^\d{6}$/.test(form.code)) next.code = 'Enter the six-digit code.';
-      if (proofMode === 'recoveryCode' && !form.recoveryCode.trim()) next.recoveryCode = 'Enter a recovery code.';
+      const message = validateField(proofMode, form[proofMode]);
+      if (message) next[proofMode] = message;
     }
     return next;
   }
@@ -155,7 +182,7 @@ export function SecurityScreen({ navigation }: any) {
       if (typeof text === 'string' && text) next[scope === 'setup' && field === 'code' ? 'setupCode' : field] = text;
     }
     setErrors(next);
-    setFailure(typeof data?.message === 'string' ? data.message : 'Unable to complete this security change. Check your connection and try again.');
+    setFailure(Object.keys(next).length ? null : typeof data?.message === 'string' ? data.message : 'Unable to complete this security change. Check your connection and try again.');
     const locked = data?.lockedUntil ? Date.parse(data.lockedUntil) || 0 : 0;
     const retry = typeof data?.retryAfterSeconds === 'number' ? Date.now() + Math.max(0, data.retryAfterSeconds) * 1000 : 0;
     if (locked || retry) setCooldownUntil(Math.max(locked, retry));
@@ -187,11 +214,10 @@ export function SecurityScreen({ navigation }: any) {
   }
   function handlePasswordChange() {
     const next = proofErrors();
-    const length = Array.from(form.newPassword).length;
-    if (!form.newPassword) next.newPassword = 'New password is required.';
-    else if (length < 15 || length > 128) next.newPassword = 'Use 15 to 128 characters.';
-    if (!form.confirmPassword) next.confirmPassword = 'Confirm your new password.';
-    else if (form.confirmPassword !== form.newPassword) next.confirmPassword = 'Passwords do not match.';
+    for (const field of ['newPassword', 'confirmPassword'] as const) {
+      const message = validateField(field, form[field]);
+      if (message) next[field] = message;
+    }
     setErrors(next); setFailure(null);
     if (Object.keys(next).length) return;
     const payload = { ...proofPayload(), newPassword: form.newPassword, confirmPassword: form.confirmPassword };
@@ -210,8 +236,8 @@ export function SecurityScreen({ navigation }: any) {
   }
   function handleConfirmSetup() {
     if (!setup) return;
-    if (Date.now() >= Date.parse(setup.expiresAt)) { setErrors({ setupCode: 'Setup expired. Cancel and start again.' }); return; }
-    if (!/^\d{6}$/.test(setupCode)) { setErrors({ setupCode: 'Enter the six-digit code from your authenticator.' }); return; }
+    const message = validateField('setupCode', setupCode);
+    if (message) { setErrors({ setupCode: message }); return; }
     const token = setup.setupToken; const code = setupCode;
     void runAction(() => confirmMfaSetup(token, code), result => showRecoveryCodes(result.recoveryCodes), 'setup');
   }
@@ -235,7 +261,8 @@ export function SecurityScreen({ navigation }: any) {
   }
   function handleDelete() {
     const next = proofErrors();
-    if (form.confirmation !== 'DELETE') next.confirmation = 'Type DELETE exactly to confirm.';
+    const message = validateField('confirmation', form.confirmation);
+    if (message) next.confirmation = message;
     setErrors(next); setFailure(null);
     if (Object.keys(next).length || blocked) return;
     const proof = proofPayload();
@@ -263,14 +290,14 @@ export function SecurityScreen({ navigation }: any) {
           <>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Verify your identity</Text>
             <Text style={[styles.note, { color: colors.muted }]}>Enter your current password before making a security change.</Text>
-            <SecurityField label="Current Password" error={errors.currentPassword} value={form.currentPassword} onChangeText={value => editField('currentPassword', value)} secret disabled={isBusy} textContentType="password" />
+            <SecurityField label="Current Password" error={errors.currentPassword} value={form.currentPassword} onChangeText={value => editField('currentPassword', value)} onBlur={() => showFieldError('currentPassword')} secret disabled={isBusy} textContentType="password" />
             {status.mfaEnabled && (
               <>
                 <View style={styles.modeRow}>
                   <AppButton title="Authenticator code" variant={proofMode === 'code' ? 'primary' : 'secondary'} disabled={isBusy} onPress={() => selectProofMode('code')} style={styles.modeButton} textStyle={styles.modeText} />
                   <AppButton title="Recovery code" variant={proofMode === 'recoveryCode' ? 'primary' : 'secondary'} disabled={isBusy} onPress={() => selectProofMode('recoveryCode')} style={styles.modeButton} textStyle={styles.modeText} />
                 </View>
-                {proofMode === 'code' ? <SecurityField label="Authenticator Code" error={errors.code} value={form.code} onChangeText={value => editField('code', value.replace(/\D/g, '').slice(0, 6))} keyboardType="number-pad" textContentType="oneTimeCode" placeholder="6 digits" disabled={isBusy} /> : <SecurityField label="Recovery Code" error={errors.recoveryCode} value={form.recoveryCode} onChangeText={value => editField('recoveryCode', value.slice(0, 128))} placeholder="One unused recovery code" autoCapitalize="characters" secret disabled={isBusy} />}
+                {proofMode === 'code' ? <SecurityField label="Authenticator Code" error={errors.code} value={form.code} onChangeText={value => editField('code', value.replace(/\D/g, '').slice(0, 6))} onBlur={() => showFieldError('code')} keyboardType="number-pad" textContentType="oneTimeCode" placeholder="6 digits" disabled={isBusy} /> : <SecurityField label="Recovery Code" error={errors.recoveryCode} value={form.recoveryCode} onChangeText={value => editField('recoveryCode', value.slice(0, 128))} onBlur={() => showFieldError('recoveryCode')} placeholder="One unused recovery code" autoCapitalize="characters" secret disabled={isBusy} />}
                 <Text style={[styles.note, { color: colors.muted }]}>Recovery codes work once. {status.recoveryCodesRemaining} remaining.</Text>
               </>
             )}
@@ -278,8 +305,8 @@ export function SecurityScreen({ navigation }: any) {
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Change Password</Text>
             <Text style={[styles.note, { color: colors.muted }]}>Use 15 to 128 characters. Other devices will be signed out.</Text>
-            <SecurityField label="New Password" error={errors.newPassword} value={form.newPassword} onChangeText={value => editField('newPassword', value)} secret disabled={isBusy} textContentType="newPassword" />
-            <SecurityField label="Confirm New Password" error={errors.confirmPassword} value={form.confirmPassword} onChangeText={value => editField('confirmPassword', value)} secret disabled={isBusy} textContentType="newPassword" />
+            <SecurityField label="New Password" error={errors.newPassword} value={form.newPassword} onChangeText={value => editField('newPassword', value)} onBlur={() => showFieldError('newPassword')} secret disabled={isBusy} textContentType="newPassword" />
+            <SecurityField label="Confirm New Password" error={errors.confirmPassword} value={form.confirmPassword} onChangeText={value => editField('confirmPassword', value)} onBlur={() => showFieldError('confirmPassword')} secret disabled={isBusy} textContentType="newPassword" />
             <AppButton title="Update Password" onPress={handlePasswordChange} disabled={blocked || !!setup} style={styles.actionButton} />
 
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
@@ -307,7 +334,7 @@ export function SecurityScreen({ navigation }: any) {
                 <Text style={[styles.label, { color: colors.text }]}>Setup key</Text>
                 <Text selectable style={[styles.secret, { color: colors.text }]}>{setup.secret}</Text>
                 <Text style={[styles.note, { color: setupSeconds ? colors.muted : errorColor }]}>{setupSeconds ? `Setup expires in ${clockText(setupSeconds)}.` : 'Setup expired. Cancel and start again.'}</Text>
-                <SecurityField label="New Authenticator Code" error={errors.setupCode} value={setupCode} onChangeText={value => { setSetupCode(value.replace(/\D/g, '').slice(0, 6)); setErrors(current => ({ ...current, setupCode: undefined })); setFailure(null); }} keyboardType="number-pad" textContentType="oneTimeCode" placeholder="6 digits" disabled={isBusy} />
+                <SecurityField label="New Authenticator Code" error={errors.setupCode} value={setupCode} onChangeText={value => { setSetupCode(value.replace(/\D/g, '').slice(0, 6)); setErrors(current => ({ ...current, setupCode: undefined })); setFailure(null); }} onBlur={() => showFieldError('setupCode')} keyboardType="number-pad" textContentType="oneTimeCode" placeholder="6 digits" disabled={isBusy} />
                 <AppButton title="Confirm Authenticator" onPress={handleConfirmSetup} disabled={blocked || !setupSeconds} style={styles.actionButton} />
                 <AppButton title="Cancel Setup" variant="quiet" disabled={isBusy} onPress={() => { wipeDraft(); setFailure(null); setMessage(null); }} />
               </View>
@@ -316,7 +343,7 @@ export function SecurityScreen({ navigation }: any) {
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Delete Account</Text>
             <Text style={[styles.note, { color: colors.muted }]}>This permanently closes your account. Your events will be hidden and kept as read-only archives. Enter your password{status.mfaEnabled ? ' and verification code' : ''} above, then type DELETE below.</Text>
-            <SecurityField label="Deletion Confirmation" error={errors.confirmation} value={form.confirmation} onChangeText={value => editField('confirmation', value)} placeholder="DELETE" autoCapitalize="characters" disabled={isBusy} />
+            <SecurityField label="Deletion Confirmation" error={errors.confirmation} value={form.confirmation} onChangeText={value => editField('confirmation', value)} onBlur={() => showFieldError('confirmation')} placeholder="DELETE" autoCapitalize="characters" disabled={isBusy} />
             <AppButton title="Delete Account Permanently" variant="secondary" onPress={handleDelete} disabled={blocked || !!setup} style={styles.deleteButton} textStyle={{ color: errorColor }} />
             {isBusy && <ActivityIndicator accessibilityLabel="Saving security change" color={colors.primary} style={styles.feedback} />}
             {failure && <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.feedback, { color: errorColor }]}>{failure}</Text>}
@@ -357,7 +384,6 @@ const styles = StyleSheet.create({
   field: { marginTop: 12 },
   labelRow: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', gap: 8, marginBottom: 6 },
   label: { fontSize: 12, fontWeight: '700' },
-  fieldError: { fontSize: 12, flexShrink: 1 },
   inputRow: { borderWidth: 1, borderRadius: 10, flexDirection: 'row', alignItems: 'center' },
   input: { flex: 1, padding: 12, fontSize: 14, minHeight: 46 },
   visibilityButton: { paddingHorizontal: 12, minHeight: 44, justifyContent: 'center' },

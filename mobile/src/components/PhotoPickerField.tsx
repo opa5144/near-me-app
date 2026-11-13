@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { MAX_PHOTOS, preparePhoto } from '../api/photos';
 import type { EditablePhoto } from '../api/photos';
 import { AppButton } from './AppButton';
 import { useTheme } from '../context/ThemeContext';
+import { FieldError } from './FieldError';
 
 export interface PhotoPickerFieldProps {
   photos: EditablePhoto[];
@@ -12,15 +13,18 @@ export interface PhotoPickerFieldProps {
   disabled?: boolean;
   label?: string;
   onBusyChange?: (busy: boolean) => void;
+  error?: string | null;
+  onBlur?: (photos: EditablePhoto[]) => void;
 }
 
-export function PhotoPickerField({ photos, onChange, disabled = false, label = 'Photos', onBusyChange }: PhotoPickerFieldProps) {
+export function PhotoPickerField({ photos, onChange, disabled = false, label = 'Photos', onBusyChange, error, onBlur }: PhotoPickerFieldProps) {
   const { colors } = useTheme();
   const [busy, setBusy] = useState(false);
+  const [operationError, setOperationError] = useState<string | null>(null);
   const busyRef = useRef(false);
   const mounted = useRef(true);
-  const latest = useRef({ photos, onChange, disabled, onBusyChange });
-  latest.current = { photos, onChange, disabled, onBusyChange };
+  const latest = useRef({ photos, onChange, disabled, onBusyChange, onBlur });
+  latest.current = { photos, onChange, disabled, onBusyChange, onBlur };
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; };
@@ -29,12 +33,13 @@ export function PhotoPickerField({ photos, onChange, disabled = false, label = '
   async function addPhoto() {
     if (busyRef.current || latest.current.disabled || latest.current.photos.length >= MAX_PHOTOS) return;
     busyRef.current = true;
+    setOperationError(null);
     setBusy(true);
     latest.current.onBusyChange?.(true);
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        if (mounted.current) Alert.alert('Photo Permission', 'Allow access to your photo library to add a photo.');
+        if (mounted.current) setOperationError('Allow access to your photo library to add a photo.');
         return;
       }
       // Add one cropped photo at a time; Expo cannot crop a multiple selection.
@@ -42,10 +47,12 @@ export function PhotoPickerField({ photos, onChange, disabled = false, label = '
       if (result.canceled || !result.assets?.length || !mounted.current) return;
       const prepared = await preparePhoto(result.assets[0].uri);
       if (mounted.current && latest.current.photos.length < MAX_PHOTOS) {
-        latest.current.onChange([...latest.current.photos, prepared]);
+        const next = [...latest.current.photos, prepared];
+        latest.current.onChange(next);
+        latest.current.onBlur?.(next);
       }
     } catch (error: unknown) {
-      if (mounted.current) Alert.alert('Photo Error', error instanceof Error ? error.message : 'This photo could not be prepared.');
+      if (mounted.current) setOperationError(error instanceof Error ? error.message : 'This photo could not be prepared.');
     } finally {
       busyRef.current = false;
       if (mounted.current) {
@@ -61,6 +68,8 @@ export function PhotoPickerField({ photos, onChange, disabled = false, label = '
     const [photo] = reordered.splice(index, 1);
     reordered.splice(target, 0, photo);
     onChange(reordered);
+    setOperationError(null);
+    onBlur?.(reordered);
   }
 
   const blocked = busy || disabled;
@@ -81,7 +90,7 @@ export function PhotoPickerField({ photos, onChange, disabled = false, label = '
           <Pressable disabled={blocked || index === photos.length - 1} onPress={() => changeOrder(index, index + 1)} accessibilityRole="button" accessibilityLabel={'Move photo ' + (index + 1) + ' later'} style={styles.action}>
             <Text style={{ color: blocked || index === photos.length - 1 ? colors.muted : colors.primary }}>Later</Text>
           </Pressable>
-          <Pressable disabled={blocked} onPress={() => { if (!busyRef.current && !disabled) onChange(photos.filter((_, itemIndex) => itemIndex !== index)); }} accessibilityRole="button" accessibilityLabel={'Remove photo ' + (index + 1)} style={styles.action}>
+          <Pressable disabled={blocked} onPress={() => { if (!busyRef.current && !disabled) { const next = photos.filter((_, itemIndex) => itemIndex !== index); onChange(next); setOperationError(null); onBlur?.(next); } }} accessibilityRole="button" accessibilityLabel={'Remove photo ' + (index + 1)} style={styles.action}>
             <Text style={{ color: blocked ? colors.muted : colors.primary }}>Remove</Text>
           </Pressable>
         </View>
@@ -89,6 +98,7 @@ export function PhotoPickerField({ photos, onChange, disabled = false, label = '
     </View>)}
     {busy && <ActivityIndicator color={colors.primary} style={styles.busy} accessibilityLabel="Preparing photo" />}
     <AppButton title={busy ? 'Preparing photo...' : 'Add photo'} variant="secondary" onPress={addPhoto} disabled={blocked || photos.length >= MAX_PHOTOS} />
+    <FieldError message={operationError || error} />
   </View>;
 }
 

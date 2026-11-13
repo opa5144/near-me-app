@@ -1,5 +1,5 @@
 const { MAX_IMAGE_BYTES, validatePhotoInput, photoItems } = require('./photoData');
-const CATEGORIES = ['Music', 'Dance', 'Food', 'Film', 'Workshop', 'Art'];
+const { EVENT_CATEGORIES } = require('../constants/eventCategories');
 
 // Validation failures carry a safe message and HTTP status for the event route.
 class EventInputError extends Error {
@@ -16,6 +16,31 @@ function requiredText(value, label, maxLength) {
     throw new EventInputError(label + ' is required and must be at most ' + maxLength + ' characters.');
   }
   return value.trim();
+}
+
+function parseEventCategories(body) {
+  // An explicitly supplied categories field must be valid; an old category must
+  // not hide an empty or malformed canonical value.
+  const values = Object.prototype.hasOwnProperty.call(body, 'categories')
+    ? body.categories : typeof body.category === 'string' ? [body.category] : undefined;
+  if (!Array.isArray(values) || values.length < 1 || values.length > EVENT_CATEGORIES.length ||
+      values.some(value => typeof value !== 'string' || !EVENT_CATEGORIES.includes(value.trim()))) {
+    throw new EventInputError('Please choose one to six supported event categories.');
+  }
+  const categories = values.map(value => value.trim());
+  if (new Set(categories).size !== categories.length) {
+    throw new EventInputError('Each event category can only be selected once.');
+  }
+  return categories;
+}
+
+function categoriesForEvent(event) {
+  // Read existing singleton records without changing them. Canonical arrays take
+  // precedence over a stale compatibility field left on an edited older record.
+  const values = Array.isArray(event.categories) && event.categories.length
+    ? event.categories : typeof event.category === 'string' ? [event.category] : [];
+  return [...new Set(values.filter(value => typeof value === 'string' &&
+    EVENT_CATEGORIES.includes(value.trim())).map(value => value.trim()))];
 }
 
 // Require an explicit year and timezone instead of JavaScript's permissive, yearless date parsing.
@@ -47,7 +72,7 @@ function parseCreateEvent(body) {
   const description = requiredText(body.description, 'Description', 10000);
   const address = requiredText(body.address, 'Address', 500);
   const place = requiredText(body.place, 'Place', 300);
-  if (!CATEGORIES.includes(body.category)) throw new EventInputError('Please choose a valid category.');
+  const categories = parseEventCategories(body);
 
   // Accept zero for free events and reject amounts with fractions smaller than one cent.
   if (typeof body.price !== 'number' || !Number.isFinite(body.price) || body.price < 0 ||
@@ -94,7 +119,7 @@ function parseCreateEvent(body) {
 
   // Ownership and seed keys are deliberately omitted; the route assigns the authenticated host.
   return {
-    title, description, address, place, category: body.category,
+    title, description, address, place, categories,
     price: Number(body.price.toFixed(2)), startsAt, endsAt, timeZone: body.timeZone,
     placeId: typeof body.placeId === 'string' ? body.placeId.slice(0, 500) : null,
     latitude: hasLatitude ? body.latitude : null,
@@ -103,11 +128,11 @@ function parseCreateEvent(body) {
 }
 
 // Translate a database record into the shared mobile shape with no embedded image bytes.
-function toEventItem(event, apiBaseUrl, photoDocuments = []) {
+function toEventItem(event, apiBaseUrl, photoDocuments = [], audience) {
   const timeZone = event.timeZone;
   // Format display labels in the event's zone, keeping output consistent across devices.
   const dateFormat = new Intl.DateTimeFormat('en-US', {
-    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone,
+    month: '2-digit', day: '2-digit', year: 'numeric', timeZone,
   });
   const timeFormat = new Intl.DateTimeFormat('en-US', {
     hour: 'numeric', minute: '2-digit', hour12: true, timeZone,
@@ -122,6 +147,7 @@ function toEventItem(event, apiBaseUrl, photoDocuments = []) {
   // Keep a numeric price for app logic alongside the formatted Free/currency label.
   const priceAmount = Number(event.price);
   const photos = photoItems(event, apiBaseUrl, 'events', photoDocuments);
+  const categories = categoriesForEvent(event);
   return {
     id: String(event._id),
     // For hostId, return an object with user details if populated, otherwise just the ID string. 
@@ -133,7 +159,12 @@ function toEventItem(event, apiBaseUrl, photoDocuments = []) {
     } : String(event.hostId),
 
     title: event.title,
-    category: event.category,
+    categories,
+    // Keep the first category for older app builds while every current screen
+    // adopts the complete array. This compatibility value is never stored anew.
+    ...(categories[0] ? { category: categories[0] } : {}),
+    // Optional for history serializers; event list/detail responses supply live totals.
+    ...(audience ? { interestedCount: audience.interestedCount, attendingCount: audience.attendingCount } : {}),
     date: dateFormat.format(start),
     time: timeFormat.format(start) + ' – ' + timeFormat.format(end) +
       (crossesDay ? ' (ends ' + dateFormat.format(end) + ')' : ''),

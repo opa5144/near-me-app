@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, TouchableOpacity } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { AppText } from './AppText';
+import { FieldError } from './FieldError';
+import { formatCalendarDate } from '../utils/dateFormat';
 
 interface DatePickerFieldProps {
   label: string;
@@ -12,32 +14,21 @@ interface DatePickerFieldProps {
   minimumDate?: string; // <--- Add optional minimumDate prop here
   open?: boolean; // <--- Optional controlled state so the parent can keep one picker open at a time
   onOpenChange?: (open: boolean) => void;
+  error?: string | null;
+  onBlur?: (date: string) => void;
+  disabled?: boolean;
 }
 
-// Adds st / nd / rd / th (11th, 12th, 13th are the exceptions)
-const getOrdinal = (n: number) => {
-  const mod100 = n % 100;
-  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
-  switch (n % 10) {
-    case 1: return `${n}st`;
-    case 2: return `${n}nd`;
-    case 3: return `${n}rd`;
-    default: return `${n}th`;
-  }
-};
-
-// "2026-10-24" -> "October 24th, 2026" (display only)
-const formatDisplayDate = (dateString: string) => {
-  const d = new Date(dateString + 'T00:00:00'); // Local midnight avoids the off-by-one-day timezone shift
-  if (isNaN(d.getTime())) return dateString;
-  const month = d.toLocaleDateString('en-US', { month: 'long' });
-  return `${month} ${getOrdinal(d.getDate())}, ${d.getFullYear()}`;
-};
-
-export function DatePickerField({ label, date, onDateChange, minimumDate, open, onOpenChange }: DatePickerFieldProps) {
+export function DatePickerField({ label, date, onDateChange, minimumDate, open, onOpenChange, error, onBlur, disabled = false }: DatePickerFieldProps) {
   const { colors } = useTheme();
   const [internalOpen, setInternalOpen] = useState(false);
   const showDatePicker = open ?? internalOpen;
+  const wasOpen = useRef(showDatePicker);
+  // A picker close/selection is the field's blur equivalent, not each date change.
+  useEffect(() => {
+    if (wasOpen.current && !showDatePicker) onBlur?.(date);
+    wasOpen.current = showDatePicker;
+  }, [showDatePicker, date, onBlur]);
 
   const setShowDatePicker = (value: boolean) => {
     setInternalOpen(value);
@@ -72,14 +63,16 @@ export function DatePickerField({ label, date, onDateChange, minimumDate, open, 
       <TouchableOpacity 
         style={[styles.fieldInputButton, styles.rowButton, { backgroundColor: colors.surface, borderColor: colors.border }]} 
         onPress={() => setShowDatePicker(!showDatePicker)}
+        disabled={disabled}
         activeOpacity={0.8}
       >
         <View style={styles.leftContent}>
           <Ionicons name="calendar-outline" size={16} color={colors.text} style={styles.iconStyle} />
-          <AppText style={[styles.fieldInputText, { color: colors.text }]}>{formatDisplayDate(date)}</AppText>
+          <AppText style={[styles.fieldInputText, { color: colors.text }]}>{formatCalendarDate(date)}</AppText>
         </View>
         <Ionicons name={showDatePicker ? "chevron-up" : "chevron-down"} size={14} color={colors.muted} />
       </TouchableOpacity>
+      <FieldError message={error} />
       {showDatePicker && (
         <View style={[styles.calendarDropdownContainer, { borderColor: colors.border, backgroundColor: colors.surface }]}>
           <Calendar
@@ -89,11 +82,15 @@ export function DatePickerField({ label, date, onDateChange, minimumDate, open, 
             hideExtraDays // <--- Hides the faded days from adjacent months
             enableSwipeMonths // <--- Swipe left/right to change month
             onDayPress={(day: { dateString: string }) => {
+              if (disabled) return;
               onDateChange(day.dateString);
               setShowDatePicker(false);
             }}
             markedDates={{ [date]: { selected: true, selectedColor: colors.primary } }}
           />
+          <TouchableOpacity onPress={() => setShowDatePicker(false)} accessibilityRole="button" style={{ padding: 12, alignItems: 'center' }}>
+            <AppText style={{ color: colors.primary, fontWeight: '700' }}>Done</AppText>
+          </TouchableOpacity>
         </View>
       )}
     </View>

@@ -1,12 +1,16 @@
 import React from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
+import { FieldError } from './FieldError';
 
 interface PriceInputFieldProps {
   label: string;
   price: string;
   onPriceChange: (price: string) => void;
   placeholder?: string;
+  error?: string | null;
+  onBlur?: () => void;
+  disabled?: boolean;
 }
 
 // Keeps digits and a single decimal point, max 2 decimal places
@@ -17,7 +21,7 @@ const sanitizePrice = (text: string) => {
   return `${whole.slice(0, 7)}.${rest.join('').slice(0, 2)}`;
 };
 
-export function PriceInputField({ label, price, onPriceChange, placeholder = '0.00' }: PriceInputFieldProps) {
+export function PriceInputField({ label, price, onPriceChange, placeholder = '0.00', error, onBlur, disabled = false }: PriceInputFieldProps) {
   const { colors } = useTheme();
 
   return (
@@ -28,12 +32,15 @@ export function PriceInputField({ label, price, onPriceChange, placeholder = '0.
         <TextInput
           value={price}
           onChangeText={(text) => onPriceChange(sanitizePrice(text))}
+          onBlur={onBlur}
+          editable={!disabled}
           placeholder={placeholder}
           placeholderTextColor={colors.muted}
           keyboardType="decimal-pad" // <--- Numeric keyboard with a decimal point
           style={[styles.fieldInputText, { color: colors.text }]}
         />
       </View>
+      <FieldError message={error} />
       <Text style={[styles.helperText, { color: colors.muted }]}>Leave blank for a free event.</Text>
     </View>
   );

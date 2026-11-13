@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { StyleSheet, Switch, Text, View } from 'react-native';
 import { TimePickerField } from './TimePickerField';
 import { useTheme } from '../context/ThemeContext';
+import { FieldError } from './FieldError';
 
 export const businessDays = [
   'Sunday',
@@ -26,22 +27,32 @@ export type BusinessHoursData = Record<BusinessDay, BusinessHours>;
 interface BusinessHoursEditorProps {
   hours: BusinessHoursData;
   onChange: (hours: BusinessHoursData) => void;
+  error?: string | null;
+  dayErrors?: Partial<Record<BusinessDay, string>>;
+  onBlur?: (hours: BusinessHoursData) => void;
+  disabled?: boolean;
 }
 
 export function BusinessHoursEditor({
   hours,
-  onChange
+  onChange, error, dayErrors, onBlur, disabled = false
 }: BusinessHoursEditorProps) {
   const { colors } = useTheme();
+  const latestHours = useRef(hours);
+  latestHours.current = hours;
 
   const updateDay = (day: BusinessDay, changes: Partial<BusinessHours>) => {
-    onChange({
-      ...hours,
+    if (disabled) return;
+    const next = {
+      ...latestHours.current,
       [day]: {
-        ...hours[day],
+        ...latestHours.current[day],
         ...changes
       }
-    });
+    };
+    latestHours.current = next;
+    onChange(next);
+    return next;
   };
 
   return (
@@ -56,7 +67,8 @@ export function BusinessHoursEditor({
             <View style={styles.dayToggle}>
               <Switch
                 value={hours[day].open}
-                onValueChange={open => updateDay(day, { open })}
+                onValueChange={open => { const next = updateDay(day, { open }); if (next) onBlur?.(next); }}
+                disabled={disabled}
                 trackColor={{
                   false: colors.border,
                   true: colors.primary
@@ -77,6 +89,8 @@ export function BusinessHoursEditor({
                   time={hours[day].openTime}
                   onTimeChange={openTime => updateDay(day, { openTime })}
                   minuteInterval={15}
+                  disabled={disabled}
+                  onBlur={openTime => onBlur?.({ ...latestHours.current, [day]: { ...latestHours.current[day], openTime } })}
                 />
               </View>
 
@@ -86,12 +100,16 @@ export function BusinessHoursEditor({
                   time={hours[day].closeTime}
                   onTimeChange={closeTime => updateDay(day, { closeTime })}
                   minuteInterval={15}
+                  disabled={disabled}
+                  onBlur={closeTime => onBlur?.({ ...latestHours.current, [day]: { ...latestHours.current[day], closeTime } })}
                 />
               </View>
             </View>
           )}
+          <FieldError message={dayErrors?.[day]} />
         </View>
       ))}
+      <FieldError message={error} />
     </View>
   );
 }

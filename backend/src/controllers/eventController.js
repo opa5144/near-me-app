@@ -15,6 +15,7 @@ async function listEvents(req, res) {
 
 async function listHostedEvents(req, res) {
   try {
+    res.set('Cache-Control', 'no-store');
     return res.json({ events: await events.listHostedEvents(getAuthContext(req), apiBaseUrl(req)) });
   } catch (error) {
     if (sendServiceError(res, error)) return;

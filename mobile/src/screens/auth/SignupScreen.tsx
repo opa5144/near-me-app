@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppButton } from '../../components/AppButton';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { useTheme } from '../../context/ThemeContext';
@@ -55,61 +55,74 @@ export function SignupScreen({ onBackToLogin }: SignupScreenProps) {
   const checkedUsername = useRef('');
   const usernameRevision = useRef(0);
   const currentUsername = useRef(form.username);
+  const usernameRequest = useRef<AbortController | null>(null);
+  const mounted = useRef(true);
 
-  // The final insert still checks the unique index; a delayed availability read
-  // must never replace validation for a newer username or a submitted account.
   useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      ++usernameRevision.current;
+      usernameRequest.current?.abort();
+    };
+  }, []);
+
+  // Availability is checked only when leaving Username. The final insert still
+  // checks its unique index, and an old response cannot replace a newer edit.
+  function checkUsernameOnBlur(username: string) {
     const revision = ++usernameRevision.current;
-    if (isSubmitting || accountCreated || validateField('username', form.username)) {
+    usernameRequest.current?.abort();
+    if (signupInFlight.current || accountCreated || validateField('username', username)) {
       setUsernameStatus('idle');
       return;
     }
-    const username = form.username;
     const controller = new AbortController();
-    let active = true;
-    const isCurrent = () => active && revision === usernameRevision.current &&
+    usernameRequest.current = controller;
+    const isCurrent = () => mounted.current && !controller.signal.aborted && revision === usernameRevision.current &&
       currentUsername.current === username && !signupInFlight.current;
     setUsernameStatus('checking');
-    const timer = setTimeout(() => {
-      checkUsernameAvailability(username, controller.signal).then(available => {
-        if (!isCurrent()) return;
-        checkedUsername.current = username;
-        setUsernameStatus(available ? 'available' : 'taken');
-        setErrors(current => {
-          if (!isCurrent()) return current;
-          if (!available) return { ...current, username: 'Username already exists.' };
-          if (current.username !== 'Username already exists.') return current;
-          const next = { ...current };
-          delete next.username;
-          return next;
-        });
-      }).catch(() => {
-        if (isCurrent() && !controller.signal.aborted) setUsernameStatus('unavailable');
+    void checkUsernameAvailability(username, controller.signal).then(available => {
+      if (!isCurrent()) return;
+      checkedUsername.current = username;
+      setUsernameStatus(available ? 'available' : 'taken');
+      setErrors(current => {
+        if (!isCurrent()) return current;
+        if (!available) return { ...current, username: 'Username already exists.' };
+        if (current.username !== 'Username already exists.') return current;
+        const next = { ...current };
+        delete next.username;
+        return next;
       });
-    }, 350);
-    return () => { active = false; clearTimeout(timer); controller.abort(); };
-  }, [form.username, isSubmitting, accountCreated]);
+    }).catch(() => {
+      if (isCurrent() && !controller.signal.aborted) setUsernameStatus('unavailable');
+    });
+  }
 
-  function showFieldError(field: SignupField, value: string, edited = false) {
+  function showFieldError(field: SignupField, value: string) {
     setErrors(current => {
       const next = { ...current };
       const message = validateField(field, value);
       if (message) next[field] = message;
-      else if (edited) delete next[field];
       return next;
     });
+    if (field === 'username') checkUsernameOnBlur(value);
   }
 
   function editField(field: SignupField, value: string) {
     if (field === 'username') {
-      // Invalidate before React's next effect cleanup, not after a new render.
+      // Editing invalidates the old lookup without validating the new value.
       ++usernameRevision.current;
+      usernameRequest.current?.abort();
       currentUsername.current = value;
       checkedUsername.current = '';
       setUsernameStatus('idle');
     }
     setForm(current => ({ ...current, [field]: value }));
-    showFieldError(field, value, true);
+    setErrors(current => {
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
     setFormError(null);
   }
 
@@ -127,6 +140,8 @@ export function SignupScreen({ onBackToLogin }: SignupScreenProps) {
     if (Object.keys(invalid).length) return;
 
     ++usernameRevision.current;
+    usernameRequest.current?.abort();
+    setUsernameStatus('idle');
     signupInFlight.current = true;
     setIsSubmitting(true);
     
@@ -177,27 +192,28 @@ export function SignupScreen({ onBackToLogin }: SignupScreenProps) {
       {formError && <Text accessibilityRole="alert" style={[styles.feedback, { color: errorColor }]}>{formError}</Text>}
 
       {fields.map(({ key, label }) => (//renders input fields for each field in the form
-        <AppTextInput
-          key={key}
-          label={label}
-          error={errors[key]}
-          value={form[key]}
-          editable={!isSubmitting && !accountCreated}
-          onChangeText={value => editField(key, value)}
-          onBlur={() => showFieldError(key, form[key])}
-          maxLength={key === 'username' ? 25 : undefined}
-          autoCapitalize={
-            key === 'firstName' || key === 'lastName'
-              ? 'words'
-              : 'none'
-          }
-          keyboardType={key === 'email' ? 'email-address' : 'default'}
-          autoComplete={key === 'password' ? 'new-password' : undefined}
-          isPassword={key === 'password'}
-        />
+        <View key={key}>
+          <AppTextInput
+            label={label}
+            error={errors[key]}
+            value={form[key]}
+            editable={!isSubmitting && !accountCreated}
+            onChangeText={value => editField(key, value)}
+            onBlur={() => showFieldError(key, form[key])}
+            maxLength={key === 'username' ? 25 : undefined}
+            autoCapitalize={
+              key === 'firstName' || key === 'lastName'
+                ? 'words'
+                : 'none'
+            }
+            keyboardType={key === 'email' ? 'email-address' : 'default'}
+            autoComplete={key === 'password' ? 'new-password' : undefined}
+            isPassword={key === 'password'}
+          />
+          {key === 'username' && usernameStatus === 'checking' && <Text style={[styles.feedback, { color: colors.muted }]}>Checking username...</Text>}
+          {key === 'username' && usernameStatus === 'unavailable' && <Text style={[styles.feedback, { color: colors.muted }]}>Could not check availability. You can still try signing up.</Text>}
+        </View>
       ))}
-      {usernameStatus === 'checking' && <Text style={[styles.feedback, { color: colors.muted }]}>Checking username...</Text>}
-      {usernameStatus === 'unavailable' && <Text style={[styles.feedback, { color: colors.muted }]}>Could not check availability. You can still try signing up.</Text>}
 
       <AppButton
         title={isSubmitting ? 'Creating account...' : 'Sign up'}
