@@ -7,6 +7,7 @@ const { NOTIFICATION_DEFAULTS } = NotificationSettings;
 const { withActiveAccountWrite, ActiveAccountWriteError } = require('./activeAccountWrite');
 const { validPlaceId, searchCities, fetchCity, displayCities } = require('./cityPreferences');
 const { ServiceError } = require('./serviceError');
+const notificationPreferences = require('./notifications/preferenceService');
 
 const categories = [...EVENT_CATEGORIES];
 const categoryDefaults = () => Object.fromEntries(categories.map(category => [category, false]));
@@ -83,13 +84,13 @@ async function notificationResponse(userId, stored) {
   const profile = await UserProfile.findOne({ userId }).select('phone').lean();
   if (!profile) throw new ServiceError(503, 'Your account profile is unavailable. Please try again later.');
   return {
-    settings: { ...NOTIFICATION_DEFAULTS, ...(stored?.settings ?? {}) },
+    ...notificationPreferences.normalizePreferences(stored),
     contacts: { email: account.email ?? '', phone: profile?.phone ?? '' },
   };
 }
 
 async function getNotifications(auth) {
-  const stored = await NotificationSettings.findOne({ userId: auth.userId }).lean();
+  const stored = await notificationPreferences.getPreferences(auth);
   return notificationResponse(auth.userId, stored);
 }
 
@@ -100,13 +101,7 @@ async function updateNotifications(auth, body) {
         !Object.prototype.hasOwnProperty.call(NOTIFICATION_DEFAULTS, key) || typeof value !== 'boolean')) {
     throw new ServiceError(400, 'Notification preferences must be true or false for a supported setting.');
   }
-  await NotificationSettings.init();
-  const stored = await withActiveAccountWrite(auth, [], async session => {
-    const current = await NotificationSettings.findOne({ userId: auth.userId }).session(session).lean();
-    return NotificationSettings.findOneAndUpdate({ userId: auth.userId }, { $set: {
-      settings: { ...NOTIFICATION_DEFAULTS, ...(current?.settings ?? {}), ...body.settings },
-    } }, { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true, session }).lean();
-  });
+  const stored = await notificationPreferences.updatePreferences(auth, body);
   return notificationResponse(auth.userId, stored);
 }
 

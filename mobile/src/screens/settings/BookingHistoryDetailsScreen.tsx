@@ -9,6 +9,7 @@ import { fetchBookingHistoryDetails } from '../../api/events';
 import type { BookingHistoryItem } from '../../api/events';
 import { useTheme } from '../../context/ThemeContext';
 import { formatEventDate } from '../../utils/dateFormat';
+import { EventRatingForm } from '../../components/EventRatingForm';
 
 type BookingHistoryDetailsScreenProps = {
   navigation: any;
@@ -37,7 +38,7 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   </View>;
 }
 
-// History has its own read-only view: no RSVP, sharing, maps, or host-follow actions.
+// Historical event details stay static; eligible attendees may add/update their rating.
 export function BookingHistoryDetailsScreen({ navigation, route }: BookingHistoryDetailsScreenProps) {
   const { colors, theme } = useTheme();
   const errorColor = theme === 'dark' ? '#FF8A80' : '#C62828';
@@ -82,7 +83,7 @@ export function BookingHistoryDetailsScreen({ navigation, route }: BookingHistor
   return (
     <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]}>
       <AppButton title="Back to Booking History" variant="quiet" alignment="left" onPress={() => navigation.goBack()} />
-      <ScreenHeader title="Past event details" subtitle="Your saved history. Event choices cannot be changed." />
+      <ScreenHeader title="Past event details" subtitle="Your past event details. Registration choices are read-only." />
       {isLoading ? <ActivityIndicator size="large" color={colors.primary} style={styles.loading} /> : error || !event || !booking ? (
         <View style={styles.notice}>
           <Text accessibilityRole="alert" style={[styles.message, { color: errorColor }]}>{error || 'This history entry is unavailable.'}</Text>
@@ -103,6 +104,7 @@ export function BookingHistoryDetailsScreen({ navigation, route }: BookingHistor
           <DetailRow label="Coordinates" value={event.latitude.toFixed(5) + ', ' + event.longitude.toFixed(5)} />}
         {host?.username && <DetailRow label="Host" value={'@' + host.username + (hostName ? ' (' + hostName + ')' : '')} />}
         <DetailRow label="History section" value={booking.attending ? 'Attended' : 'Interested'} />
+        {booking.attending && event.status !== 'cancelled' && <EventRatingForm eventId={event.id} />}
         <Text style={[styles.section, { color: colors.text }]}>About this event</Text>
         <Text style={[styles.description, { color: colors.muted }]}>{event.description}</Text>
         <PhotoCollection photos={event.photos ?? []} fallbackUri={event.bannerImage} title={event.title}

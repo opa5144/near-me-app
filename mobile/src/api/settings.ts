@@ -1,5 +1,6 @@
 import { isAxiosError } from 'axios';
 import { api } from './client';
+import type { ChannelChoices, TypeChannelChoices } from './notifications';
 
 export interface CitySuggestion {
   placeId: string;
@@ -40,6 +41,8 @@ export type NotificationSettings = Record<NotificationKey, boolean>;
 export interface NotificationsResponse {
   settings: NotificationSettings;
   contacts: { email: string; phone: string };
+  channels: ChannelChoices;
+  typeChannels: TypeChannelChoices;
 }
 
 interface SettingsErrorResponse {

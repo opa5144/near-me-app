@@ -64,9 +64,12 @@ function parseEventTimestamp(value, label = 'Timestamp') {
 }
 
 // Convert untrusted JSON into allowed database fields without copying arbitrary properties.
-function parseCreateEvent(body) {
+function parseCreateEvent(body, { existingEvent } = {}) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     throw new EventInputError('Please submit an event object.');
+  }
+  if (['status', 'cancelledAt', 'cancellationReason', 'notificationVersion'].some(field => Object.prototype.hasOwnProperty.call(body, field))) {
+    throw new EventInputError('Use the event cancellation action to cancel an event.');
   }
   const title = requiredText(body.title, 'Title', 150);
   const description = requiredText(body.description, 'Description', 10000);
@@ -85,6 +88,16 @@ function parseCreateEvent(body) {
   if (startsAt.getTime() <= Date.now()) throw new EventInputError('The event must start in the future.');
   if (endsAt.getTime() - startsAt.getTime() < 30 * 60 * 1000) {
     throw new EventInputError('The event must last at least 30 minutes.');
+  }
+  let registrationClosesAt;
+  if (Object.prototype.hasOwnProperty.call(body, 'registrationClosesAt')) {
+    registrationClosesAt = body.registrationClosesAt === null
+      ? null : parseEventTimestamp(body.registrationClosesAt, 'Registration closing time');
+  } else {
+    registrationClosesAt = existingEvent?.registrationClosesAt ? new Date(existingEvent.registrationClosesAt) : null;
+  }
+  if (registrationClosesAt && (!Number.isFinite(registrationClosesAt.getTime()) || registrationClosesAt > startsAt)) {
+    throw new EventInputError('Registration closing time cannot be after the event starts. Choose an earlier deadline.');
   }
   // Confirm the stored display timezone is recognized independently of the server's zone.
   if (typeof body.timeZone !== 'string') throw new EventInputError('A timezone is required.');
@@ -120,7 +133,7 @@ function parseCreateEvent(body) {
   // Ownership and seed keys are deliberately omitted; the route assigns the authenticated host.
   return {
     title, description, address, place, categories,
-    price: Number(body.price.toFixed(2)), startsAt, endsAt, timeZone: body.timeZone,
+    price: Number(body.price.toFixed(2)), startsAt, endsAt, registrationClosesAt, timeZone: body.timeZone,
     placeId: typeof body.placeId === 'string' ? body.placeId.slice(0, 500) : null,
     latitude: hasLatitude ? body.latitude : null,
     longitude: hasLongitude ? body.longitude : null,
@@ -181,6 +194,10 @@ function toEventItem(event, apiBaseUrl, photoDocuments = [], audience) {
     priceAmount,
     startsAt: start.toISOString(),
     endsAt: end.toISOString(),
+    status: event.status === 'cancelled' ? 'cancelled' : 'published',
+    cancelledAt: event.cancelledAt ? new Date(event.cancelledAt).toISOString() : null,
+    cancellationReason: event.cancellationReason || '',
+    registrationClosesAt: new Date(event.registrationClosesAt || event.startsAt).toISOString(),
     timeZone,
     address: event.address,
     place: event.place,

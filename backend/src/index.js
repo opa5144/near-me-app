@@ -14,6 +14,10 @@ const userRoutes = require('./routes/users');
 const settingsRoutes = require('./routes/settings');
 const eventSelectionRoutes = require('./routes/eventSelections');
 const storeRoutes = require('./routes/stores');
+const notificationRoutes = require('./routes/notifications');
+const notificationDeviceRoutes = require('./routes/notificationDevices');
+const organizerFollowRoutes = require('./routes/organizerFollows');
+const { initializeNotificationModels, startNotificationWorker } = require('./workers/notificationWorker');
 
 const app = express();
 app.use(cors());
@@ -29,6 +33,9 @@ app.use('/api/users', userRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/event-selections', eventSelectionRoutes);
 app.use('/api/stores', storeRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/notification-devices', notificationDeviceRoutes);
+app.use('/api/organizer-follows', organizerFollowRoutes);
 
 // Turn JSON parsing failures into readable API responses before handling other errors.
 app.use((err, req, res, next) => {
@@ -50,13 +57,39 @@ async function startServer() {
     process.exitCode = 1;
     return;
   }
+  let worker;
   try {
     await mongoose.connect(process.env.MONGO_URI);
+    await initializeNotificationModels();
     console.log('MongoDB Connected');
+    worker = startNotificationWorker();
     const port = process.env.PORT || 5000;
-    app.listen(port, () => console.log('Server running on port ' + port));
+    const server = app.listen(port, () => console.log('Server running on port ' + port));
+    let closing = false;
+    const shutdown = async () => {
+      if (closing) return;
+      closing = true;
+      // Stop accepting requests; finish leased work before closing Atlas.
+      const httpClosed = new Promise(resolve => server.close(resolve));
+      await worker.stop();
+      await httpClosed;
+      await mongoose.disconnect();
+    };
+    const handleShutdown = () => shutdown().catch(error => {
+      console.error('Server shutdown failed:', error.name);
+      process.exitCode = 1;
+    });
+    process.once('SIGINT', handleShutdown);
+    process.once('SIGTERM', handleShutdown);
+    server.on('error', error => {
+      console.error('HTTP server failed:', error.name);
+      process.exitCode = 1;
+      handleShutdown();
+    });
   } catch (err) {
-    console.error('MongoDB connection failed:', err.name);
+    if (worker) await worker.stop();
+    await mongoose.disconnect();
+    console.error('Backend startup failed:', err.name);
     process.exitCode = 1;
   }
 }

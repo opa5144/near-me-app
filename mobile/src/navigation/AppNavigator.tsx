@@ -14,6 +14,8 @@ import { ScreenContainer } from '../components/ScreenContainer';
 
 import { useTheme } from '../context/ThemeContext';
 import { EventsProvider, useEvents } from '../context/EventsContext';
+import { NotificationsProvider } from '../context/NotificationsContext';
+import type { NotificationAction } from '../api/notifications';
 
 import { fetchEvent } from '../api/events';
 import type { EventItem } from '../data/events';
@@ -40,6 +42,8 @@ import { PreferencesScreen } from '../screens/settings/PreferencesScreen';
 import { NotificationsScreen } from '../screens/settings/NotificationsScreen';
 import { DisplayScreen } from '../screens/settings/DisplayScreen';
 import { AboutScreen } from '../screens/settings/AboutScreen';
+import { NotificationInboxScreen } from '../screens/settings/NotificationInboxScreen';
+import { RateEventScreen } from '../screens/event/RateEventScreen';
 
 export type RootStackParamList = {
   MainTabs: undefined;
@@ -47,12 +51,21 @@ export type RootStackParamList = {
   EventHostDetail: { eventId: string };
   EditEvent: { eventId: string };
   StoreDetails: { storeId: string };
+  NotificationInbox: undefined;
+  RateEvent: { eventId: string };
 };
 
 const Tab = createBottomTabNavigator();
 const ProfileStack = createNativeStackNavigator();
 const HostStack = createNativeStackNavigator();
 const RootStack = createNativeStackNavigator<RootStackParamList>();
+
+// Inbox content supplies IDs, never arbitrary navigation routes or URLs.
+function openNotificationAction(navigation: any, action: NotificationAction) {
+  if (typeof action.eventId !== 'string' || !/^[a-f0-9]{24}$/i.test(action.eventId)) return;
+  if (action.type === 'OPEN_EVENT') navigation.navigate('EventDetails', { eventId: action.eventId });
+  if (action.type === 'RATE_EVENT') navigation.navigate('RateEvent', { eventId: action.eventId });
+}
 
 function ProfileNavigator() {
   const { colors } = useTheme();
@@ -71,6 +84,7 @@ function ProfileNavigator() {
             <UserProfileScreen
               events={interestedEvents}
               onOpenEvent={event => props.navigation.navigate('EventDetails', { eventId: event.id })}
+              onOpenNotificationAction={action => openNotificationAction(props.navigation, action)}
               {...props}
             />
           </ScreenContainer>
@@ -217,6 +231,7 @@ function TabNavigator() {
                 interestedEvents={plannedEvents}
                 onOpenEvent={event => props.navigation.navigate('EventDetails', { eventId: event.id })}
                 onSeeAll={() => props.navigation.navigate('Search')}
+                onOpenNotifications={() => props.navigation.navigate('NotificationInbox')}
               />
             </ScreenContainer>
           </EventsStatus>
@@ -425,6 +440,7 @@ function EventHostDetailsRoute({ route, navigation }: NativeStackScreenProps<Roo
       onRefresh={() => setAttempt(current => current + 1)}
       refreshing={isLoading}
       refreshError={error}
+      ratingRefreshKey={attempt}
     />
   );
 }
@@ -432,6 +448,21 @@ function EventHostDetailsRoute({ route, navigation }: NativeStackScreenProps<Roo
 function StoreDetailsRoute({ route, navigation }: NativeStackScreenProps<RootStackParamList, 'StoreDetails'>) {
   return <ScreenContainer style={{ paddingHorizontal: 0 }}>
     <StoreDetailsScreen storeId={route.params?.storeId ?? ''}
+      onBack={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MainTabs')} />
+  </ScreenContainer>;
+}
+
+function NotificationInboxRoute({ navigation }: NativeStackScreenProps<RootStackParamList, 'NotificationInbox'>) {
+  return <ScreenContainer style={{ paddingHorizontal: 0 }}>
+    <NotificationInboxScreen
+      onBack={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MainTabs')}
+      onOpenAction={action => openNotificationAction(navigation, action)} />
+  </ScreenContainer>;
+}
+
+function RateEventRoute({ route, navigation }: NativeStackScreenProps<RootStackParamList, 'RateEvent'>) {
+  return <ScreenContainer style={{ paddingHorizontal: 0 }}>
+    <RateEventScreen eventId={route.params?.eventId ?? ''}
       onBack={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MainTabs')} />
   </ScreenContainer>;
 }
@@ -450,6 +481,8 @@ function RootNavigator() {
       <RootStack.Screen name="EventDetails" component={EventDetailsRoute} />
       <RootStack.Screen name="EventHostDetail" component={EventHostDetailsRoute} />
       <RootStack.Screen name="StoreDetails" component={StoreDetailsRoute} />
+      <RootStack.Screen name="NotificationInbox" component={NotificationInboxRoute} />
+      <RootStack.Screen name="RateEvent" component={RateEventRoute} />
       <RootStack.Screen name="EditEvent">
         {props => {
           const route = props.route as { params?: { eventId: string } };
@@ -471,7 +504,9 @@ function RootNavigator() {
 export function AppNavigator() {
   return (
     <EventsProvider>
-      <RootNavigator />
+      <NotificationsProvider>
+        <RootNavigator />
+      </NotificationsProvider>
     </EventsProvider>
   );
 }

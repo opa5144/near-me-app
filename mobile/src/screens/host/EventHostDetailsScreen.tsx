@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Linking, Platform, Pressable, RefreshControl, ScrollView, Share, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { EventItem } from '../../data/events';
@@ -7,19 +7,32 @@ import { PhotoCollection } from '../../components/PhotoCollection';
 import { useTheme } from '../../context/ThemeContext';
 import { FieldError } from '../../components/FieldError';
 import { openEventMaps } from '../../utils/eventMaps';
+import { EventRatingSummary } from '../../components/EventRatingSummary';
 
 // Host details screen modeled after EventDetailsScreen, adding analytics and host management actions.
-export function EventHostDetailsScreen({ event, onEditEvent, onBack, onRefresh, refreshing, refreshError }: {
+export function EventHostDetailsScreen({ event, onEditEvent, onBack, onRefresh, refreshing, refreshError, ratingRefreshKey }: {
   event: EventItem;
   onEditEvent: () => void;
   onBack: () => void;
   onRefresh: () => void;
   refreshing: boolean;
   refreshError: string | null;
+  ratingRefreshKey?: number | string;
 }) {
   const { colors } = useTheme();
   const [mapError, setMapError] = useState<string | null>(null);
   const [openingMap, setOpeningMap] = useState(false);
+  const [hasEnded, setHasEnded] = useState(() => Date.parse(event.endsAt) <= Date.now());
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    function update() {
+      const remaining = Date.parse(event.endsAt) - Date.now();
+      setHasEnded(Number.isFinite(remaining) && remaining <= 0);
+      if (remaining > 0) timer = setTimeout(update, Math.min(remaining, 60000));
+    }
+    update();
+    return () => { if (timer) clearTimeout(timer); };
+  }, [event.endsAt]);
   // These are saved choices across active accounts, not the host's personal flags.
   const interestedCount = event.interestedCount ?? 0;
   const attendingCount = event.attendingCount ?? 0;
@@ -149,6 +162,7 @@ export function EventHostDetailsScreen({ event, onEditEvent, onBack, onRefresh, 
         <AppText style={styles.editButtonText}>Edit Event Details</AppText>
       </Pressable>
 
+      {hasEnded && <EventRatingSummary eventId={event.id} refreshKey={ratingRefreshKey} />}
       <AppText style={[styles.section, { color: colors.text }]}>About event</AppText>
       <AppText style={[styles.description, { color: colors.muted }]}>{event.description}</AppText>
       <PhotoCollection photos={event.photos ?? []} fallbackUri={event.bannerImage} title={event.title}

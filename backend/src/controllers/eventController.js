@@ -84,4 +84,16 @@ async function updateEvent(req, res) {
   }
 }
 
-module.exports = { listEvents, listHostedEvents, getImage, getPhoto, getEvent, createEvent, updateEvent };
+async function cancelEvent(req, res) {
+  try {
+    const event = await events.cancelEvent(getAuthContext(req), req.params.id, req.body, apiBaseUrl(req));
+    res.set('Cache-Control', 'no-store');
+    return res.json({ message: 'Event cancelled.', event });
+  } catch (error) {
+    if (sendServiceError(res, error)) return;
+    console.error('Event cancellation failed:', error.name);
+    return res.status(500).json({ message: 'Unable to cancel your event. Please try again.' });
+  }
+}
+
+module.exports = { listEvents, listHostedEvents, getImage, getPhoto, getEvent, createEvent, updateEvent, cancelEvent };

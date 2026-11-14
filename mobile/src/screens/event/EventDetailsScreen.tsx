@@ -10,6 +10,7 @@ import { PublicProfileScreen } from '../settings/PublicProfileScreen';
 import { fetchUserProfile } from '../../api/client';
 import { FieldError } from '../../components/FieldError';
 import { openEventMaps } from '../../utils/eventMaps';
+import { EventRatingForm } from '../../components/EventRatingForm';
 
 type EventDetailsScreenProps = {
   event: EventItem;
@@ -49,7 +50,8 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
     checkEnd();
     return () => { if (timer) clearTimeout(timer); };
   }, [event.endsAt]);
-  const selectionDisabled = hasEnded || !selectionsReady || selectionsLoading || selectionSaving;
+  const cancelled = event.status === 'cancelled';
+  const selectionDisabled = cancelled || hasEnded || !selectionsReady || selectionsLoading || selectionSaving;
 
   // Modal state for viewing host profile popup
   const [showHostModal, setShowHostModal] = useState(false);
@@ -198,6 +200,9 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
       </View>}
       {selectionsLoading && <AppText style={[styles.selectionNotice, { color: colors.muted }]}>Loading your saved choices...</AppText>}
       {hasEnded && <AppText style={[styles.selectionNotice, { color: colors.muted }]}>This event has ended. Your saved choices are read-only.</AppText>}
+      {cancelled && <AppText accessibilityRole="alert" style={[styles.selectionNotice, { color: errorColor }]}>
+        This event has been cancelled.{event.cancellationReason ? ' ' + event.cancellationReason : ''}
+      </AppText>}
       <View style={styles.selectionRow}>
         <AppButton title={interested ? 'Interested' : "I'm Interested"} onPress={onToggleInterested}
           disabled={selectionDisabled} variant={interested ? 'primary' : 'secondary'} style={styles.selectionButton}
@@ -207,6 +212,7 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
           style={styles.selectionButton} textStyle={styles.selectionButtonText} />
       </View>
       {selectionSaving && <AppText accessibilityLiveRegion="polite" style={{ color: colors.muted, marginBottom: 12 }}>Saving choices...</AppText>}
+      {hasEnded && attending && !cancelled && currentUserId !== hostUserId && <EventRatingForm eventId={event.id} />}
       
       <AppText style={[styles.section, { color: colors.text }]}>About Event</AppText>
       <AppText style={[styles.description, { color: colors.muted }]}>{event.description}</AppText>

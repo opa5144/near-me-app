@@ -2,6 +2,9 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { AppButton } from '../../components/AppButton';
 import { useTheme } from '../../context/ThemeContext';
+import { useRef, useState } from 'react';
+import { logoutUser } from '../../api/client';
+import { useNotifications } from '../../context/NotificationsContext';
 
 const settingSections = [
   {
@@ -21,7 +24,8 @@ const settingSections = [
   {
     title: 'App Settings',
     items: [
-      { id: 'Notifications', icon: '🔔', title: 'Notifications', subtitle: 'Push alerts, email options, calendar sync' },
+      { id: 'NotificationInbox', icon: '📥', title: 'Notification Inbox', subtitle: 'Event updates, reminders, and unread alerts' },
+      { id: 'Notifications', icon: '🔔', title: 'Notification Settings', subtitle: 'Channels and event notification preferences' },
       { id: 'Display', icon: '🎨', title: 'Display & Theme', subtitle: 'System default, light, or dark mode' },
     ],
   },
@@ -35,6 +39,17 @@ const settingSections = [
 
 export function SettingsScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const { unreadCount } = useNotifications();
+  const [loggingOut, setLoggingOut] = useState(false);
+  const pendingLogout = useRef(false);
+
+  async function handleLogout() {
+    if (pendingLogout.current) return;
+    pendingLogout.current = true;
+    setLoggingOut(true);
+    // logoutUser always clears local authentication, which unmounts notification state.
+    try { await logoutUser(); } catch { /* Local sign-out still completed. */ }
+  }
 
   return (
     <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
@@ -49,6 +64,7 @@ export function SettingsScreen({ navigation }: any) {
               key={item.id}
               style={[styles.item, { backgroundColor: colors.surface, borderColor: colors.border }]}
               activeOpacity={0.7}
+              disabled={loggingOut}
               onPress={() => navigation.navigate(item.id)}
             >
               <View style={[styles.iconBox, { backgroundColor: colors.primaryLight }]}><Text style={styles.icon}>{item.icon}</Text></View>
@@ -56,14 +72,17 @@ export function SettingsScreen({ navigation }: any) {
                 <Text style={[styles.title, { color: colors.text }]}>{item.title}</Text>
                 <Text style={[styles.subtitle, { color: colors.muted }]}>{item.subtitle}</Text>
               </View>
+              {item.id === 'NotificationInbox' && unreadCount > 0 && <Text accessibilityLabel={`${unreadCount} unread notifications`}
+                style={[styles.unread, { backgroundColor: colors.primary }]}>{unreadCount > 99 ? '99+' : unreadCount}</Text>}
               <Text style={[styles.arrow, { color: colors.muted }]}>›</Text>
             </TouchableOpacity>
           ))}
         </View>
       ))}
 
-      <TouchableOpacity style={styles.logoutButton} activeOpacity={0.8}>
-        <Text style={styles.logoutText}>Log Out</Text>
+      <TouchableOpacity style={styles.logoutButton} activeOpacity={0.8} accessibilityRole="button"
+        disabled={loggingOut} onPress={() => void handleLogout()}>
+        <Text style={styles.logoutText}>{loggingOut ? 'Signing out...' : 'Log Out'}</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -82,6 +101,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 13, fontWeight: '800' },
   subtitle: { fontSize: 10, marginTop: 3, lineHeight: 14 },
   arrow: { fontSize: 22, fontWeight: '300' },
+  unread: { color: '#FFFFFF', borderRadius: 12, paddingHorizontal: 7, paddingVertical: 3, fontSize: 11, fontWeight: '800' },
   logoutButton: { padding: 14, alignItems: 'center', borderRadius: 14, backgroundColor: '#FFF0F0', borderWidth: 1, borderColor: '#FFD7D7', marginTop: 8, marginBottom: 16 },
   logoutText: { color: '#D93025', fontWeight: '800', fontSize: 13 },
 });

@@ -19,6 +19,13 @@ const eventSchema = new mongoose.Schema({
   price: { type: Number, required: true, min: 0 },
   startsAt: { type: Date, required: true },
   endsAt: { type: Date, required: true },
+  // Missing status on older records means published. Cancellation retains history.
+  status: { type: String, enum: ['published', 'cancelled'], default: 'published', required: true },
+  cancelledAt: { type: Date, default: null },
+  cancellationReason: { type: String, trim: true, maxlength: 500, default: '' },
+  notificationVersion: { type: Number, default: 0, min: 0, validate: Number.isSafeInteger },
+  // Null/absent deadlines follow startsAt; an earlier explicit deadline stays fixed.
+  registrationClosesAt: { type: Date, default: null },
   timeZone: { type: String, required: true },
   address: { type: String, required: true, trim: true, maxlength: 500 },
   place: { type: String, required: true, trim: true, maxlength: 300 },

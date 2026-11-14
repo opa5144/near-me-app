@@ -3,17 +3,20 @@ import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { EventItem } from '../../data/events';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { useTheme } from '../../context/ThemeContext';
+import { NotificationBell } from '../../components/NotificationBell';
 
 export function HomeScreen({
   events,
   interestedEvents,
   onOpenEvent,
-  onSeeAll
+  onSeeAll,
+  onOpenNotifications
 }: {
   events: EventItem[];
   interestedEvents: EventItem[];
   onOpenEvent: (event: EventItem) => void;
   onSeeAll: () => void;
+  onOpenNotifications: () => void;
 }) {
   const { colors } = useTheme();
 
@@ -35,9 +38,10 @@ export function HomeScreen({
       contentContainerStyle={[styles.content, { backgroundColor: colors.background }]}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={[styles.welcome, { color: colors.muted }]}>
-        Welcome back!
-      </Text>
+      <View style={styles.welcomeRow}>
+        <Text style={[styles.welcome, { color: colors.muted }]}>Welcome back!</Text>
+        <NotificationBell onPress={onOpenNotifications} />
+      </View>
 
       <ScreenHeader
         title="Your Dashboard"
@@ -190,6 +194,7 @@ function FeaturedArt({ event }: { event: EventItem }) {
 }
 
 const styles = StyleSheet.create({
+  welcomeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   content: {
     padding: 16,
     paddingBottom: 24,

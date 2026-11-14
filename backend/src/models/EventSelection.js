@@ -6,6 +6,13 @@ const eventSelectionSchema = new mongoose.Schema({
   eventId: { type: mongoose.Schema.Types.ObjectId, ref: 'Event', required: true },
   interested: { type: Boolean, default: false, required: true },
   attending: { type: Boolean, default: false, required: true },
+  // Each transition has a generation, so cancel/re-register can notify again
+  // while retries of the same saved choice cannot create duplicate notifications.
+  registrationVersion: { type: Number, default: 0, min: 0, validate: Number.isSafeInteger },
+  selectionVersion: { type: Number, default: 0, min: 0, validate: Number.isSafeInteger },
+  registeredAt: { type: Date, default: null },
+  cancelledAt: { type: Date, default: null },
+  savedAt: { type: Date, default: null },
 }, { timestamps: true, collection: 'EventSelections' });
 
 eventSelectionSchema.index({ userId: 1, eventId: 1 }, { unique: true });

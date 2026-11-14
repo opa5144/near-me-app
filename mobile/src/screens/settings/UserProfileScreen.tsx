@@ -12,9 +12,16 @@ import { EventItem } from '../../data/events';
 import { EventCard } from '../../components/EventCard';
 import { fetchBookingHistory } from '../../api/events';
 import type { BookingHistoryItem } from '../../api/events';
+import type { NotificationAction } from '../../api/notifications';
+import { NotificationInbox } from '../../components/NotificationInbox';
+import { useNotifications } from '../../context/NotificationsContext';
 
-export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigation: any; events: EventItem[]; onOpenEvent: (event: EventItem) => void }) {
+export function UserProfileScreen({ navigation, events, onOpenEvent, onOpenNotificationAction }: {
+  navigation: any; events: EventItem[]; onOpenEvent: (event: EventItem) => void;
+  onOpenNotificationAction?: (action: NotificationAction) => void;
+}) {
   const { colors, theme } = useTheme();
+  const { unreadCount } = useNotifications();
   const attendedErrorColor = theme === 'dark' ? '#FF8A80' : '#C62828';
 
   // User state
@@ -40,10 +47,6 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
   const [friendRequests, setFriendRequests] = useState<any[]>([]);
   const [loadingFriends, setLoadingFriends] = useState(false);
 
-  const [notifications] = useState([
-    { id: '1', title: 'Event Reminder', body: 'Tech Meetup starts tomorrow at 6:00 PM.', time: '2h ago', icon: 'alarm-outline' },
-    { id: '2', title: 'Host Update', body: 'Venue location updated for Jazz Night.', time: '1d ago', icon: 'information-circle-outline' },
-  ]);
   const [directMessages] = useState([
     { id: '1', name: 'Sarah Jenkins', lastMessage: 'Are we heading to the concert together?', time: '10m ago', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330' },
   ]);
@@ -231,7 +234,7 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
         </TouchableOpacity>
         <TouchableOpacity style={[styles.miniCard, { backgroundColor: colors.surface, borderColor: colors.border }]} activeOpacity={0.7} onPress={() => setShowInboxModal(true)}>
           <Ionicons name="chatbubble-ellipses-outline" size={26} color={colors.primary} />
-          <AppText variant="bodyMedium" style={styles.miniCardTitle}>Inbox</AppText>
+          <AppText variant="bodyMedium" style={styles.miniCardTitle}>Inbox{unreadCount > 0 ? ` · ${unreadCount > 99 ? '99+' : unreadCount}` : ''}</AppText>
         </TouchableOpacity>
       </View>
 
@@ -379,23 +382,14 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
           </View>
 
           {inboxSubTab === 'notifications' ? (
-            <FlatList
-              data={notifications}
-              keyExtractor={item => item.id}
-              renderItem={({ item }) => (
-                <View style={[styles.modalItem, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  <Ionicons name={item.icon as any} size={22} color={colors.primary} style={{ marginRight: 8 }} />
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-                      <AppText style={{ fontWeight: '800', color: colors.text }}>{item.title}</AppText>
-                      <AppText style={{ fontSize: 10, color: colors.muted }}>{item.time}</AppText>
-                    </View>
-                    <AppText style={{ fontSize: 12, color: colors.muted, lineHeight: 16 }}>{item.body}</AppText>
-                  </View>
-                </View>
-              )}
-            />
+            <NotificationInbox onOpenAction={action => {
+              setShowInboxModal(false);
+              if (onOpenNotificationAction) onOpenNotificationAction(action);
+              else navigation.navigate(action.type === 'RATE_EVENT' ? 'RateEvent' : 'EventDetails', { eventId: action.eventId });
+            }} />
           ) : (
+            <View style={{ flex: 1 }}>
+            <AppText style={{ color: colors.muted, fontSize: 12, marginBottom: 12 }}>Message preview. Messaging is not connected yet.</AppText>
             <FlatList
               data={directMessages}
               keyExtractor={item => item.id}
@@ -412,6 +406,7 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
                 </View>
               )}
             />
+            </View>
           )}
         </View>
       </Modal>
