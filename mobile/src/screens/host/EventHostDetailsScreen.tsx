@@ -9,6 +9,12 @@ import { useTheme } from '../../context/ThemeContext';
 import { FieldError } from '../../components/FieldError';
 import { openEventMaps } from '../../utils/eventMaps';
 
+function parseEventPrice(price?: string): number {
+  if (!price || price.toLowerCase().includes('free')) return 0;
+  const numeric = parseFloat(price.replace(/[^0-9.]/g, ''));
+  return Number.isFinite(numeric) ? Math.round(numeric) : 0;
+}
+
 // Host details screen modeled after EventDetailsScreen, adding analytics and host management actions.
 export function EventHostDetailsScreen({ event, onEditEvent, onBack, onRefresh, refreshing, refreshError }: {
   event: EventItem;
@@ -18,12 +24,15 @@ export function EventHostDetailsScreen({ event, onEditEvent, onBack, onRefresh, 
   refreshing: boolean;
   refreshError: string | null;
 }) {
-  const { colors } = useTheme();
+  const { colors, theme } = useTheme();
+  const revenueColor = theme === 'dark' ? '#69F0AE' : '#1B873F';
   const [mapError, setMapError] = useState<string | null>(null);
   const [openingMap, setOpeningMap] = useState(false);
+
   // These are saved choices across active accounts, not the host's personal flags.
   const interestedCount = event.interestedCount ?? 0;
   const attendingCount = event.attendingCount ?? 0;
+  const estRevenue = parseEventPrice(event.price) * attendingCount;
 
   // Function to share event details via native share sheet
   const handleShare = async () => {
@@ -46,7 +55,6 @@ export function EventHostDetailsScreen({ event, onEditEvent, onBack, onRefresh, 
     finally { setOpeningMap(false); }
   };
 
-  // Function to open the device's native calendar app with the event details pre-filled
   const handleAddToCalendar = async () => {
     // Build the event times from the saved start/end (assumes event.startsAt / event.endsAt are ISO strings)
     const start = new Date(event.startsAt);
@@ -94,7 +102,7 @@ export function EventHostDetailsScreen({ event, onEditEvent, onBack, onRefresh, 
           <AppText style={{ color: colors.primary }}>Retry</AppText>
         </Pressable>
       </View>}
-      
+     
       <PhotoCollection photos={event.photos ?? []} fallbackUri={event.bannerImage} title={event.title}
         emoji={event.emoji} accent={event.accent} mode="hero" />
       <View style={styles.categoryList}>
@@ -102,9 +110,15 @@ export function EventHostDetailsScreen({ event, onEditEvent, onBack, onRefresh, 
         <AppText style={{ color: colors.muted, fontSize: 11 }}>EVENT • HOST VIEW</AppText>
       </View>
 
-
       {/* Host Analytics Performance Summary */}
       <View style={[styles.metricsContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={styles.metricItem}>
+          <AppText style={[styles.metricValue, { color: revenueColor }]}>
+            {refreshing ? '…' : refreshError ? '—' : `$${estRevenue.toLocaleString()}`}
+          </AppText>
+          <AppText style={[styles.metricLabel, { color: colors.muted }]}>EST. REVENUE</AppText>
+        </View>
+        <View style={[styles.metricDivider, { backgroundColor: colors.border }]} />
         <View style={styles.metricItem}>
           <AppText style={[styles.metricValue, { color: colors.text }]}>{refreshing ? '…' : refreshError ? '—' : attendingCount}</AppText>
           <AppText style={[styles.metricLabel, { color: colors.muted }]}>ATTENDING</AppText>
@@ -127,7 +141,7 @@ export function EventHostDetailsScreen({ event, onEditEvent, onBack, onRefresh, 
           <AppText style={[styles.infoMain, { color: colors.text }]}>{event.date}</AppText>
           <AppText style={[styles.infoSub, { color: colors.muted }]}>{event.time}</AppText>
         </View>
-        <Pressable 
+        <Pressable
           onPress={handleAddToCalendar}
           style={[styles.mapButton, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Ionicons name="calendar" size={14} color={colors.primary} />
@@ -141,7 +155,7 @@ export function EventHostDetailsScreen({ event, onEditEvent, onBack, onRefresh, 
           <AppText style={[styles.infoMain, { color: colors.text }]}>{event.venue}</AppText>
           <AppText style={[styles.infoSub, { color: colors.muted }]}>{event.address || event.location}</AppText>
         </View>
-        <Pressable 
+        <Pressable
           onPress={handleOpenMaps}
           disabled={openingMap}
           style={[styles.mapButton, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -152,7 +166,7 @@ export function EventHostDetailsScreen({ event, onEditEvent, onBack, onRefresh, 
       <FieldError message={mapError} />
 
       {/* Host Action Control */}
-      <Pressable 
+      <Pressable
         onPress={onEditEvent}
         style={[styles.editButton, { backgroundColor: colors.primary }]}>
         <Ionicons name="create-outline" size={18} color="#FFFFFF" />
