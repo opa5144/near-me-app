@@ -7,11 +7,13 @@ import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../context/ThemeContext';
 import { AppButton } from '../../components/AppButton';
 import { AppText } from '../../components/AppText';
-import { fetchUserProfile, fetchFriendsNetwork, respondToFriendRequest, updateUserAvatar } from '../../api/client';
+import { fetchUserProfile, updateUserAvatar } from '../../api/client';
+import { fetchFriendsNetwork, respondToFriendRequest } from '../../api/friends';
 import { EventItem } from '../../data/events';
 import { EventCard } from '../../components/EventCard';
 import { fetchBookingHistory } from '../../api/events';
 import type { BookingHistoryItem } from '../../api/events';
+import { FriendActionButton } from '../../components/FriendActionButton';
 
 export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigation: any; events: EventItem[]; onOpenEvent: (event: EventItem) => void }) {
   const { colors, theme } = useTheme();
@@ -38,6 +40,7 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
 
   const [friends, setFriends] = useState<any[]>([]);
   const [friendRequests, setFriendRequests] = useState<any[]>([]);
+  const [sentRequests, setSentRequests] = useState<any[]>([]);
   const [loadingFriends, setLoadingFriends] = useState(false);
 
   const [notifications] = useState([
@@ -54,15 +57,13 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
     let active = true;
 
     fetchUserProfile(controller.signal)
-      .then((res) => {
-        // A blurred screen must not apply a response from an earlier visit.
+      .then((res: any) => {
         if (!active) return;
-        const profileData: any = res.user;
+        const profileData = res.user;
         setUser(profileData);
 
         const savedAvatar = profileData?.avatarUrl || profileData?.avatar || profileData?.profilePicture;
         if (savedAvatar && typeof savedAvatar === 'string' && savedAvatar.trim() !== '') {
-          // Bypass cached image bytes when loading the saved avatar again.
           setAvatarUri(`${savedAvatar}?t=${Date.now()}`);
         } else {
           setAvatarUri(DEFAULT_AVATAR);
@@ -80,8 +81,6 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
     };
   }, []));
 
-  // Public discovery now excludes ended events. Read past attendance from this
-  // account's private history instead, whenever the Attended tab gains focus.
   useFocusEffect(useCallback(() => {
     if (activeTab !== 'attended') return;
     let active = true;
@@ -106,13 +105,14 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
     };
   }, [activeTab, attendedAttempt]));
 
-  // Fetch real friends & pending requests when modal opens
+  // Fetch real friends, pending requests, and sent requests when modal opens
   const loadFriendsNetwork = async () => {
     try {
       setLoadingFriends(true);
-      const data = await fetchFriendsNetwork();
+      const data: any = await fetchFriendsNetwork();
       setFriends(data.friends || []);
       setFriendRequests(data.pendingRequests || []);
+      setSentRequests(data.sentRequests || []);
     } catch (error: any) {
       console.error('Error fetching friends network:', error.message);
     } finally {
@@ -135,6 +135,14 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
     }
   };
 
+  // Helper to determine accurate initial friendship status from database records
+  const getFriendshipStatus = (targetId: string) => {
+    if (friends.some(f => f.id === targetId)) return 'accepted';
+    if (friendRequests.some(r => r.id === targetId)) return 'pending_received';
+    if (sentRequests.some(s => s.id === targetId)) return 'pending_sent';
+    return 'none';
+  };
+
   const handlePickAvatar = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
@@ -149,17 +157,15 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
     });
     if (!result.canceled && result.assets[0].uri) {
       const newUri = result.assets[0].uri;
-      setAvatarUri(newUri); // Instant UI update
+      setAvatarUri(newUri);
 
       try {
-        const response = await updateUserAvatar(newUri);
+        const response: any = await updateUserAvatar(newUri);
         if (response && response.user && response.user.avatarUrl) {
-          // 👈 Cache-buster added here so updates bypass React Native caching instantly
           setAvatarUri(`${response.user.avatarUrl}?t=${Date.now()}`);
         }
       } catch (error: any) {
         const errorMsg = error.response?.data?.message || error.message || 'Unknown error';
-        console.log('Avatar update error details:', error.response?.data || error.message);
         Alert.alert('Error Saving Avatar', errorMsg); 
       }
     }
@@ -344,10 +350,13 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
                     <AppText style={{ fontWeight: '800', color: colors.text }}>{item.name}</AppText>
                     <AppText style={{ fontSize: 11, color: colors.muted }}>@{item.username}</AppText>
                   </View>
-                  <View style={{ flexDirection: 'row', gap: 6 }}>
-                    <TouchableOpacity onPress={() => handleRequestResponse(item.requestId, 'accept')} style={[styles.modalActionBtn, { backgroundColor: colors.primary }]}>
-                      <AppText style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>Accept</AppText>
-                    </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                    <FriendActionButton
+                      targetUserId={item.id}
+                      initialStatus={getFriendshipStatus(item.id)}
+                      requestId={item.requestId}
+                      onStatusChange={() => loadFriendsNetwork()}
+                    />
                     <TouchableOpacity onPress={() => handleRequestResponse(item.requestId, 'reject')} style={[styles.modalActionBtn, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}>
                       <AppText style={{ color: colors.text, fontSize: 11, fontWeight: '800' }}>Decline</AppText>
                     </TouchableOpacity>

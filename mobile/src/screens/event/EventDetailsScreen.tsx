@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Image, Linking, Platform, Pressable, ScrollView, Share, StyleSheet, View, Modal, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Alert, Image, Linking, Pressable, ScrollView, Share, StyleSheet, View, Modal, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Calendar from 'expo-calendar/legacy';
 import { EventItem } from '../../data/events';
@@ -8,9 +8,13 @@ import { AppText } from '../../components/AppText';
 import { PhotoCollection } from '../../components/PhotoCollection';
 import { useTheme } from '../../context/ThemeContext';
 import { PublicProfileScreen } from '../settings/PublicProfileScreen'; 
-import { fetchUserProfile } from '../../api/client';
+import { fetchUserProfile, fetchFriendsNetwork } from '../../api/client';
 import { FieldError } from '../../components/FieldError';
 import { openEventMaps } from '../../utils/eventMaps';
+import { FriendAvatarStack } from '../../components/FriendAvatarStack';
+import { InviteFriendsModal } from '../../components/InviteFriendsModal';
+import { FriendItem } from '../../api/friends';
+import { FriendshipStatus } from '../../components/FriendActionButton';
 
 // Helper to format prices as whole dollars without decimals or cents
 function formatWholeDollarPrice(price?: string | number | null): string {
@@ -35,15 +39,28 @@ type EventDetailsScreenProps = {
   onRetrySelections: () => void;
   onBack: () => void;
   navigation?: any;
+  onInviteFriend?: (friend: FriendItem, eventId: string) => Promise<void> | void;
 };
 
 export function EventDetailsScreen({ event, interested, attending, onToggleInterested, onToggleAttending,
   selectionsLoading, selectionsReady, selectionSaving, selectionError, onRetrySelections,
-  onBack, navigation }: EventDetailsScreenProps) {
+  onBack, navigation, onInviteFriend }: EventDetailsScreenProps) {
   const { colors, theme } = useTheme();
   const errorColor = theme === 'dark' ? '#FF8A80' : '#C62828';
   const [mapError, setMapError] = useState<string | null>(null);
   const [openingMap, setOpeningMap] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  
+  // Store full friend network so host relationship is ready before opening modal
+  const [friendNetwork, setFriendNetwork] = useState<{
+    friends: FriendItem[];
+    pendingRequests: any[];
+    sentRequests: any[];
+  }>({
+    friends: [],
+    pendingRequests: [],
+    sentRequests: [],
+  });
   
   // A screen left open becomes read-only as soon as the saved end time passes.
   const [hasEnded, setHasEnded] = useState(() => {
@@ -62,6 +79,23 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
   }, [event.endsAt]);
   const selectionDisabled = hasEnded || !selectionsReady || selectionsLoading || selectionSaving;
 
+  // Fetch friends, incoming requests, and sent requests on mount
+  const loadFriendNetwork = () => {
+    fetchFriendsNetwork()
+      .then((res: any) => {
+        setFriendNetwork({
+          friends: res.friends || [],
+          pendingRequests: res.pendingRequests || [],
+          sentRequests: res.sentRequests || [],
+        });
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    loadFriendNetwork();
+  }, [event.id]);
+
   // Modal state for viewing host profile popup
   const [showHostModal, setShowHostModal] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -75,7 +109,6 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
       })
       .catch(() => {});
   }, []);
-
 
   const handleShare = async () => {
     try {
@@ -97,7 +130,6 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
   };
 
   const handleAddToCalendar = async () => {
-    // Build the event times from the saved start/end (assumes event.startsAt / event.endsAt are ISO strings)
     const start = new Date(event.startsAt);
     const end = new Date(event.endsAt);
     const hasTimes = Number.isFinite(start.getTime()) && Number.isFinite(end.getTime());
@@ -105,7 +137,6 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
 
     try {
       if (hasTimes) {
-        // Opens the native calendar's "new event" screen pre-filled; user only has to press Add/Save
         await Calendar.createEventInCalendarAsync({
           title: event.title,
           notes: event.description,
@@ -114,7 +145,6 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
           endDate: end,
         });
       } else {
-        // Fallback if the saved times can't be parsed: Google Calendar template link
         const title = encodeURIComponent(event.title);
         const details = encodeURIComponent(event.description);
         const loc = encodeURIComponent(location);
@@ -127,11 +157,43 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
   };
 
   const hostUserId = (event.hostId as any)?._id || (event.hostId as any)?.id || event.hostId;
-  const hostObject = typeof event.hostId === 'object' ? event.hostId : null;
+
+  // Compute exact relationship status with the host before opening the modal
+  const getHostRelationship = (): {
+    status: FriendshipStatus;
+    requestId?: string;
+    isFriend: boolean;
+  } => {
+    if (!hostUserId) return { status: 'none', isFriend: false };
+    const targetId = String(hostUserId);
+
+    const matchedFriend = friendNetwork.friends.find(f => String(f.id) === targetId);
+    if (matchedFriend) {
+      return { status: 'accepted', isFriend: true };
+    }
+
+    const matchedReceived = friendNetwork.pendingRequests.find(r => String(r.id) === targetId);
+    if (matchedReceived) {
+      return {
+        status: 'pending_received',
+        requestId: matchedReceived.requestId,
+        isFriend: false,
+      };
+    }
+
+    const matchedSent = friendNetwork.sentRequests.find(s => String(s.id) === targetId);
+    if (matchedSent) {
+      return { status: 'pending_sent', isFriend: false };
+    }
+
+    return { status: 'none', isFriend: false };
+  };
+
+  const hostRelationship = getHostRelationship();
 
   // Handle host row click: If it's your own event, go straight to your profile tab. Otherwise, open the modal.
   const handlePressHost = () => {
-    if (currentUserId && hostUserId && currentUserId === hostUserId) {
+    if (currentUserId && hostUserId && String(currentUserId) === String(hostUserId)) {
       if (navigation) {
         navigation.navigate('MainTabs', { screen: 'Profile' });
       }
@@ -144,9 +206,18 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
     <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]}>
       <View style={styles.topBar}>
         <AppText onPress={onBack} style={[styles.back, { color: colors.primary }]}>‹  Back to events</AppText>
-        <Pressable onPress={handleShare} style={[styles.shareButton, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Ionicons name="share-social-outline" size={16} color={colors.primary} />
-        </Pressable>
+        <View style={styles.topBarActions}>
+          <Pressable
+            onPress={() => setShowInviteModal(true)}
+            style={[styles.invitePillButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          >
+            <Ionicons name="person-add-outline" size={14} color={colors.primary} />
+            <AppText style={[styles.invitePillText, { color: colors.primary }]}>Invite</AppText>
+          </Pressable>
+          <Pressable onPress={handleShare} style={[styles.shareButton, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Ionicons name="share-social-outline" size={16} color={colors.primary} />
+          </Pressable>
+        </View>
       </View>
       
       <PhotoCollection photos={event.photos ?? []} fallbackUri={event.bannerImage} title={event.title}
@@ -156,6 +227,8 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
         <AppText style={{ color: colors.muted, fontSize: 11 }}>EVENT</AppText>
       </View>
 
+      {/* Social Proof Avatar Stack */}
+      <FriendAvatarStack friendsAttending={friendNetwork.friends} onPress={() => setShowInviteModal(true)} />
 
       <View style={styles.titleRow}>
         <AppText style={[styles.title, { color: colors.text }]}>{event.title}</AppText>
@@ -238,18 +311,30 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
         visible={showHostModal}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setShowHostModal(false)}
+        onRequestClose={() => {
+          setShowHostModal(false);
+          loadFriendNetwork(); // Refresh network state when closing modal
+        }}
       >
         <View style={[styles.modalWrapper, { backgroundColor: colors.background }]}>
           <View style={styles.modalHeader}>
             <AppText style={[styles.modalTitle, { color: colors.text }]}>Host Profile</AppText>
-            <TouchableOpacity onPress={() => setShowHostModal(false)} style={styles.closeBtn}>
+            <TouchableOpacity
+              onPress={() => {
+                setShowHostModal(false);
+                loadFriendNetwork();
+              }}
+              style={styles.closeBtn}
+            >
               <Ionicons name="close-circle" size={28} color={colors.muted} />
             </TouchableOpacity>
           </View>
           <PublicProfileScreen
             publicUser={event.hostId}
             events={[]}
+            initialFriendshipStatus={hostRelationship.status}
+            pendingRequestId={hostRelationship.requestId}
+            isFriend={hostRelationship.isFriend}
             onOpenEvent={(e) => {
               setShowHostModal(false);
               if (navigation) navigation.navigate('EventDetails', { eventId: e.id });
@@ -257,6 +342,18 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
           />
         </View>
       </Modal>
+
+      {/* --- IN-APP FRIEND INVITES MODAL --- */}
+      <InviteFriendsModal
+        visible={showInviteModal}
+        eventTitle={event.title}
+        onClose={() => setShowInviteModal(false)}
+        onSendInvite={async (friend) => {
+          if (onInviteFriend) {
+            await onInviteFriend(friend, event.id);
+          }
+        }}
+      />
     </ScrollView>
   );
 }
@@ -264,7 +361,10 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
 const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 28, flexGrow: 1 },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 13 },
+  topBarActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   back: { fontWeight: '800', fontSize: 13 },
+  invitePillButton: { height: 34, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  invitePillText: { fontSize: 12, fontWeight: '800' },
   shareButton: { width: 34, height: 34, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   categoryList: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 12 },
   photoCategory: { fontSize: 11, fontWeight: '700', borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },

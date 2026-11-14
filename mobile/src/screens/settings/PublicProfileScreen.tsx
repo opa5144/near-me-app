@@ -5,20 +5,76 @@ import { useTheme } from '../../context/ThemeContext';
 import { AppText } from '../../components/AppText';
 import { EventItem } from '../../data/events';
 import { EventCard } from '../../components/EventCard';
+import { FriendActionButton, FriendshipStatus } from '../../components/FriendActionButton';
+import { fetchFriendsNetwork } from '../../api/friends';
 
-export function PublicProfileScreen({ publicUser, events, onOpenEvent, onSendFriendRequest, isFriend }: { publicUser: any; events: EventItem[]; onOpenEvent: (event: EventItem) => void; onSendFriendRequest?: (userId: string) => void; isFriend?: boolean }) {
+export function PublicProfileScreen({
+  publicUser,
+  events,
+  onOpenEvent,
+  initialFriendshipStatus,
+  pendingRequestId,
+  isFriend,
+}: {
+  publicUser: any;
+  events: EventItem[];
+  onOpenEvent: (event: EventItem) => void;
+  initialFriendshipStatus?: FriendshipStatus;
+  pendingRequestId?: string;
+  isFriend?: boolean;
+}) {
   const { colors } = useTheme();
-
   const [activeTab, setActiveTab] = useState<'interested' | 'attended'>('interested');
-  const [requestSent, setRequestSent] = useState(false);
 
   const DEFAULT_AVATAR = 'https://static.vecteezy.com/system/resources/previews/077/167/094/non_2x/simple-icon-of-a-person-with-a-round-head-and-rounded-body-vector.jpg';
 
   const [avatarUri, setAvatarUri] = useState<string>(
-    publicUser?.avatarUrl && publicUser.avatarUrl.trim() !== '' 
-      ? publicUser.avatarUrl 
+    publicUser?.avatarUrl && publicUser.avatarUrl.trim() !== ''
+      ? publicUser.avatarUrl
       : DEFAULT_AVATAR
   );
+
+  // Live relationship status state
+  const [resolvedStatus, setResolvedStatus] = useState<FriendshipStatus>(
+    initialFriendshipStatus ?? (isFriend ? 'accepted' : 'none')
+  );
+  const [activeRequestId, setActiveRequestId] = useState<string | undefined>(pendingRequestId);
+
+  // Fetch live network status on mount so sent/accepted states are accurate
+  useEffect(() => {
+    let active = true;
+    const checkStatus = async () => {
+      if (!publicUser?._id) return;
+      try {
+        const network: any = await fetchFriendsNetwork();
+        if (!active) return;
+
+        const targetId = String(publicUser._id);
+
+        const matchedFriend = (network.friends || []).find((f: any) => String(f.id) === targetId);
+        const matchedReceived = (network.pendingRequests || []).find((r: any) => String(r.id) === targetId);
+        const matchedSent = (network.sentRequests || []).find((s: any) => String(s.id) === targetId);
+
+        if (matchedFriend) {
+          setResolvedStatus('accepted');
+        } else if (matchedReceived) {
+          setResolvedStatus('pending_received');
+          setActiveRequestId(matchedReceived.requestId);
+        } else if (matchedSent) {
+          setResolvedStatus('pending_sent');
+        } else {
+          setResolvedStatus(initialFriendshipStatus ?? 'none');
+        }
+      } catch (err: any) {
+        console.log('Full 500 error details:', err.response?.data || err.message);
+      }
+    };
+
+    checkStatus();
+    return () => {
+      active = false;
+    };
+  }, [publicUser?._id]);
 
   useEffect(() => {
     if (publicUser?.avatarUrl && publicUser.avatarUrl.trim() !== '') {
@@ -30,16 +86,7 @@ export function PublicProfileScreen({ publicUser, events, onOpenEvent, onSendFri
 
   const today = new Date();
   const interestedEvents = events || [];
-  // Compare the real end timestamp; event.date is a formatted display label.
   const attendedEvents = interestedEvents.filter(e => new Date(e.endsAt) < today);
-
-  const handleFriendPress = () => {
-    if (isFriend || requestSent) return;
-    setRequestSent(true);
-    if (onSendFriendRequest && publicUser?._id) {
-      onSendFriendRequest(publicUser._id);
-    }
-  };
 
   return (
     <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
@@ -51,18 +98,18 @@ export function PublicProfileScreen({ publicUser, events, onOpenEvent, onSendFri
         </View>
         <AppText variant="headerMedium" style={styles.userName}>{displayName}</AppText>
         <AppText variant="bodyMedium" color={colors.muted} style={styles.userLocation}>{publicUser?.username ? `@${publicUser.username}` : 'Erie, United States'}</AppText>
-        
-        {/* Friend Action Button */}
-        <TouchableOpacity 
-          style={[styles.friendBtn, { backgroundColor: isFriend ? colors.border : (requestSent ? colors.border : colors.primary) }]} 
-          onPress={handleFriendPress}
-          activeOpacity={0.8}
-        >
-          <Ionicons name={isFriend ? "checkmark-circle" : (requestSent ? "time-outline" : "person-add")} size={16} color="#FFF" />
-          <AppText variant="bodyMedium" style={styles.friendBtnText}>
-            {isFriend ? 'Friends' : (requestSent ? 'Request Sent' : 'Add Friend')}
-          </AppText>
-        </TouchableOpacity>
+
+        {/* Stateful Friend Action Control */}
+        {publicUser?._id && (
+          <View style={styles.friendActionContainer}>
+            <FriendActionButton
+              targetUserId={String(publicUser._id)}
+              initialStatus={resolvedStatus}
+              requestId={activeRequestId}
+              onStatusChange={(newStatus) => setResolvedStatus(newStatus)}
+            />
+          </View>
+        )}
       </View>
 
       {/* Tabs Row */}
@@ -99,20 +146,18 @@ export function PublicProfileScreen({ publicUser, events, onOpenEvent, onSendFri
           {attendedEvents.length ? attendedEvents.map(event => <EventCard key={event.id} event={event} horizontal onPress={() => onOpenEvent(event)} />) : <AppText variant="bodyMedium" color={colors.muted} style={styles.empty}>No attended events yet.</AppText>}
         </>
       )}
-
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40, flexGrow: 1 },
-  profileHeader: { alignItems: 'center', marginBottom: 24 },
+  profileHeader: { alignItems: 'center', marginBottom: 20 },
   avatarImage: { width: 94, height: 94, borderRadius: 47 },
   avatarFrame: { borderWidth: 2, borderRadius: 51, padding: 3, marginBottom: 12 },
   userName: { fontWeight: '900', marginBottom: 4, letterSpacing: 0.2 },
   userLocation: { fontWeight: '500', marginBottom: 12 },
-  friendBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20 },
-  friendBtnText: { color: '#FFF', fontWeight: '700' },
+  friendActionContainer: { marginTop: 4 },
   tabsRow: { flexDirection: 'row', borderBottomWidth: 1, marginBottom: 20, gap: 32 },
   tabButton: { paddingBottom: 12, position: 'relative' },
   activeTabText: { fontWeight: '800' },

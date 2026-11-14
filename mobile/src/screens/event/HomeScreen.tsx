@@ -3,6 +3,7 @@ import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { EventItem } from '../../data/events';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { useTheme } from '../../context/ThemeContext';
+import { FriendAvatarStack } from '../../components/FriendAvatarStack';
 
 // Helper to format prices as whole dollars without decimals or cents
 function formatWholeDollarPrice(price?: string | number | null): string {
@@ -39,6 +40,7 @@ export function HomeScreen({
   }, [interestedEvents]);
 
   const topPicks = events.slice(0, 4);
+  const nextEventFriends = (nextEvent as any)?.friendsAttending ?? [];
 
   return (
     <ScrollView
@@ -89,6 +91,12 @@ export function HomeScreen({
               {nextEvent.venue}
             </Text>
 
+            {nextEventFriends.length > 0 && (
+              <View style={styles.friendStackRow}>
+                <FriendAvatarStack friendsAttending={nextEventFriends} />
+              </View>
+            )}
+
             <Text
               onPress={() => onOpenEvent(nextEvent)}
               style={[styles.detailsLink, { color: colors.primary }]}
@@ -136,36 +144,45 @@ export function HomeScreen({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.featured}
       >
-        {topPicks.map(event => (
-          <View
-            key={event.id}
-            style={[styles.featuredCard, {
-              backgroundColor: colors.surface,
-              borderColor: colors.border
-            }]}
-          >
-            <FeaturedArt event={event} />
-
-            <Text
-              style={[styles.featuredTitle, { color: colors.text }]}
-              numberOfLines={2}
+        {topPicks.map(event => {
+          const pickFriends = (event as any).friendsAttending ?? [];
+          return (
+            <View
+              key={event.id}
+              style={[styles.featuredCard, {
+                backgroundColor: colors.surface,
+                borderColor: colors.border
+              }]}
             >
-              {event.title}
-            </Text>
+              <FeaturedArt event={event} />
 
-            <Text style={[styles.featuredMeta, { color: colors.muted }]}>
-              {event.date}
-            </Text>
-            <Text style={[styles.tilePrice, { color: colors.primary }]}>{formatWholeDollarPrice(event.price)}</Text>
+              <Text
+                style={[styles.featuredTitle, { color: colors.text }]}
+                numberOfLines={2}
+              >
+                {event.title}
+              </Text>
 
-            <Text
-              onPress={() => onOpenEvent(event)}
-              style={[styles.detailsLink, { color: colors.primary }]}
-            >
-              View details →
-            </Text>
-          </View>
-        ))}
+              <Text style={[styles.featuredMeta, { color: colors.muted }]}>
+                {event.date}
+              </Text>
+              <Text style={[styles.tilePrice, { color: colors.primary }]}>{formatWholeDollarPrice(event.price)}</Text>
+
+              {pickFriends.length > 0 && (
+                <View style={styles.friendStackRow}>
+                  <FriendAvatarStack friendsAttending={pickFriends} />
+                </View>
+              )}
+
+              <Text
+                onPress={() => onOpenEvent(event)}
+                style={[styles.detailsLink, { color: colors.primary }]}
+              >
+                View details →
+              </Text>
+            </View>
+          );
+        })}
       </ScrollView>
 
       {!topPicks.length && (
@@ -310,6 +327,7 @@ const styles = StyleSheet.create({
     marginTop: 5
   },
   tilePrice: { fontSize: 12, fontWeight: '800', marginTop: 5, marginBottom: 4 },
+  friendStackRow: { marginTop: 4 },
   detailsLink: {
     fontSize: 11,
     fontWeight: '800',

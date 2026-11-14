@@ -26,7 +26,12 @@ async function sendRequest(req, res) {
 
 async function respondToRequest(req, res) {
   try {
-    const friendship = await friendService.respondToFriendRequest(getAuthContext(req), req.params.requestId, req.body);
+    // Simply pass req.body directly since friendService expects { action }
+    const friendship = await friendService.respondToFriendRequest(
+      getAuthContext(req), 
+      req.params.requestId, 
+      req.body
+    );
     return res.json({ success: true, friendship });
   } catch (error) {
     return sendFriendError(res, error, 'Error updating friend request');

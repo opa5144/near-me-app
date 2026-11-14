@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Linking, Platform, Pressable, RefreshControl, ScrollView, Share, StyleSheet, View } from 'react-native';
+import { Alert, Linking, Pressable, RefreshControl, ScrollView, Share, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Calendar from 'expo-calendar/legacy';
 import { EventItem } from '../../data/events';
@@ -8,6 +8,8 @@ import { PhotoCollection } from '../../components/PhotoCollection';
 import { useTheme } from '../../context/ThemeContext';
 import { FieldError } from '../../components/FieldError';
 import { openEventMaps } from '../../utils/eventMaps';
+import { InviteFriendsModal } from '../../components/InviteFriendsModal';
+import { FriendItem } from '../../api/friends';
 
 // Helper to format prices as whole dollars without decimals or cents
 function formatWholeDollarPrice(price?: string | number | null): string {
@@ -26,18 +28,20 @@ function parseEventPrice(price?: string): number {
 }
 
 // Host details screen modeled after EventDetailsScreen, adding analytics and host management actions.
-export function EventHostDetailsScreen({ event, onEditEvent, onBack, onRefresh, refreshing, refreshError }: {
+export function EventHostDetailsScreen({ event, onEditEvent, onBack, onRefresh, refreshing, refreshError, onInviteFriend }: {
   event: EventItem;
   onEditEvent: () => void;
   onBack: () => void;
   onRefresh: () => void;
   refreshing: boolean;
   refreshError: string | null;
+  onInviteFriend?: (friend: FriendItem, eventId: string) => Promise<void> | void;
 }) {
   const { colors, theme } = useTheme();
   const revenueColor = theme === 'dark' ? '#69F0AE' : '#1B873F';
   const [mapError, setMapError] = useState<string | null>(null);
   const [openingMap, setOpeningMap] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
 
   // These are saved choices across active accounts, not the host's personal flags.
   const interestedCount = event.interestedCount ?? 0;
@@ -99,12 +103,21 @@ export function EventHostDetailsScreen({ event, onEditEvent, onBack, onRefresh, 
     <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh}
         tintColor={colors.primary} colors={[colors.primary]} />}>
-      {/* Top Header Bar with Back Link & Share Button */}
+      {/* Top Header Bar with Back Link, In-App Invite & Share Button */}
       <View style={styles.topBar}>
         <AppText onPress={onBack} style={[styles.back, { color: colors.primary }]}>‹  Back to dashboard</AppText>
-        <Pressable onPress={handleShare} style={[styles.shareButton, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Ionicons name="share-social-outline" size={16} color={colors.primary} />
-        </Pressable>
+        <View style={styles.topBarActions}>
+          <Pressable
+            onPress={() => setShowInviteModal(true)}
+            style={[styles.invitePillButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          >
+            <Ionicons name="person-add-outline" size={14} color={colors.primary} />
+            <AppText style={[styles.invitePillText, { color: colors.primary }]}>Invite</AppText>
+          </Pressable>
+          <Pressable onPress={handleShare} style={[styles.shareButton, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Ionicons name="share-social-outline" size={16} color={colors.primary} />
+          </Pressable>
+        </View>
       </View>
       {refreshError && <View style={{ marginBottom: 12 }}>
         <AppText accessibilityRole="alert" style={{ color: colors.text }}>{refreshError}</AppText>
@@ -112,7 +125,7 @@ export function EventHostDetailsScreen({ event, onEditEvent, onBack, onRefresh, 
           <AppText style={{ color: colors.primary }}>Retry</AppText>
         </Pressable>
       </View>}
-     
+
       <PhotoCollection photos={event.photos ?? []} fallbackUri={event.bannerImage} title={event.title}
         emoji={event.emoji} accent={event.accent} mode="hero" />
       <View style={styles.categoryList}>
@@ -187,6 +200,18 @@ export function EventHostDetailsScreen({ event, onEditEvent, onBack, onRefresh, 
       <AppText style={[styles.description, { color: colors.muted }]}>{event.description}</AppText>
       <PhotoCollection photos={event.photos ?? []} fallbackUri={event.bannerImage} title={event.title}
         emoji={event.emoji} accent={event.accent} mode="gallery" />
+
+      {/* Direct In-App Friend Invites */}
+      <InviteFriendsModal
+        visible={showInviteModal}
+        eventTitle={event.title}
+        onClose={() => setShowInviteModal(false)}
+        onSendInvite={async (friend) => {
+          if (onInviteFriend) {
+            await onInviteFriend(friend, event.id);
+          }
+        }}
+      />
     </ScrollView>
   );
 }
@@ -194,7 +219,10 @@ export function EventHostDetailsScreen({ event, onEditEvent, onBack, onRefresh, 
 const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 28, flexGrow: 1 },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 13 },
+  topBarActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   back: { fontWeight: '800', fontSize: 13 },
+  invitePillButton: { height: 34, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  invitePillText: { fontSize: 12, fontWeight: '800' },
   shareButton: { width: 34, height: 34, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   categoryList: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 12 },
   photoCategory: { fontSize: 11, fontWeight: '700', borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },

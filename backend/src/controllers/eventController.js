@@ -1,11 +1,28 @@
 const events = require('../services/eventService');
 const { getAuthContext, apiBaseUrl, sendServiceError } = require('./controllerUtils');
+const { getFriendsAttendingByEvents } = require('../services/friendAttendance');
 
 async function listEvents(req, res) {
   try {
     const items = await events.listPublicEvents(apiBaseUrl(req));
+    const currentUserId = req.user && (req.user.id || req.user._id);
+    
+    const friendsMap = await getFriendsAttendingByEvents(
+      currentUserId,
+      items.map(e => e._id || e.id)
+    );
+
+    const enrichedEvents = items.map(event => {
+      const eventId = String(event._id || event.id);
+      return {
+        ...event,
+        id: eventId,
+        friendsAttending: friendsMap.get(eventId) || [],
+      };
+    });
+
     res.set('Cache-Control', 'no-store');
-    return res.json({ events: items });
+    return res.json({ events: enrichedEvents });
   } catch (error) {
     if (sendServiceError(res, error)) return;
     console.error('Event list failed:', error.name);
@@ -15,8 +32,25 @@ async function listEvents(req, res) {
 
 async function listHostedEvents(req, res) {
   try {
+    const items = await events.listHostedEvents(getAuthContext(req), apiBaseUrl(req));
+    const currentUserId = req.user && (req.user.id || req.user._id);
+
+    const friendsMap = await getFriendsAttendingByEvents(
+      currentUserId,
+      items.map(e => e._id || e.id)
+    );
+
+    const enrichedEvents = items.map(event => {
+      const eventId = String(event._id || event.id);
+      return {
+        ...event,
+        id: eventId,
+        friendsAttending: friendsMap.get(eventId) || [],
+      };
+    });
+
     res.set('Cache-Control', 'no-store');
-    return res.json({ events: await events.listHostedEvents(getAuthContext(req), apiBaseUrl(req)) });
+    return res.json({ events: enrichedEvents });
   } catch (error) {
     if (sendServiceError(res, error)) return;
     return res.status(500).json({ message: 'Unable to load your events.' });
@@ -40,8 +74,19 @@ async function getImage(req, res) {
 async function getEvent(req, res) {
   try {
     const event = await events.getEvent(req.params.id, apiBaseUrl(req));
+    const currentUserId = req.user && (req.user.id || req.user._id);
+    
+    const eventId = String(event._id || event.id);
+    const friendsMap = await getFriendsAttendingByEvents(currentUserId, [eventId]);
+
+    const enrichedEvent = {
+      ...event,
+      id: eventId,
+      friendsAttending: friendsMap.get(eventId) || [],
+    };
+
     res.set('Cache-Control', 'no-store');
-    return res.json({ event });
+    return res.json({ event: enrichedEvent });
   } catch (error) {
     if (sendServiceError(res, error)) return;
     return res.status(500).json({ message: 'Unable to load this event.' });
