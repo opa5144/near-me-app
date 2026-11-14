@@ -9,6 +9,16 @@ import { useTheme } from '../../context/ThemeContext';
 import { FieldError } from '../../components/FieldError';
 import { openEventMaps } from '../../utils/eventMaps';
 
+// Helper to format prices as whole dollars without decimals or cents
+function formatWholeDollarPrice(price?: string | number | null): string {
+  if (price === undefined || price === null) return 'Free';
+  const raw = String(price).trim();
+  if (!raw || raw.toLowerCase().includes('free')) return 'Free';
+  const numeric = parseFloat(raw.replace(/[^0-9.]/g, ''));
+  if (!Number.isFinite(numeric) || numeric <= 0) return 'Free';
+  return `$${Math.round(numeric).toLocaleString()}`;
+}
+
 function parseEventPrice(price?: string): number {
   if (!price || price.toLowerCase().includes('free')) return 0;
   const numeric = parseFloat(price.replace(/[^0-9.]/g, ''));
@@ -132,7 +142,7 @@ export function EventHostDetailsScreen({ event, onEditEvent, onBack, onRefresh, 
 
       <View style={styles.titleRow}>
         <AppText style={[styles.title, { color: colors.text }]}>{event.title}</AppText>
-        <AppText style={[styles.price, { color: colors.primary }]}>{event.price}</AppText>
+        <AppText style={[styles.price, { color: colors.primary }]}>{formatWholeDollarPrice(event.price)}</AppText>
       </View>
 
       <View style={[styles.info, { borderBottomColor: colors.border }]}>

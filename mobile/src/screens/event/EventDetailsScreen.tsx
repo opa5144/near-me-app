@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Image, Linking, Platform, Pressable, ScrollView, Share, StyleSheet, View, Modal, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Calendar from 'expo-calendar/legacy';
@@ -11,6 +11,16 @@ import { PublicProfileScreen } from '../settings/PublicProfileScreen';
 import { fetchUserProfile } from '../../api/client';
 import { FieldError } from '../../components/FieldError';
 import { openEventMaps } from '../../utils/eventMaps';
+
+// Helper to format prices as whole dollars without decimals or cents
+function formatWholeDollarPrice(price?: string | number | null): string {
+  if (price === undefined || price === null) return 'Free';
+  const raw = String(price).trim();
+  if (!raw || raw.toLowerCase().includes('free')) return 'Free';
+  const numeric = parseFloat(raw.replace(/[^0-9.]/g, ''));
+  if (!Number.isFinite(numeric) || numeric <= 0) return 'Free';
+  return `$${Math.round(numeric).toLocaleString()}`;
+}
 
 type EventDetailsScreenProps = {
   event: EventItem;
@@ -149,7 +159,7 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
 
       <View style={styles.titleRow}>
         <AppText style={[styles.title, { color: colors.text }]}>{event.title}</AppText>
-        <AppText style={[styles.price, { color: colors.primary }]}>{event.price}</AppText>
+        <AppText style={[styles.price, { color: colors.primary }]}>{formatWholeDollarPrice(event.price)}</AppText>
       </View>
 
       {/* See event host - Navigates to own profile tab if self, or opens popup modal if other */}

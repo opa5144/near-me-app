@@ -3,6 +3,16 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { EventItem } from '../data/events';
 import { useTheme } from '../context/ThemeContext';
 
+// Helper to ensure prices display as whole dollars without decimals or cents
+function formatWholeDollarPrice(price?: string | number | null): string {
+  if (price === undefined || price === null) return 'Free';
+  const raw = String(price).trim();
+  if (!raw || raw.toLowerCase().includes('free')) return 'Free';
+  const numeric = parseFloat(raw.replace(/[^0-9.]/g, ''));
+  if (!Number.isFinite(numeric) || numeric <= 0) return 'Free';
+  return `$${Math.round(numeric).toLocaleString()}`;
+}
+
 // Reused by event lists. The parent supplies the record and decides where a tap navigates.
 export function EventCard({ event, onPress, horizontal = false, interestedCount, attendingCount }: {
   event: EventItem; onPress: () => void; horizontal?: boolean;
@@ -34,7 +44,7 @@ export function EventCard({ event, onPress, horizontal = false, interestedCount,
           <Text style={[styles.title, { color: colors.text }]} numberOfLines={2}>{event.title}</Text>
         </View>
         <Text style={[styles.meta, { color: colors.primary }]}>{event.date} · {event.time}</Text>
-        <Text style={[styles.price, { color: colors.primary }]}>{event.price}</Text>
+        <Text style={[styles.price, { color: colors.primary }]}>{formatWholeDollarPrice(event.price)}</Text>
         <Text style={[styles.venue, { color: colors.muted }]} numberOfLines={1}>⌖ {event.venue}</Text>
         {interestedCount !== undefined && <Text style={[styles.audience, { color: colors.muted }]}>
           {interestedCount} interested{attendingCount !== undefined ? ` · ${attendingCount} attending` : ''}

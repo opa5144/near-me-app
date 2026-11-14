@@ -4,6 +4,16 @@ import { EventItem } from '../../data/events';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { useTheme } from '../../context/ThemeContext';
 
+// Helper to format prices as whole dollars without decimals or cents
+function formatWholeDollarPrice(price?: string | number | null): string {
+  if (price === undefined || price === null) return 'Free';
+  const raw = String(price).trim();
+  if (!raw || raw.toLowerCase().includes('free')) return 'Free';
+  const numeric = parseFloat(raw.replace(/[^0-9.]/g, ''));
+  if (!Number.isFinite(numeric) || numeric <= 0) return 'Free';
+  return `$${Math.round(numeric).toLocaleString()}`;
+}
+
 export function HomeScreen({
   events,
   interestedEvents,
@@ -73,7 +83,7 @@ export function HomeScreen({
             <Text style={[styles.upcomingMeta, { color: colors.muted }]}>
               {nextEvent.date} · {nextEvent.time}
             </Text>
-            <Text style={[styles.tilePrice, { color: colors.primary }]}>{nextEvent.price}</Text>
+            <Text style={[styles.tilePrice, { color: colors.primary }]}>{formatWholeDollarPrice(nextEvent.price)}</Text>
 
             <Text style={[styles.upcomingMeta, { color: colors.muted }]}>
               {nextEvent.venue}
@@ -146,7 +156,7 @@ export function HomeScreen({
             <Text style={[styles.featuredMeta, { color: colors.muted }]}>
               {event.date}
             </Text>
-            <Text style={[styles.tilePrice, { color: colors.primary }]}>{event.price}</Text>
+            <Text style={[styles.tilePrice, { color: colors.primary }]}>{formatWholeDollarPrice(event.price)}</Text>
 
             <Text
               onPress={() => onOpenEvent(event)}

@@ -13,15 +13,13 @@ interface PriceInputFieldProps {
   disabled?: boolean;
 }
 
-// Keeps digits and a single decimal point, max 2 decimal places
+// Keeps whole digits only (no decimal point or cents)
 const sanitizePrice = (text: string) => {
-  const cleaned = text.replace(/,/g, '.').replace(/[^0-9.]/g, ''); // Some locales type a comma as the decimal
-  const [whole, ...rest] = cleaned.split('.');
-  if (rest.length === 0) return whole.slice(0, 7);
-  return `${whole.slice(0, 7)}.${rest.join('').slice(0, 2)}`;
+  const cleaned = text.replace(/[^0-9]/g, '');
+  return cleaned.slice(0, 7);
 };
 
-export function PriceInputField({ label, price, onPriceChange, placeholder = '0.00', error, onBlur, disabled = false }: PriceInputFieldProps) {
+export function PriceInputField({ label, price, onPriceChange, placeholder = '0', error, onBlur, disabled = false }: PriceInputFieldProps) {
   const { colors } = useTheme();
 
   return (
@@ -36,7 +34,7 @@ export function PriceInputField({ label, price, onPriceChange, placeholder = '0.
           editable={!disabled}
           placeholder={placeholder}
           placeholderTextColor={colors.muted}
-          keyboardType="decimal-pad" // <--- Numeric keyboard with a decimal point
+          keyboardType="number-pad" // <--- Numeric keyboard for whole numbers only
           style={[styles.fieldInputText, { color: colors.text }]}
         />
       </View>
