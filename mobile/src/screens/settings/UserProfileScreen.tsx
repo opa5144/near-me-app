@@ -14,6 +14,7 @@ import { EventCard } from '../../components/EventCard';
 import { fetchBookingHistory } from '../../api/events';
 import type { BookingHistoryItem } from '../../api/events';
 import { FriendActionButton } from '../../components/FriendActionButton';
+import { AcceptRequestCard } from '../../components/AcceptRequestCard';
 
 export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigation: any; events: EventItem[]; onOpenEvent: (event: EventItem) => void }) {
   const { colors, theme } = useTheme();
@@ -51,35 +52,48 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
     { id: '1', name: 'Sarah Jenkins', lastMessage: 'Are we heading to the concert together?', time: '10m ago', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330' },
   ]);
 
-  // Refresh after returning from Account so saved profile changes appear here.
-  useFocusEffect(useCallback(() => {
-    const controller = new AbortController();
-    let active = true;
+  // Refresh profile details and keep friend count accurate upon screen focus
+  useFocusEffect(
+    useCallback(() => {
+      const controller = new AbortController();
+      let active = true;
 
-    fetchUserProfile(controller.signal)
-      .then((res: any) => {
-        if (!active) return;
-        const profileData = res.user;
-        setUser(profileData);
+      fetchUserProfile(controller.signal)
+        .then((res: any) => {
+          if (!active) return;
+          const profileData = res.user;
+          setUser(profileData);
 
-        const savedAvatar = profileData?.avatarUrl || profileData?.avatar || profileData?.profilePicture;
-        if (savedAvatar && typeof savedAvatar === 'string' && savedAvatar.trim() !== '') {
-          setAvatarUri(`${savedAvatar}?t=${Date.now()}`);
-        } else {
+          const savedAvatar = profileData?.avatarUrl || profileData?.avatar || profileData?.profilePicture;
+          if (savedAvatar && typeof savedAvatar === 'string' && savedAvatar.trim() !== '') {
+            setAvatarUri(`${savedAvatar}?t=${Date.now()}`);
+          } else {
+            setAvatarUri(DEFAULT_AVATAR);
+          }
+        })
+        .catch((err) => {
+          if (!active || controller.signal.aborted) return;
+          console.log('Failed to fetch user profile:', err.message);
           setAvatarUri(DEFAULT_AVATAR);
-        }
-      })
-      .catch((err) => {
-        if (!active || controller.signal.aborted) return;
-        console.log('Failed to fetch user profile:', err.message);
-        setAvatarUri(DEFAULT_AVATAR);
-      });
+        });
 
-    return () => {
-      active = false;
-      controller.abort();
-    };
-  }, []));
+      // Silently pre-fetch friends network to keep the badge count accurate instantly
+      void fetchFriendsNetwork()
+        .then(data => {
+          if (active && data?.friends) {
+            setFriends(data.friends);
+          }
+        })
+        .catch(err => {
+          console.log('Failed to pre-fetch friends count:', err.message);
+        });
+
+      return () => {
+        active = false;
+        controller.abort();
+      };
+    }, [])
+  );
 
   useFocusEffect(useCallback(() => {
     if (activeTab !== 'attended') return;
@@ -133,14 +147,6 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Could not process request');
     }
-  };
-
-  // Helper to determine accurate initial friendship status from database records
-  const getFriendshipStatus = (targetId: string) => {
-    if (friends.some(f => f.id === targetId)) return 'accepted';
-    if (friendRequests.some(r => r.id === targetId)) return 'pending_received';
-    if (sentRequests.some(s => s.id === targetId)) return 'pending_sent';
-    return 'none';
   };
 
   const handlePickAvatar = async () => {
@@ -314,7 +320,7 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
               <AppText style={{ fontWeight: '800', color: friendsSubTab === 'friends' ? colors.primary : colors.muted }}>My Friends ({friends.length})</AppText>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setFriendsSubTab('requests')} style={[styles.subTab, friendsSubTab === 'requests' && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}>
-              <AppText style={{ fontWeight: '800', color: friendsSubTab === 'requests' ? colors.primary : colors.muted }}>Requests ({friendRequests.length})</AppText>
+              <AppText style={{ fontWeight: '800', color: friendsSubTab === 'requests' ? colors.primary : colors.muted }}>Friend Requests ({friendRequests.length})</AppText>
             </TouchableOpacity>
           </View>
 
@@ -329,10 +335,10 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
                 <View style={[styles.modalItem, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                   <Image source={{ uri: item.avatar }} style={styles.friendAvatar} />
                   <View style={{ flex: 1 }}>
-                    <AppText style={{ fontWeight: '800', color: colors.text }}>{item.name}</AppText>
-                    <AppText style={{ fontSize: 11, color: colors.muted }}>@{item.username}</AppText>
+                    <AppText style={{ fontWeight: '800', color: colors.text }} numberOfLines={1}>{item.name}</AppText>
+                    <AppText style={{ fontSize: 11, color: colors.muted }} numberOfLines={1}>@{item.username}</AppText>
                   </View>
-                  <TouchableOpacity style={[styles.modalActionBtn, { backgroundColor: colors.primary }]}>
+                  <TouchableOpacity style={[styles.modalActionBtn, { backgroundColor: colors.primary }]} activeOpacity={0.8}>
                     <AppText style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>Message</AppText>
                   </TouchableOpacity>
                 </View>
@@ -344,24 +350,12 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
               keyExtractor={item => item.requestId}
               ListEmptyComponent={<AppText style={{ textAlign: 'center', color: colors.muted, marginTop: 20 }}>No pending friend requests.</AppText>}
               renderItem={({ item }) => (
-                <View style={[styles.modalItem, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  <Image source={{ uri: item.avatar }} style={styles.friendAvatar} />
-                  <View style={{ flex: 1 }}>
-                    <AppText style={{ fontWeight: '800', color: colors.text }}>{item.name}</AppText>
-                    <AppText style={{ fontSize: 11, color: colors.muted }}>@{item.username}</AppText>
-                  </View>
-                  <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-                    <FriendActionButton
-                      targetUserId={item.id}
-                      initialStatus={getFriendshipStatus(item.id)}
-                      requestId={item.requestId}
-                      onStatusChange={() => loadFriendsNetwork()}
-                    />
-                    <TouchableOpacity onPress={() => handleRequestResponse(item.requestId, 'reject')} style={[styles.modalActionBtn, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}>
-                      <AppText style={{ color: colors.text, fontSize: 11, fontWeight: '800' }}>Decline</AppText>
-                    </TouchableOpacity>
-                  </View>
-                </View>
+                <AcceptRequestCard
+                  item={item}
+                  colors={colors}
+                  onAccept={(reqId) => handleRequestResponse(reqId, 'accept')}
+                  onReject={(reqId) => handleRequestResponse(reqId, 'reject')}
+                />
               )}
             />
           )}
