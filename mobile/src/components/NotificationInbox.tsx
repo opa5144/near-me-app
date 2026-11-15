@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,12 +9,27 @@ import { useTheme } from '../context/ThemeContext';
 import { formatEventDate } from '../utils/dateFormat';
 import { AppButton } from './AppButton';
 import { FieldError } from './FieldError';
+import { EventInviteCard } from './EventInviteCard';
+import { EventInvitesPanel } from './EventInvitesPanel';
+import { useEvents } from '../context/EventsContext';
 
 export function NotificationInbox({ onOpenAction }: { onOpenAction: (action: NotificationAction) => void }) {
   const { colors } = useTheme();
+  const { refreshSelections, refreshEvents } = useEvents();
   const { notifications, unreadCount, isLoading, refreshing, loadingMore, hasMore, error, actionError,
     saving, refresh, loadMore, setRead, readAll } = useNotifications();
-  useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
+  const [inviteRefreshGeneration, setInviteRefreshGeneration] = useState(0);
+  // Inbox refreshes include invitations even when their notification channel is off.
+  const refreshInbox = useCallback(() => {
+    setInviteRefreshGeneration(value => value + 1);
+    void refresh();
+  }, [refresh]);
+  useFocusEffect(useCallback(() => { refreshInbox(); }, [refreshInbox]));
+  const inviteIdFor = (item: AppNotification) => item.type === 'EVENT_INVITE' && typeof item.data.inviteId === 'string' &&
+    /^[a-f0-9]{24}$/i.test(item.data.inviteId) ? item.data.inviteId : undefined;
+  const notificationInviteIds = new Set(notifications.map(inviteIdFor).filter((value): value is string => Boolean(value)));
+  const invitationUpdated = () => { refreshInbox(); void refreshSelections(); void refreshEvents(); };
+  const openInvitedEvent = (eventId: string) => onOpenAction({ type: 'OPEN_EVENT', eventId });
 
   async function open(item: AppNotification) {
     const action = notificationAction(item);
@@ -32,8 +47,10 @@ export function NotificationInbox({ onOpenAction }: { onOpenAction: (action: Not
     <FieldError message={actionError} />
     {isLoading ? <ActivityIndicator color={colors.primary} style={styles.loading} /> : <FlatList
       data={notifications} keyExtractor={item => item.id} contentContainerStyle={styles.list}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { void refresh(); }} tintColor={colors.primary} colors={[colors.primary]} />}
-      ListEmptyComponent={!error ? <Text style={[styles.empty, { color: colors.muted }]}>No notifications yet. Your event updates will appear here.</Text> : null}
+      ListHeaderComponent={<EventInvitesPanel notificationInviteIds={notificationInviteIds} refreshGeneration={inviteRefreshGeneration}
+        onUpdated={invitationUpdated} onOpenEvent={openInvitedEvent} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refreshInbox} tintColor={colors.primary} colors={[colors.primary]} />}
+      ListEmptyComponent={!error ? <Text style={[styles.empty, { color: colors.muted }]}>No notifications yet. Your event updates will appear here.</Text> : undefined}
       renderItem={({ item }) => {
         const action = notificationAction(item);
         const created = new Date(item.createdAt);
@@ -46,6 +63,7 @@ export function NotificationInbox({ onOpenAction }: { onOpenAction: (action: Not
           </View>
           <Text style={[styles.message, { color: colors.text }]}>{item.message}</Text>
           <Text style={[styles.time, { color: colors.muted }]}>{timestamp}</Text>
+          {inviteIdFor(item) && <EventInviteCard inviteId={inviteIdFor(item)!} refreshGeneration={inviteRefreshGeneration} onUpdated={invitationUpdated} />}
           <View style={styles.actions}>
             {action && <Pressable accessibilityRole="button" disabled={saving} onPress={() => { void open(item); }} style={styles.action}>
               <Text style={[styles.actionText, { color: colors.primary }]}>{action.type === 'RATE_EVENT' ? 'Rate event' : 'View event'}</Text>
@@ -58,7 +76,7 @@ export function NotificationInbox({ onOpenAction }: { onOpenAction: (action: Not
       }}
       ListFooterComponent={<>
         <FieldError message={error} />
-        {error && <AppButton title="Retry notifications" variant="quiet" onPress={() => { void refresh(); }} />}
+        {error && <AppButton title="Retry notifications" variant="quiet" onPress={refreshInbox} />}
         {hasMore && <AppButton title={loadingMore ? 'Loading...' : 'Load more'} variant="quiet"
           disabled={loadingMore || refreshing || saving} onPress={() => { void loadMore(); }} />}
       </>} />}

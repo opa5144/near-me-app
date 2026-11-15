@@ -2,17 +2,23 @@ import { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { EventItem } from '../data/events';
 import { useTheme } from '../context/ThemeContext';
+import { FriendAvatarStack } from './FriendAvatarStack';
+import { FriendItem } from '../api/friends';
+import { formatEventPrice } from '../utils/eventPrice';
 
 // Reused by event lists. The parent supplies the record and decides where a tap navigates.
-export function EventCard({ event, onPress, horizontal = false, interestedCount, attendingCount }: {
+export function EventCard({ event, onPress, horizontal = false, interestedCount, attendingCount, friendsAttending }: {
   event: EventItem; onPress: () => void; horizontal?: boolean;
   interestedCount?: number; attendingCount?: number;
+  friendsAttending?: FriendItem[];
 }) {
   const { colors } = useTheme();
   // Use the persisted image URL, falling back to the event emoji if loading fails.
   const [imageFailed, setImageFailed] = useState(false);
   // Reset a previous failure when this card is given a different image URL.
   useEffect(() => setImageFailed(false), [event.bannerImage]);
+
+  const goingFriends = friendsAttending ?? event.friendsAttending ?? [];
 
   return (
     <Pressable onPress={onPress} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, horizontal && styles.horizontal]}>
@@ -34,11 +40,16 @@ export function EventCard({ event, onPress, horizontal = false, interestedCount,
           <Text style={[styles.title, { color: colors.text }]} numberOfLines={2}>{event.title}</Text>
         </View>
         <Text style={[styles.meta, { color: colors.primary }]}>{event.date} · {event.time}</Text>
-        <Text style={[styles.price, { color: colors.primary }]}>{event.price}</Text>
+        <Text style={[styles.price, { color: colors.primary }]}>{formatEventPrice(event)}</Text>
         <Text style={[styles.venue, { color: colors.muted }]} numberOfLines={1}>⌖ {event.venue}</Text>
         {interestedCount !== undefined && <Text style={[styles.audience, { color: colors.muted }]}>
           {interestedCount} interested{attendingCount !== undefined ? ` · ${attendingCount} attending` : ''}
         </Text>}
+        {goingFriends.length > 0 && (
+          <View style={styles.friendStackRow}>
+            <FriendAvatarStack friendsAttending={goingFriends} />
+          </View>
+        )}
       </View>
     </Pressable>
   );
@@ -61,4 +72,5 @@ const styles = StyleSheet.create({
   meta: { fontSize: 10, marginTop: 5 },
   venue: { fontSize: 10, marginTop: 4 },
   audience: { fontSize: 10, marginTop: 6 },
+  friendStackRow: { marginTop: 6 },
 });

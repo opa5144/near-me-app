@@ -22,3 +22,13 @@ allprojects {
 
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
+
+// WatermelonDB's Java sources reference BuildConfig.DEBUG. Generate that class
+// explicitly because current Android Gradle plugins disable it for libraries.
+subprojects { subproject ->
+  if (subproject.name == 'nozbe_watermelondb') {
+    subproject.plugins.withId('com.android.library') {
+      subproject.extensions.getByName('android').buildFeatures.buildConfig = true
+    }
+  }
+}

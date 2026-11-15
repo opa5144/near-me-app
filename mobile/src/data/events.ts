@@ -32,6 +32,7 @@ export type EventItem = {
   // Server totals count active accounts, independently of this viewer's own choices.
   interestedCount?: number;
   attendingCount?: number;
+  friendsAttending?: { id: string; name: string; username: string; avatar: string }[];
   hostId?: {
     _id: string;
     username: string;

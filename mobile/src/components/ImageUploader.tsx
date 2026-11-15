@@ -1,66 +1,65 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import type { EditablePhoto } from '../api/photos';
+import { settingsErrorMessage } from '../api/settings';
+import { useTheme } from '../context/ThemeContext';
+import { AppButton } from './AppButton';
+import { FieldError } from './FieldError';
+import { PhotoPickerField } from './PhotoPickerField';
 
-export default function ImageUploader() {
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState('');
-  const fileInputRef = useRef(null);
+export interface ImageUploaderProps {
+  label?: string;
+  disabled?: boolean;
+  // The caller supplies persistence. Selecting a preview alone never uploads it.
+  onUpload?: (photo: EditablePhoto) => void | Promise<void>;
+}
 
-  // 1. Memory Cleanup: Revoke blob URL when preview changes or component unmounts
-  useEffect(() => {
-    return () => {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
-    };
-  }, [previewUrl]);
+// Native single-photo selection, preview and reset, using the shared preparation rules.
+export default function ImageUploader({ label = 'Upload an image', disabled = false, onUpload }: ImageUploaderProps) {
+  const { colors } = useTheme();
+  const [photos, setPhotos] = useState<EditablePhoto[]>([]);
+  const [preparing, setPreparing] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [uploaded, setUploaded] = useState(false);
+  const mounted = useRef(true);
+  const uploadingRef = useRef(false);
+  const preparingRef = useRef(false);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
 
-  // Handle the file selection event
-  const handleImageChange = (event) => {
-    const file = event.target.files[0];
+  function reset() {
+    if (disabled || uploadingRef.current || preparingRef.current) return;
+    setPhotos([]); setError(null); setUploaded(false);
+  }
 
-    if (file && file.type.startsWith('image/')) {
-      setSelectedImage(file);
-
-      // Create object URL (will be cleaned up automatically by useEffect)
-      const fileUrl = URL.createObjectURL(file);
-      setPreviewUrl(fileUrl);
-    } else if (file) {
-      alert('Please select a valid image file.');
-      handleReset();
-    }
-  };
-
-  // 2. Reset input DOM ref so re-selecting the exact same file works properly
-  const handleReset = () => {
-    setSelectedImage(null);
-    setPreviewUrl('');
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const handleUpload = async () => {
-    if (!selectedImage) return;
-
-    const formData = new FormData();
-    formData.append('image', selectedImage);
-
+  async function upload() {
+    const photo = photos[0];
+    if (!onUpload || !photo || disabled || uploadingRef.current || preparingRef.current) return;
+    uploadingRef.current = true;
+    setUploading(true); setError(null); setUploaded(false);
     try {
-      console.log('Ready to upload:', selectedImage.name);
-      // Example POST request:
-      // await fetch('/api/upload', { method: 'POST', body: formData });
-      
-      alert('Upload successful!');
-      handleReset(); // Reset after successful upload
-    } catch (error) {
-      console.error('Upload failed:', error);
-      alert('Upload failed.');
+      await onUpload(photo);
+      if (mounted.current) { setPhotos([]); setUploaded(true); }
+    } catch (reason: unknown) {
+      if (mounted.current) setError(settingsErrorMessage(reason, 'Unable to upload this image. Please try again.'));
+    } finally {
+      uploadingRef.current = false;
+      if (mounted.current) setUploading(false);
     }
-  };
+  }
 
-  return (
-    <div style={{ border: '1px solid #ccc', padding: '20px', borderRadius: '8px', maxWidth: '400px' }}>
-      <h3>Upload an Image</h3>
+  return <View style={styles.container}>
+    <PhotoPickerField label={label} photos={photos} maxPhotos={1}
+      disabled={disabled || uploading} onChange={next => { setPhotos(next); setError(null); setUploaded(false); }}
+      onBusyChange={busy => { preparingRef.current = busy; setPreparing(busy); }} />
+    {photos.length > 0 && <AppButton title="Reset image" variant="quiet" onPress={reset}
+      disabled={disabled || preparing || uploading} />}
+    {onUpload ? <AppButton title={uploading ? 'Uploading...' : 'Upload image'} onPress={() => void upload()}
+      disabled={disabled || preparing || uploading || photos.length === 0} />
+      : <Text style={[styles.note, { color: colors.muted }]}>Photo preview only. Uploading is not connected.</Text>}
+    <FieldError message={error} />
+    {uploaded && <Text accessibilityLiveRegion="polite" style={[styles.note, { color: colors.primary }]}>Image uploaded.</Text>}
+  </View>;
+}
 
-      <input> 
-  </input>
+const styles = StyleSheet.create({ container: { gap: 8 }, note: { fontSize: 12, lineHeight: 18 } });

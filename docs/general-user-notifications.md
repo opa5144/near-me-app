@@ -1,6 +1,6 @@
 # General-user notification backend
 
-This implements all ten notification types in the backend. The later [frontend and event ratings phase](notifications-and-event-ratings.md) connects the inbox/preferences screens and rating actions. Provider accounts, live external delivery, native permission prompts, and push-token registration remain on hold. No live database writes, provider sends, server starts, tests, typechecks, lint, or syntax checks were run during implementation. Review was limited to source and diffs.
+The original backend phase implements ten notification types. The later [frontend and event ratings phase](notifications-and-event-ratings.md) connects the inbox/preferences screens and rating actions. The [merge resolution](merge-resolution-2026-11-14.md) adds `EVENT_INVITE` as an eleventh type and documents subsequent verification and database repair. Provider accounts, live external delivery, native push permission prompts, and push-token registration remain on hold. The original backend phase used source/diff review only; its verification scope is distinct from the later merge work.
 
 ## File workflow
 
@@ -43,6 +43,7 @@ Reading the inbox does not pass through delivery adapters. A background reminder
 | `SAVED_EVENT_REGISTRATION_CLOSING` | 24 hours before registration closes; interested users who are not attending. |
 | `FOLLOWED_ORGANIZER_NEW_EVENT` | Organizer creates an event; users already following that organizer. |
 | `RATE_ATTENDED_EVENT` | 1 hour after end; eligible attending users who have not rated yet. New records open the rating form with a `RATE_EVENT` action. |
+| `EVENT_INVITE` | An accepted friend sends an invitation to an open event; the recipient. Pending/read state, current friendship/block status, active accounts, and event registration cutoff are checked before materialization. |
 
 Attending is the existing registration flag; interested is the existing saved flag. A follow is a directed organizer subscription, separate from friendship. Following now does not backfill previous event announcements.
 
@@ -65,6 +66,8 @@ Dates remain BSON/ISO instants with an event timezone. Human-readable notificati
 
 Existing event/selection models gain cancellation/deadline/version fields and registration/save transition timestamps. Older records are interpreted with published status, zero generations, and registration closing at start. No historical registration confirmations are invented.
 
+The invitation merge adds `EventInvite` in the existing `eventinvites` collection. It stores `eventId`, `senderId`, `recipientId`, pending/accepted/declined status, read state, response time, and timestamps, with a unique event/sender/recipient index. An invitation and its notification outbox job commit together. Accepting a pending invitation and setting the recipient's existing attending selection also commit together, using the normal registration rules and notification triggers. Declining leaves attendance unchanged. Repeating a successful request does not create another invitation or registration transition.
+
 Normal backend startup initializes the new collections and indexes before accepting requests. This implementation did not connect to Atlas or migrate/rewrite existing records.
 
 ## Authenticated APIs
@@ -86,6 +89,10 @@ The logged-in session determines the user. Clients cannot submit another recipie
 | `POST /api/organizer-follows/:organizerId` | Follow an active account; empty body/object. No self-follow. |
 | `DELETE /api/organizer-follows/:organizerId` | Unfollow; empty body/object; 204. |
 | `POST /api/events/:id/cancel` | `{ "reason": "Optional reason" }`; existing event response wrapper. |
+| `POST /api/events/:eventId/invite` | `{ "recipientId": "..." }`; accepted friends only; returns `{invite}`. |
+| `GET /api/events/invites/me` | Latest 30 caller-owned received invitations, with canonical event details. |
+| `GET /api/events/invites/:inviteId` | Recipient-only `{invite}`. |
+| `PATCH /api/events/invites/:inviteId` | `{ "status": "accepted" }`, `{ "status": "declined" }`, or `{ "read": true }`; returns `{invite}`. |
 
 Existing create/update event endpoints accept optional `registrationClosesAt` as an offset-bearing ISO timestamp or `null`. Omitting it on edit preserves an explicit stored deadline. Moving start before that deadline is rejected until the host changes the deadline. `status`, cancellation fields, and notification generations cannot be set through ordinary event payloads.
 
@@ -101,6 +108,8 @@ Example preference update:
 ```
 
 Channel defaults are in-app on, push/email/SMS off. A type choice cannot override a disabled global channel. `emailMaster` and `phoneMaster` still gate email and SMS respectively. Existing attending reminder, saved-event email, and organizer-announcement flags also gate their relevant types. Other legacy settings remain stored for their existing/future features. The old settings endpoint retains its settings/contact response and now also includes channel/type choices. An empty object for a type resets that type to global choices.
+
+`EVENT_INVITE` uses the same global/per-type channel preferences. Received pending invitations remain accessible through their own API and the inbox's invitation panel even when in-app notification delivery is disabled. Reading/responding marks related invite notifications read and suppresses a still-pending unread notification job; reading an invitation does not accept it.
 
 Push registration requires the configured Expo project, allows up to ten active devices per user, replaces an installation's previous token, and transfers a re-registered token to the current user. Removing it or transferring ownership prevents pending deliveries to its previous user. Mobile logout should unregister that installation when frontend integration is added.
 

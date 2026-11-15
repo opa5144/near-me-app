@@ -2,6 +2,8 @@ const User = require('../../models/User');
 const Event = require('../../models/Event');
 const EventSelection = require('../../models/EventSelection');
 const EventRating = require('../../models/EventRating');
+const EventInvite = require('../../models/EventInvite');
+const { areAcceptedFriends } = require('../friendshipAccess');
 const OrganizerFollow = require('../../models/OrganizerFollow');
 const { NOTIFICATION_TYPES, TIMED_TYPES } = require('../../constants/notificationTypes');
 const { getNotificationConfig } = require('../../config/notifications');
@@ -50,6 +52,7 @@ async function loadNotificationContext(job, now = new Date(), { session } = {}) 
   const selected = Boolean(selection?.interested || selection?.attending);
   const cancelled = event.status === 'cancelled';
   let follow = null;
+  let sender = null;
 
   if (TIMED_TYPES.includes(job.type)) {
     const due = instant(notificationOccurrence(job));
@@ -70,6 +73,14 @@ async function loadNotificationContext(job, now = new Date(), { session } = {}) 
     } else if (!selection?.attending || !sameInstant(payload.expectedStartsAt, event.startsAt) || currentTime >= instant(event.startsAt)) {
       return null;
     }
+  } else if (job.type === 'EVENT_INVITE') {
+    if (cancelled || currentTime >= instant(event.registrationClosesAt || event.startsAt) ||
+        typeof payload.inviteId !== 'string' || !/^[a-f0-9]{24}$/i.test(payload.inviteId)) return null;
+    const invite = await read(EventInvite.findOne({ _id: payload.inviteId, eventId: event._id,
+      recipientId: user._id, senderId: job.actorId, status: 'pending', read: { $ne: true } }), session);
+    if (!invite) return null;
+    sender = await read(User.findOne({ _id: invite.senderId, deletedAt: null }).select('_id username'), session);
+    if (!sender || !(await areAcceptedFriends(sender._id, user._id, { session }))) return null;
   } else if (job.type === 'REGISTRATION_CONFIRMED' || job.type === 'REGISTRATION_CANCELLED') {
     // These are committed facts, not assertions of the user's latest status. A
     // later register/cancel cycle must not erase an earlier confirmation/history.
@@ -86,7 +97,7 @@ async function loadNotificationContext(job, now = new Date(), { session } = {}) 
   }
 
   const eventSnapshot = object(payload.eventSnapshot);
-  return { job, payload, user, event, host, selection, follow,
+  return { job, payload, user, event, host, selection, follow, sender,
     eventSnapshot: Object.keys(eventSnapshot).length ? eventSnapshot : event };
 }
 

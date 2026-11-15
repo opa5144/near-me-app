@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { isAxiosError } from 'axios';
 import { View, Share, TouchableOpacity, StyleSheet, Image, ScrollView, Modal, FlatList, Alert, ActivityIndicator } from 'react-native';
@@ -7,7 +7,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../context/ThemeContext';
 import { AppButton } from '../../components/AppButton';
 import { AppText } from '../../components/AppText';
-import { fetchUserProfile, fetchFriendsNetwork, respondToFriendRequest, updateUserAvatar } from '../../api/client';
+import { fetchUserProfile, updateUserAvatar } from '../../api/client';
+import { fetchFriendsNetwork, respondToFriendRequest } from '../../api/friends';
+import type { FriendItem, PendingRequest } from '../../api/friends';
 import { EventItem } from '../../data/events';
 import { EventCard } from '../../components/EventCard';
 import { fetchBookingHistory } from '../../api/events';
@@ -15,6 +17,9 @@ import type { BookingHistoryItem } from '../../api/events';
 import type { NotificationAction } from '../../api/notifications';
 import { NotificationInbox } from '../../components/NotificationInbox';
 import { useNotifications } from '../../context/NotificationsContext';
+import { AcceptRequestCard } from '../../components/AcceptRequestCard';
+import { FieldError } from '../../components/FieldError';
+import { settingsErrorMessage } from '../../api/settings';
 
 export function UserProfileScreen({ navigation, events, onOpenEvent, onOpenNotificationAction }: {
   navigation: any; events: EventItem[]; onOpenEvent: (event: EventItem) => void;
@@ -43,48 +48,79 @@ export function UserProfileScreen({ navigation, events, onOpenEvent, onOpenNotif
   const [friendsSubTab, setFriendsSubTab] = useState<'friends' | 'requests'>('friends');
   const [inboxSubTab, setInboxSubTab] = useState<'notifications' | 'messages'>('notifications');
 
-  const [friends, setFriends] = useState<any[]>([]);
-  const [friendRequests, setFriendRequests] = useState<any[]>([]);
+  const [friends, setFriends] = useState<FriendItem[]>([]);
+  const [friendRequests, setFriendRequests] = useState<PendingRequest[]>([]);
   const [loadingFriends, setLoadingFriends] = useState(false);
+  const [friendsError, setFriendsError] = useState<string | null>(null);
+  const friendRead = useRef<AbortController | null>(null);
+  const friendVersion = useRef(0);
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; ++friendVersion.current; friendRead.current?.abort(); };
+  }, []);
+
+  const loadFriendsNetwork = useCallback(async (silent = false) => {
+    if (!mounted.current) return;
+    const version = ++friendVersion.current;
+    friendRead.current?.abort();
+    const controller = new AbortController();
+    friendRead.current = controller;
+    setLoadingFriends(!silent); setFriendsError(null);
+    try {
+      const data = await fetchFriendsNetwork(controller.signal);
+      if (!mounted.current || version !== friendVersion.current || controller.signal.aborted) return;
+      setFriends(data.friends); setFriendRequests(data.pendingRequests);
+    } catch (reason: unknown) {
+      if (mounted.current && version === friendVersion.current && !controller.signal.aborted) {
+        setFriendsError(settingsErrorMessage(reason, 'Unable to load friends and requests. Please try again.'));
+      }
+    } finally {
+      if (mounted.current && version === friendVersion.current) { setLoadingFriends(false); friendRead.current = null; }
+    }
+  }, []);
 
   const [directMessages] = useState([
     { id: '1', name: 'Sarah Jenkins', lastMessage: 'Are we heading to the concert together?', time: '10m ago', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330' },
   ]);
 
-  // Refresh after returning from Account so saved profile changes appear here.
-  useFocusEffect(useCallback(() => {
-    const controller = new AbortController();
-    let active = true;
+  // Refresh profile details and keep friend count accurate upon screen focus
+  useFocusEffect(
+    useCallback(() => {
+      const controller = new AbortController();
+      let active = true;
 
-    fetchUserProfile(controller.signal)
-      .then((res) => {
-        // A blurred screen must not apply a response from an earlier visit.
-        if (!active) return;
-        const profileData: any = res.user;
-        setUser(profileData);
+      fetchUserProfile(controller.signal)
+        .then((res: any) => {
+          if (!active) return;
+          const profileData = res.user;
+          setUser(profileData);
 
-        const savedAvatar = profileData?.avatarUrl || profileData?.avatar || profileData?.profilePicture;
-        if (savedAvatar && typeof savedAvatar === 'string' && savedAvatar.trim() !== '') {
-          // Bypass cached image bytes when loading the saved avatar again.
-          setAvatarUri(`${savedAvatar}?t=${Date.now()}`);
-        } else {
+          const savedAvatar = profileData?.avatarUrl || profileData?.avatar || profileData?.profilePicture;
+          if (savedAvatar && typeof savedAvatar === 'string' && savedAvatar.trim() !== '') {
+            setAvatarUri(`${savedAvatar}?t=${Date.now()}`);
+          } else {
+            setAvatarUri(DEFAULT_AVATAR);
+          }
+        })
+        .catch((err) => {
+          if (!active || controller.signal.aborted) return;
+          console.log('Failed to fetch user profile:', err.message);
           setAvatarUri(DEFAULT_AVATAR);
-        }
-      })
-      .catch((err) => {
-        if (!active || controller.signal.aborted) return;
-        console.log('Failed to fetch user profile:', err.message);
-        setAvatarUri(DEFAULT_AVATAR);
-      });
+        });
 
-    return () => {
-      active = false;
-      controller.abort();
-    };
-  }, []));
+      // The same loader/revision guards both the count and the open Friends Hub.
+      void loadFriendsNetwork(true);
 
-  // Public discovery now excludes ended events. Read past attendance from this
-  // account's private history instead, whenever the Attended tab gains focus.
+      return () => {
+        active = false;
+        controller.abort();
+        ++friendVersion.current; friendRead.current?.abort();
+      };
+    }, [loadFriendsNetwork])
+  );
+
   useFocusEffect(useCallback(() => {
     if (activeTab !== 'attended') return;
     let active = true;
@@ -109,33 +145,15 @@ export function UserProfileScreen({ navigation, events, onOpenEvent, onOpenNotif
     };
   }, [activeTab, attendedAttempt]));
 
-  // Fetch real friends & pending requests when modal opens
-  const loadFriendsNetwork = async () => {
-    try {
-      setLoadingFriends(true);
-      const data = await fetchFriendsNetwork();
-      setFriends(data.friends || []);
-      setFriendRequests(data.pendingRequests || []);
-    } catch (error: any) {
-      console.error('Error fetching friends network:', error.message);
-    } finally {
-      setLoadingFriends(false);
-    }
-  };
-
   useEffect(() => {
-    if (showFriendsModal) {
-      loadFriendsNetwork();
-    }
-  }, [showFriendsModal]);
+    if (showFriendsModal) void loadFriendsNetwork();
+  }, [showFriendsModal, loadFriendsNetwork]);
 
   const handleRequestResponse = async (requestId: string, action: 'accept' | 'reject') => {
-    try {
-      await respondToFriendRequest(requestId, action);
-      loadFriendsNetwork();
-    } catch (err: any) {
-      Alert.alert('Error', err.message || 'Could not process request');
-    }
+    // The card owns saving/error feedback and supplies the Friendship ID.
+    // Let failures reach it; successful changes refresh both list and counts.
+    await respondToFriendRequest(requestId, action);
+    await loadFriendsNetwork();
   };
 
   const handlePickAvatar = async () => {
@@ -152,17 +170,15 @@ export function UserProfileScreen({ navigation, events, onOpenEvent, onOpenNotif
     });
     if (!result.canceled && result.assets[0].uri) {
       const newUri = result.assets[0].uri;
-      setAvatarUri(newUri); // Instant UI update
+      setAvatarUri(newUri);
 
       try {
-        const response = await updateUserAvatar(newUri);
+        const response: any = await updateUserAvatar(newUri);
         if (response && response.user && response.user.avatarUrl) {
-          // 👈 Cache-buster added here so updates bypass React Native caching instantly
           setAvatarUri(`${response.user.avatarUrl}?t=${Date.now()}`);
         }
       } catch (error: any) {
         const errorMsg = error.response?.data?.message || error.message || 'Unknown error';
-        console.log('Avatar update error details:', error.response?.data || error.message);
         Alert.alert('Error Saving Avatar', errorMsg); 
       }
     }
@@ -311,10 +327,13 @@ export function UserProfileScreen({ navigation, events, onOpenEvent, onOpenNotif
               <AppText style={{ fontWeight: '800', color: friendsSubTab === 'friends' ? colors.primary : colors.muted }}>My Friends ({friends.length})</AppText>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setFriendsSubTab('requests')} style={[styles.subTab, friendsSubTab === 'requests' && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}>
-              <AppText style={{ fontWeight: '800', color: friendsSubTab === 'requests' ? colors.primary : colors.muted }}>Requests ({friendRequests.length})</AppText>
+              <AppText style={{ fontWeight: '800', color: friendsSubTab === 'requests' ? colors.primary : colors.muted }}>Friend Requests ({friendRequests.length})</AppText>
             </TouchableOpacity>
           </View>
 
+          <FieldError message={friendsError} />
+          {friendsError && <AppButton title="Retry friends and requests" variant="quiet"
+            onPress={() => void loadFriendsNetwork()} disabled={loadingFriends} />}
           {loadingFriends ? (
             <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 20 }} />
           ) : friendsSubTab === 'friends' ? (
@@ -326,10 +345,10 @@ export function UserProfileScreen({ navigation, events, onOpenEvent, onOpenNotif
                 <View style={[styles.modalItem, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                   <Image source={{ uri: item.avatar }} style={styles.friendAvatar} />
                   <View style={{ flex: 1 }}>
-                    <AppText style={{ fontWeight: '800', color: colors.text }}>{item.name}</AppText>
-                    <AppText style={{ fontSize: 11, color: colors.muted }}>@{item.username}</AppText>
+                    <AppText style={{ fontWeight: '800', color: colors.text }} numberOfLines={1}>{item.name}</AppText>
+                    <AppText style={{ fontSize: 11, color: colors.muted }} numberOfLines={1}>@{item.username}</AppText>
                   </View>
-                  <TouchableOpacity style={[styles.modalActionBtn, { backgroundColor: colors.primary }]}>
+                  <TouchableOpacity style={[styles.modalActionBtn, { backgroundColor: colors.primary }]} activeOpacity={0.8}>
                     <AppText style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>Message</AppText>
                   </TouchableOpacity>
                 </View>
@@ -341,21 +360,12 @@ export function UserProfileScreen({ navigation, events, onOpenEvent, onOpenNotif
               keyExtractor={item => item.requestId}
               ListEmptyComponent={<AppText style={{ textAlign: 'center', color: colors.muted, marginTop: 20 }}>No pending friend requests.</AppText>}
               renderItem={({ item }) => (
-                <View style={[styles.modalItem, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  <Image source={{ uri: item.avatar }} style={styles.friendAvatar} />
-                  <View style={{ flex: 1 }}>
-                    <AppText style={{ fontWeight: '800', color: colors.text }}>{item.name}</AppText>
-                    <AppText style={{ fontSize: 11, color: colors.muted }}>@{item.username}</AppText>
-                  </View>
-                  <View style={{ flexDirection: 'row', gap: 6 }}>
-                    <TouchableOpacity onPress={() => handleRequestResponse(item.requestId, 'accept')} style={[styles.modalActionBtn, { backgroundColor: colors.primary }]}>
-                      <AppText style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>Accept</AppText>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => handleRequestResponse(item.requestId, 'reject')} style={[styles.modalActionBtn, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}>
-                      <AppText style={{ color: colors.text, fontSize: 11, fontWeight: '800' }}>Decline</AppText>
-                    </TouchableOpacity>
-                  </View>
-                </View>
+                <AcceptRequestCard
+                  item={item}
+                  colors={colors}
+                  onAccept={(reqId) => handleRequestResponse(reqId, 'accept')}
+                  onReject={(reqId) => handleRequestResponse(reqId, 'reject')}
+                />
               )}
             />
           )}

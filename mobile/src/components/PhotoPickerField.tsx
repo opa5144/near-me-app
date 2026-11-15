@@ -15,23 +15,26 @@ export interface PhotoPickerFieldProps {
   onBusyChange?: (busy: boolean) => void;
   error?: string | null;
   onBlur?: (photos: EditablePhoto[]) => void;
+  maxPhotos?: number;
 }
 
-export function PhotoPickerField({ photos, onChange, disabled = false, label = 'Photos', onBusyChange, error, onBlur }: PhotoPickerFieldProps) {
+export function PhotoPickerField({ photos, onChange, disabled = false, label = 'Photos', onBusyChange, error, onBlur, maxPhotos = MAX_PHOTOS }: PhotoPickerFieldProps) {
   const { colors } = useTheme();
+  // Existing event/store forms keep five photos; single-image callers can opt into one.
+  const photoLimit = Number.isInteger(maxPhotos) ? Math.max(1, Math.min(MAX_PHOTOS, maxPhotos)) : MAX_PHOTOS;
   const [busy, setBusy] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
   const busyRef = useRef(false);
   const mounted = useRef(true);
-  const latest = useRef({ photos, onChange, disabled, onBusyChange, onBlur });
-  latest.current = { photos, onChange, disabled, onBusyChange, onBlur };
+  const latest = useRef({ photos, onChange, disabled, onBusyChange, onBlur, photoLimit });
+  latest.current = { photos, onChange, disabled, onBusyChange, onBlur, photoLimit };
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
 
   async function addPhoto() {
-    if (busyRef.current || latest.current.disabled || latest.current.photos.length >= MAX_PHOTOS) return;
+    if (busyRef.current || latest.current.disabled || latest.current.photos.length >= latest.current.photoLimit) return;
     busyRef.current = true;
     setOperationError(null);
     setBusy(true);
@@ -46,7 +49,7 @@ export function PhotoPickerField({ photos, onChange, disabled = false, label = '
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [16, 9], quality: 1 });
       if (result.canceled || !result.assets?.length || !mounted.current) return;
       const prepared = await preparePhoto(result.assets[0].uri);
-      if (mounted.current && latest.current.photos.length < MAX_PHOTOS) {
+      if (mounted.current && latest.current.photos.length < latest.current.photoLimit) {
         const next = [...latest.current.photos, prepared];
         latest.current.onChange(next);
         latest.current.onBlur?.(next);
@@ -74,8 +77,8 @@ export function PhotoPickerField({ photos, onChange, disabled = false, label = '
 
   const blocked = busy || disabled;
   return <View style={styles.container}>
-    <Text style={[styles.label, { color: colors.text }]}>{label} ({photos.length}/{MAX_PHOTOS})</Text>
-    <Text style={[styles.help, { color: colors.muted }]}>Optional. The first photo is the cover. Add up to five photos.</Text>
+    <Text style={[styles.label, { color: colors.text }]}>{label} ({photos.length}/{photoLimit})</Text>
+    <Text style={[styles.help, { color: colors.muted }]}>{photoLimit === 1 ? 'Choose one photo to preview. Remove it to choose another.' : `Optional. The first photo is the cover. Add up to ${photoLimit} photos.`}</Text>
     {photos.map((photo, index) => <View key={photo.id || photo.uri} style={[styles.card, { borderColor: colors.border, backgroundColor: colors.surface }]}>
       <Image source={{ uri: photo.uri }} style={styles.preview} accessibilityLabel={index === 0 ? 'Cover photo' : 'Photo ' + (index + 1)} />
       <View style={styles.controls}>
@@ -97,7 +100,7 @@ export function PhotoPickerField({ photos, onChange, disabled = false, label = '
       </View>
     </View>)}
     {busy && <ActivityIndicator color={colors.primary} style={styles.busy} accessibilityLabel="Preparing photo" />}
-    <AppButton title={busy ? 'Preparing photo...' : 'Add photo'} variant="secondary" onPress={addPhoto} disabled={blocked || photos.length >= MAX_PHOTOS} />
+    <AppButton title={busy ? 'Preparing photo...' : 'Add photo'} variant="secondary" onPress={addPhoto} disabled={blocked || photos.length >= photoLimit} />
     <FieldError message={operationError || error} />
   </View>;
 }

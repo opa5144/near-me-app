@@ -3,7 +3,8 @@ const { getAuthContext, apiBaseUrl, sendServiceError } = require('./controllerUt
 
 function sendFriendError(res, error, fallback) {
   if (sendServiceError(res, error)) return;
-  return res.status(500).json({ message: fallback, error: error.message });
+  console.error('Friend request failed:', error.name);
+  return res.status(500).json({ message: fallback });
 }
 
 async function getNetwork(req, res) {

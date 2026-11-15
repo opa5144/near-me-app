@@ -11,12 +11,27 @@ import { fetchOrganizerFollows, followOrganizer, unfollowOrganizer } from '../..
 import { settingsErrorMessage } from '../../api/settings';
 import { AppButton } from '../../components/AppButton';
 import { FieldError } from '../../components/FieldError';
+import { FriendActionButton } from '../../components/FriendActionButton';
+import { fetchFriendsNetwork, friendshipFromNetwork } from '../../api/friends';
+import type { FriendshipStatus } from '../../api/friends';
 
-export function PublicProfileScreen({ publicUser, events, onOpenEvent, onSendFriendRequest, isFriend }: { publicUser: any; events: EventItem[]; onOpenEvent: (event: EventItem) => void; onSendFriendRequest?: (userId: string) => void; isFriend?: boolean }) {
+export function PublicProfileScreen({
+  publicUser,
+  events,
+  onOpenEvent,
+  initialFriendshipStatus,
+  pendingRequestId,
+  isFriend,
+}: {
+  publicUser: any;
+  events: EventItem[];
+  onOpenEvent: (event: EventItem) => void;
+  initialFriendshipStatus?: FriendshipStatus;
+  pendingRequestId?: string;
+  isFriend?: boolean;
+}) {
   const { colors } = useTheme();
-
   const [activeTab, setActiveTab] = useState<'interested' | 'attended'>('interested');
-  const [requestSent, setRequestSent] = useState(false);
   const userIdValue = publicUser?._id ?? publicUser?.id;
   const userId = typeof userIdValue === 'string' && /^[a-f0-9]{24}$/i.test(userIdValue) ? userIdValue.toLowerCase() : null;
   const [isSelf, setIsSelf] = useState(false);
@@ -78,10 +93,43 @@ export function PublicProfileScreen({ publicUser, events, onOpenEvent, onSendFri
   const DEFAULT_AVATAR = 'https://static.vecteezy.com/system/resources/previews/077/167/094/non_2x/simple-icon-of-a-person-with-a-round-head-and-rounded-body-vector.jpg';
 
   const [avatarUri, setAvatarUri] = useState<string>(
-    publicUser?.avatarUrl && publicUser.avatarUrl.trim() !== '' 
-      ? publicUser.avatarUrl 
+    publicUser?.avatarUrl && publicUser.avatarUrl.trim() !== ''
+      ? publicUser.avatarUrl
       : DEFAULT_AVATAR
   );
+
+  // Live relationship status state
+  const [resolvedStatus, setResolvedStatus] = useState<FriendshipStatus>(
+    initialFriendshipStatus ?? (isFriend ? 'accepted' : 'none')
+  );
+  const [activeRequestId, setActiveRequestId] = useState<string | undefined>(pendingRequestId);
+  const [relationshipLoading, setRelationshipLoading] = useState(true);
+  const [relationshipError, setRelationshipError] = useState<string | null>(null);
+  const [relationshipAttempt, setRelationshipAttempt] = useState(0);
+
+  // Re-read actual friendship state on each visit, independently of follows.
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    const controller = new AbortController();
+    setResolvedStatus(initialFriendshipStatus ?? (isFriend ? 'accepted' : 'none'));
+    setActiveRequestId(pendingRequestId);
+    setRelationshipLoading(true); setRelationshipError(null);
+    const checkStatus = async () => {
+      try {
+        if (!userId) throw new Error('Unavailable user.');
+        const network = await fetchFriendsNetwork(controller.signal);
+        if (!active || controller.signal.aborted) return;
+        const relationship = friendshipFromNetwork(network, userId);
+        setResolvedStatus(relationship.status); setActiveRequestId(relationship.requestId);
+      } catch (reason: unknown) {
+        if (active && !controller.signal.aborted) setRelationshipError(settingsErrorMessage(reason, 'Unable to load friendship status. Please try again.'));
+      } finally {
+        if (active) setRelationshipLoading(false);
+      }
+    };
+    void checkStatus();
+    return () => { active = false; controller.abort(); };
+  }, [userId, initialFriendshipStatus, pendingRequestId, isFriend, relationshipAttempt]));
 
   useEffect(() => {
     if (publicUser?.avatarUrl && publicUser.avatarUrl.trim() !== '') {
@@ -93,16 +141,7 @@ export function PublicProfileScreen({ publicUser, events, onOpenEvent, onSendFri
 
   const today = new Date();
   const interestedEvents = events || [];
-  // Compare the real end timestamp; event.date is a formatted display label.
   const attendedEvents = interestedEvents.filter(e => new Date(e.endsAt) < today);
-
-  const handleFriendPress = () => {
-    if (isFriend || requestSent) return;
-    setRequestSent(true);
-    if (onSendFriendRequest && publicUser?._id) {
-      onSendFriendRequest(publicUser._id);
-    }
-  };
 
   return (
     <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
@@ -114,18 +153,15 @@ export function PublicProfileScreen({ publicUser, events, onOpenEvent, onSendFri
         </View>
         <AppText variant="headerMedium" style={styles.userName}>{displayName}</AppText>
         <AppText variant="bodyMedium" color={colors.muted} style={styles.userLocation}>{publicUser?.username ? `@${publicUser.username}` : 'Erie, United States'}</AppText>
-        
-        {/* Friend Action Button */}
-        <TouchableOpacity 
-          style={[styles.friendBtn, { backgroundColor: isFriend ? colors.border : (requestSent ? colors.border : colors.primary) }]} 
-          onPress={handleFriendPress}
-          activeOpacity={0.8}
-        >
-          <Ionicons name={isFriend ? "checkmark-circle" : (requestSent ? "time-outline" : "person-add")} size={16} color="#FFF" />
-          <AppText variant="bodyMedium" style={styles.friendBtnText}>
-            {isFriend ? 'Friends' : (requestSent ? 'Request Sent' : 'Add Friend')}
-          </AppText>
-        </TouchableOpacity>
+        {!isSelf && userId && <View style={styles.friendActionContainer}>
+          <FriendActionButton targetUserId={userId} initialStatus={resolvedStatus} requestId={activeRequestId}
+            disabled={relationshipLoading || Boolean(relationshipError) || followLoading}
+            onStatusChange={(next, nextRequestId) => { setResolvedStatus(next); setActiveRequestId(nextRequestId); }} />
+          {relationshipLoading && <AppText color={colors.muted} style={styles.followNote}>Loading friendship status...</AppText>}
+          <FieldError message={relationshipError} />
+          {relationshipError && <AppButton title="Retry friendship status" variant="quiet"
+            onPress={() => setRelationshipAttempt(value => value + 1)} />}
+        </View>}
         {!isSelf && <View style={styles.followSection}>
           <AppButton title={followLoading ? 'Loading follow status...' : followSaving ? 'Saving...' : following ? 'Following · Unfollow' : 'Follow'}
             onPress={() => void handleFollow()} variant={following ? 'secondary' : 'primary'}
@@ -170,22 +206,20 @@ export function PublicProfileScreen({ publicUser, events, onOpenEvent, onSendFri
           {attendedEvents.length ? attendedEvents.map(event => <EventCard key={event.id} event={event} horizontal onPress={() => onOpenEvent(event)} />) : <AppText variant="bodyMedium" color={colors.muted} style={styles.empty}>No attended events yet.</AppText>}
         </>
       )}
-
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40, flexGrow: 1 },
-  profileHeader: { alignItems: 'center', marginBottom: 24 },
+  profileHeader: { alignItems: 'center', marginBottom: 20 },
   avatarImage: { width: 94, height: 94, borderRadius: 47 },
   avatarFrame: { borderWidth: 2, borderRadius: 51, padding: 3, marginBottom: 12 },
   userName: { fontWeight: '900', marginBottom: 4, letterSpacing: 0.2 },
   userLocation: { fontWeight: '500', marginBottom: 12 },
-  friendBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20 },
-  friendBtnText: { color: '#FFF', fontWeight: '700' },
   followSection: { alignSelf: 'stretch', marginTop: 12, gap: 6 },
   followNote: { fontSize: 12, textAlign: 'center', lineHeight: 18 },
+  friendActionContainer: { marginTop: 12, alignSelf: 'stretch' },
   tabsRow: { flexDirection: 'row', borderBottomWidth: 1, marginBottom: 20, gap: 32 },
   tabButton: { paddingBottom: 12, position: 'relative' },
   activeTabText: { fontWeight: '800' },

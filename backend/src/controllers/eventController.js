@@ -3,7 +3,7 @@ const { getAuthContext, apiBaseUrl, sendServiceError } = require('./controllerUt
 
 async function listEvents(req, res) {
   try {
-    const items = await events.listPublicEvents(apiBaseUrl(req));
+    const items = await events.listPublicEvents(apiBaseUrl(req), req.userId);
     res.set('Cache-Control', 'no-store');
     return res.json({ events: items });
   } catch (error) {
@@ -15,8 +15,9 @@ async function listEvents(req, res) {
 
 async function listHostedEvents(req, res) {
   try {
+    const items = await events.listHostedEvents(getAuthContext(req), apiBaseUrl(req));
     res.set('Cache-Control', 'no-store');
-    return res.json({ events: await events.listHostedEvents(getAuthContext(req), apiBaseUrl(req)) });
+    return res.json({ events: items });
   } catch (error) {
     if (sendServiceError(res, error)) return;
     return res.status(500).json({ message: 'Unable to load your events.' });
@@ -39,7 +40,7 @@ async function getImage(req, res) {
 
 async function getEvent(req, res) {
   try {
-    const event = await events.getEvent(req.params.id, apiBaseUrl(req));
+    const event = await events.getEvent(req.params.id, apiBaseUrl(req), req.userId);
     res.set('Cache-Control', 'no-store');
     return res.json({ event });
   } catch (error) {

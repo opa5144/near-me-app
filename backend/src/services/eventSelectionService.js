@@ -77,6 +77,45 @@ function selectionChanges(body) {
   return changes;
 }
 
+// Call only after fencing the selecting account and the event's host. The caller
+// supplies the event read inside that transaction, so invite acceptance and normal
+// registration share the same cutoffs, generations, and notification facts.
+async function writeEventSelection(userId, current, input, session, { now = new Date() } = {}) {
+  if (!session?.inTransaction()) throw new Error('Event selections require an active transaction.');
+  const changes = selectionChanges(input);
+  if (!current?._id) throw new ServiceError(404, 'Event not found.');
+  if (current.status === 'cancelled') throw new ServiceError(409, 'This event has been cancelled. Its selections are read-only.');
+  const occurredAt = new Date(now);
+  if (!Number.isFinite(occurredAt.getTime())) throw new Error('Invalid event selection time.');
+  const endsAt = new Date(current.endsAt).getTime();
+  if (!Number.isFinite(endsAt) || endsAt <= occurredAt.getTime()) {
+    throw new ServiceError(409, 'This event has ended. Past selections are read-only.');
+  }
+  const before = await EventSelection.findOne({ userId, eventId: current._id }).session(session).lean();
+  const interested = changes.interested ?? Boolean(before?.interested);
+  const attending = changes.attending ?? Boolean(before?.attending);
+  const registrationChanged = attending !== Boolean(before?.attending);
+  const interestChanged = interested !== Boolean(before?.interested);
+  const closingTime = new Date(current.registrationClosesAt || current.startsAt).getTime();
+  if (registrationChanged && attending && (!Number.isFinite(closingTime) || closingTime <= occurredAt.getTime())) {
+    throw new ServiceError(409, 'Registration for this event has closed.');
+  }
+  // Repeating the same request neither changes its generation nor emits a fact.
+  if (!registrationChanged && !interestChanged) return before || { eventId: current._id, userId, interested, attending };
+  const registrationVersion = generation(before?.registrationVersion) + (registrationChanged ? 1 : 0);
+  const selectionVersion = generation(before?.selectionVersion) + (interestChanged ? 1 : 0);
+  const after = await EventSelection.findOneAndUpdate({ userId, eventId: current._id }, {
+    $set: {
+      interested, attending, registrationVersion, selectionVersion,
+      registeredAt: registrationChanged && attending ? occurredAt : before?.registeredAt || null,
+      cancelledAt: registrationChanged ? (attending ? null : occurredAt) : before?.cancelledAt || null,
+      savedAt: interestChanged ? (interested ? occurredAt : null) : before?.savedAt || null,
+    }, $setOnInsert: { userId, eventId: current._id },
+  }, { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true, session }).lean();
+  await recordSelectionChange({ before, after, event: current, occurredAt }, session);
+  return after;
+}
+
 async function updateSelection(auth, eventId, body) {
   requireId(eventId, 'event');
   const changes = selectionChanges(body);
@@ -89,35 +128,7 @@ async function updateSelection(auth, eventId, body) {
       const current = await Event.findOne({ _id: event._id, hostId: event.hostId })
         .session(session).lean();
       if (!current) throw new ServiceError(404, 'Event not found.');
-      if (current.status === 'cancelled') throw new ServiceError(409, 'This event has been cancelled. Its selections are read-only.');
-      const occurredAt = new Date();
-      const endsAt = new Date(current.endsAt).getTime();
-      if (!Number.isFinite(endsAt) || endsAt <= occurredAt.getTime()) {
-        throw new ServiceError(409, 'This event has ended. Past selections are read-only.');
-      }
-      const before = await EventSelection.findOne({ userId: auth.userId, eventId: event._id }).session(session).lean();
-      const interested = changes.interested ?? Boolean(before?.interested);
-      const attending = changes.attending ?? Boolean(before?.attending);
-      const registrationChanged = attending !== Boolean(before?.attending);
-      const interestChanged = interested !== Boolean(before?.interested);
-      const closingTime = new Date(current.registrationClosesAt || current.startsAt).getTime();
-      if (registrationChanged && attending && (!Number.isFinite(closingTime) || closingTime <= occurredAt.getTime())) {
-        throw new ServiceError(409, 'Registration for this event has closed.');
-      }
-      // Repeating the same request neither changes its generation nor emits a fact.
-      if (!registrationChanged && !interestChanged) return before || { eventId: event._id, userId: auth.userId, interested, attending };
-      const registrationVersion = generation(before?.registrationVersion) + (registrationChanged ? 1 : 0);
-      const selectionVersion = generation(before?.selectionVersion) + (interestChanged ? 1 : 0);
-      const after = await EventSelection.findOneAndUpdate({ userId: auth.userId, eventId: event._id }, {
-        $set: {
-          interested, attending, registrationVersion, selectionVersion,
-          registeredAt: registrationChanged && attending ? occurredAt : before?.registeredAt || null,
-          cancelledAt: registrationChanged ? (attending ? null : occurredAt) : before?.cancelledAt || null,
-          savedAt: interestChanged ? (interested ? occurredAt : null) : before?.savedAt || null,
-        }, $setOnInsert: { userId: auth.userId, eventId: event._id },
-      }, { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true, session }).lean();
-      await recordSelectionChange({ before, after, event: current, occurredAt }, session);
-      return after;
+      return writeEventSelection(auth.userId, current, changes, session);
     });
     return selectionItem(selection);
   } catch (error) {
@@ -129,4 +140,4 @@ async function updateSelection(auth, eventId, body) {
 
 function generation(value) { return Number.isSafeInteger(value) && value >= 0 ? value : 0; }
 
-module.exports = { listSelections, getBookingHistory, getBooking, updateSelection };
+module.exports = { listSelections, getBookingHistory, getBooking, updateSelection, writeEventSelection };

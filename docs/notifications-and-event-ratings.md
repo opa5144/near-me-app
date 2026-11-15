@@ -2,14 +2,17 @@
 
 This phase connects the app to the notification backend and adds attendee ratings. Provider account setup and live email/SMS/push delivery remain on hold. No provider credentials, native push packages, real environment settings, or existing database records were changed by this phase.
 
+The subsequent [merge resolution](merge-resolution-2026-11-14.md) preserves these flows while adding working friend invitations and records the later verification/database work. The phase-specific verification and inventories below describe the original frontend/rating implementation.
+
 ## User flows
 
 - Open the notification inbox from the dashboard bell, Settings, or the profile's existing inbox. It loads real notification records, supports pagination and read/unread actions, and shows the shared unread count.
 - Open an event notification to view its saved event ID. Open a rating reminder to rate the event. Only known action names and valid database IDs are used for navigation.
-- Notification Settings loads/saves the four channel choices and preferences for all ten implemented notification types. Existing contact details and older preferences are retained. External channels remain labelled inactive while provider setup is on hold.
+- Notification Settings loads/saves the four channel choices and preferences for the original ten notification types plus `EVENT_INVITE`. Existing contact details and older preferences are retained. External channels remain labelled inactive while provider setup is on hold.
 - Follow or unfollow another user from their public profile. An organizer is an ordinary user hosting an event; following is independent of friendship.
 - After an event ends, an attending user can choose or change one rating. The form is available in ended-event details, attended booking history, and the rating screen opened by a notification.
 - The event owner can view all five rating counts on the ended event's host details page and refresh them. Individual reviewers are not exposed in the summary.
+- Event invitations use real authenticated API calls. A recipient can choose Accept & Attend or Decline from the inbox; acceptance uses the existing attending selection and registration cutoff rules. An independent pending-invitations panel keeps invitations reachable when in-app notification delivery is off and avoids duplicating invitations already represented in the loaded notification rows.
 
 ## Rating rules and storage
 
@@ -41,9 +44,11 @@ The frontend notification API uses the existing authenticated `/api/notification
 
 The app can store external channel choices, but that does not activate delivery. Resend/Twilio/Expo accounts, verified sender details, Expo/Firebase/Apple push credentials as applicable, native push permissions, device-token lifecycle, and notification handling outside the running app remain a later phase. No sample project ID or token is substituted for real configuration.
 
-## Verification
+## Original-phase verification
 
 Only source and diff review was performed. Per the user's request, no tests, typechecks, lint, syntax checks, server/app starts, API functionality calls, provider sends, or database queries/writes were run. Restart the backend to load the new routes and initialize the rating collection/index, then manually exercise the app flows.
+
+Later merge checks are tracked separately in the [resolution report](merge-resolution-2026-11-14.md). Provider sends remain on hold.
 
 ## Files created in this phase
 

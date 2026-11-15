@@ -13,15 +13,15 @@ interface PriceInputFieldProps {
   disabled?: boolean;
 }
 
-// Keeps digits and a single decimal point, max 2 decimal places
+// Preserve cents while typing; form validation still runs when the field loses focus.
 const sanitizePrice = (text: string) => {
-  const cleaned = text.replace(/,/g, '.').replace(/[^0-9.]/g, ''); // Some locales type a comma as the decimal
-  const [whole, ...rest] = cleaned.split('.');
-  if (rest.length === 0) return whole.slice(0, 7);
-  return `${whole.slice(0, 7)}.${rest.join('').slice(0, 2)}`;
+  const cleaned = text.replace(/[^0-9.]/g, '');
+  const [whole, ...fraction] = cleaned.split('.');
+  const dollars = whole.slice(0, 7);
+  return fraction.length ? `${dollars}.${fraction.join('').slice(0, 2)}` : dollars;
 };
 
-export function PriceInputField({ label, price, onPriceChange, placeholder = '0.00', error, onBlur, disabled = false }: PriceInputFieldProps) {
+export function PriceInputField({ label, price, onPriceChange, placeholder = '0', error, onBlur, disabled = false }: PriceInputFieldProps) {
   const { colors } = useTheme();
 
   return (
@@ -36,7 +36,7 @@ export function PriceInputField({ label, price, onPriceChange, placeholder = '0.
           editable={!disabled}
           placeholder={placeholder}
           placeholderTextColor={colors.muted}
-          keyboardType="decimal-pad" // <--- Numeric keyboard with a decimal point
+          keyboardType="decimal-pad"
           style={[styles.fieldInputText, { color: colors.text }]}
         />
       </View>

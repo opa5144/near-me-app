@@ -35,7 +35,7 @@ function clockLabel(value, timeZone) {
 function safePayload(payload) {
   const result = {};
   for (const key of ['expectedStartsAt', 'expectedEndsAt', 'expectedClosesAt', 'registrationVersion',
-    'selectionVersion', 'eventVersion', 'occurredAt', 'changes', 'eventSnapshot', 'cancelledAt', 'cancellationReason']) {
+    'selectionVersion', 'eventVersion', 'occurredAt', 'changes', 'eventSnapshot', 'cancelledAt', 'cancellationReason', 'inviteId']) {
     if (payload[key] !== undefined) result[key] = payload[key];
   }
   return result;
@@ -53,6 +53,8 @@ function renderNotification(type, context) {
   switch (type) {
     case 'REGISTRATION_CONFIRMED':
       heading = 'Registration confirmed'; message = `Your registration for ${title} is confirmed. It starts ${start}.`; break;
+    case 'EVENT_INVITE':
+      heading = 'Event invitation'; message = `${text(context.sender?.username, 25) || 'A friend'} invited you to ${title}, starting ${start}.`; break;
     case 'REGISTRATION_CANCELLED':
       heading = 'Registration cancelled'; message = `Your registration for ${title} has been cancelled.`; break;
     case 'EVENT_STARTS_24H':
@@ -86,6 +88,7 @@ function renderNotification(type, context) {
   const eventId = String(context.event._id);
   const data = {
     eventId, type, payload: safePayload(context.payload),
+    ...(type === 'EVENT_INVITE' ? { inviteId: context.payload.inviteId } : {}),
     dueAt: iso(notificationOccurrence(context.job)), expiresAt: iso(context.job.expiresAt),
   };
   const action = { type: type === 'RATE_ATTENDED_EVENT' ? 'RATE_EVENT' : 'OPEN_EVENT', eventId };

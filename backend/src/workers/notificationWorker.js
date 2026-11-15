@@ -9,7 +9,7 @@ async function initializeNotificationModels() {
     require('../models/Notification'), require('../models/NotificationJob'),
     require('../models/NotificationDelivery'), require('../models/PushDevice'),
     require('../models/OrganizerFollow'), require('../models/NotificationSettings'),
-    require('../models/EventSelection'), require('../models/EventRating'),
+    require('../models/EventSelection'), require('../models/EventRating'), require('../models/EventInvite'),
   ];
   await Promise.all(models.map(model => model.init()));
 }

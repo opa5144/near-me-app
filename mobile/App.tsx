@@ -11,19 +11,15 @@ import { AppNavigator } from './src/navigation/AppNavigator';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-// App Linking Map
+// Link names and parameter names match the actual authenticated root stack.
 const linkingConfig: any = {
   prefixes: ['https://nearme.com', 'nearme://'], 
   config: {
     screens: {
-      // If the app is authenticated, links fall through to AppNavigator.
-      // We map 'profile/:id' directly to whatever screen name you used inside AppNavigator.
-      AppNavigator: {
-        screens: {
-          Profile: 'profile/:id', // Matches: ://myapp.com
-          EventDetails: 'event/:id', // Optional extra: matches ://myapp.com
-        }
-      }
+      MainTabs: '',
+      EventDetails: 'event/:eventId',
+      RateEvent: 'event/:eventId/rate',
+      NotificationInbox: 'notifications',
     }
   }
 };

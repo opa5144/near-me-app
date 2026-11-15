@@ -6,6 +6,7 @@ const { withActiveAccountWrite } = require('./activeAccountWrite');
 const { ServiceError } = require('./serviceError');
 const { loadPhotoMetadata, getResourcePhotoImage, replaceResourcePhotos } = require('./photoCollectionService');
 const { loadEventAudienceCounts } = require('./eventAudienceService');
+const { getFriendsAttendingByEvents } = require('./friendAttendance');
 const { recordEventCreated, recordEventChanged, recordEventCancelled } = require('./notifications/triggerService');
 
 function requireEventId(id) {
@@ -20,15 +21,19 @@ function eventWriteError(error) {
   return error;
 }
 
-async function eventItems(events, baseUrl, session) {
+async function eventItems(events, baseUrl, session, viewerId) {
   const photos = await loadPhotoMetadata('event', events.map(event => event._id), session);
   // Keep operations sequential when this helper runs inside a transaction.
   const audience = await loadEventAudienceCounts(events.map(event => event._id), session);
-  return events.map(event => toEventItem(event, baseUrl, photos.get(String(event._id)) ?? [],
-    audience.get(String(event._id)) ?? { interestedCount: 0, attendingCount: 0 }));
+  const friends = await getFriendsAttendingByEvents(viewerId, events.map(event => event._id), baseUrl, { session });
+  return events.map(event => ({
+    ...toEventItem(event, baseUrl, photos.get(String(event._id)) ?? [],
+      audience.get(String(event._id)) ?? { interestedCount: 0, attendingCount: 0 }),
+    friendsAttending: friends.get(String(event._id)) ?? [],
+  }));
 }
 
-async function listPublicEvents(baseUrl) {
+async function listPublicEvents(baseUrl, viewerId) {
   // Compare full BSON instants: an ongoing event remains visible until its end time.
   const events = await Event.find({
     status: { $ne: 'cancelled' },
@@ -38,7 +43,7 @@ async function listPublicEvents(baseUrl) {
   }).populate({
     path: 'hostId', select: 'firstName lastName username', match: { deletedAt: null },
   }).sort({ createdAt: -1, _id: -1 }).lean();
-  return eventItems(events.filter(event => event.hostId), baseUrl);
+  return eventItems(events.filter(event => event.hostId), baseUrl, undefined, viewerId);
 }
 
 async function listHostedEvents(auth, baseUrl) {
@@ -47,7 +52,7 @@ async function listHostedEvents(auth, baseUrl) {
     path: 'hostId', select: 'firstName lastName username', match: { deletedAt: null },
   })
     .sort({ createdAt: -1, _id: -1 }).lean();
-  return eventItems(events.filter(event => event.hostId), baseUrl);
+  return eventItems(events.filter(event => event.hostId), baseUrl, undefined, auth.userId);
 }
 
 async function getEventImage(id) {
@@ -64,13 +69,13 @@ async function getEventPhoto(id, photoId) {
   return getResourcePhotoImage('event', event._id, photoId);
 }
 
-async function getEvent(id, baseUrl) {
+async function getEvent(id, baseUrl, viewerId) {
   requireEventId(id);
   const event = await Event.findById(id).populate({
     path: 'hostId', select: 'firstName lastName username', match: { deletedAt: null },
   }).lean();
   if (!event || !event.hostId) throw new ServiceError(404, 'Event not found.');
-  return (await eventItems([event], baseUrl))[0];
+  return (await eventItems([event], baseUrl, undefined, viewerId))[0];
 }
 
 function eventPhotoInput(body) {

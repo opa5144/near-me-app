@@ -4,6 +4,8 @@ import { EventItem } from '../../data/events';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { useTheme } from '../../context/ThemeContext';
 import { NotificationBell } from '../../components/NotificationBell';
+import { FriendAvatarStack } from '../../components/FriendAvatarStack';
+import { formatEventPrice } from '../../utils/eventPrice';
 
 export function HomeScreen({
   events,
@@ -32,6 +34,7 @@ export function HomeScreen({
   }, [interestedEvents]);
 
   const topPicks = events.slice(0, 4);
+  const nextEventFriends = nextEvent?.friendsAttending ?? [];
 
   return (
     <ScrollView
@@ -77,11 +80,17 @@ export function HomeScreen({
             <Text style={[styles.upcomingMeta, { color: colors.muted }]}>
               {nextEvent.date} · {nextEvent.time}
             </Text>
-            <Text style={[styles.tilePrice, { color: colors.primary }]}>{nextEvent.price}</Text>
+            <Text style={[styles.tilePrice, { color: colors.primary }]}>{formatEventPrice(nextEvent)}</Text>
 
             <Text style={[styles.upcomingMeta, { color: colors.muted }]}>
               {nextEvent.venue}
             </Text>
+
+            {nextEventFriends.length > 0 && (
+              <View style={styles.friendStackRow}>
+                <FriendAvatarStack friendsAttending={nextEventFriends} />
+              </View>
+            )}
 
             <Text
               onPress={() => onOpenEvent(nextEvent)}
@@ -130,36 +139,45 @@ export function HomeScreen({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.featured}
       >
-        {topPicks.map(event => (
-          <View
-            key={event.id}
-            style={[styles.featuredCard, {
-              backgroundColor: colors.surface,
-              borderColor: colors.border
-            }]}
-          >
-            <FeaturedArt event={event} />
-
-            <Text
-              style={[styles.featuredTitle, { color: colors.text }]}
-              numberOfLines={2}
+        {topPicks.map(event => {
+          const pickFriends = event.friendsAttending ?? [];
+          return (
+            <View
+              key={event.id}
+              style={[styles.featuredCard, {
+                backgroundColor: colors.surface,
+                borderColor: colors.border
+              }]}
             >
-              {event.title}
-            </Text>
+              <FeaturedArt event={event} />
 
-            <Text style={[styles.featuredMeta, { color: colors.muted }]}>
-              {event.date}
-            </Text>
-            <Text style={[styles.tilePrice, { color: colors.primary }]}>{event.price}</Text>
+              <Text
+                style={[styles.featuredTitle, { color: colors.text }]}
+                numberOfLines={2}
+              >
+                {event.title}
+              </Text>
 
-            <Text
-              onPress={() => onOpenEvent(event)}
-              style={[styles.detailsLink, { color: colors.primary }]}
-            >
-              View details →
-            </Text>
-          </View>
-        ))}
+              <Text style={[styles.featuredMeta, { color: colors.muted }]}>
+                {event.date}
+              </Text>
+              <Text style={[styles.tilePrice, { color: colors.primary }]}>{formatEventPrice(event)}</Text>
+
+              {pickFriends.length > 0 && (
+                <View style={styles.friendStackRow}>
+                  <FriendAvatarStack friendsAttending={pickFriends} />
+                </View>
+              )}
+
+              <Text
+                onPress={() => onOpenEvent(event)}
+                style={[styles.detailsLink, { color: colors.primary }]}
+              >
+                View details →
+              </Text>
+            </View>
+          );
+        })}
       </ScrollView>
 
       {!topPicks.length && (
@@ -305,6 +323,7 @@ const styles = StyleSheet.create({
     marginTop: 5
   },
   tilePrice: { fontSize: 12, fontWeight: '800', marginTop: 5, marginBottom: 4 },
+  friendStackRow: { marginTop: 4 },
   detailsLink: {
     fontSize: 11,
     fontWeight: '800',

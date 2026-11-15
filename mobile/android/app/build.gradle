@@ -95,6 +95,13 @@ android {
         versionCode 1
         versionName "1.0.0"
 
+        // Hash long generated C++ object paths before Windows Ninja's path limit.
+        externalNativeBuild {
+            cmake {
+                arguments "-DCMAKE_OBJECT_PATH_MAX=240"
+            }
+        }
+
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
     signingConfigs {
@@ -116,7 +123,7 @@ android {
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds
-            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
             def enablePngCrunchInRelease = findProperty('android.enablePngCrunchInReleaseBuilds') ?: 'true'
             crunchPngs enablePngCrunchInRelease.toBoolean()
         }

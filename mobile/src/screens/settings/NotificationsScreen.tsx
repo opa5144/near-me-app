@@ -11,6 +11,7 @@ import type { ChannelChoices, NotificationChannel, NotificationType, TypeChannel
 
 const CHANNEL_LABELS: Record<NotificationChannel, string> = { inApp: 'In-app', push: 'Push', email: 'Email', sms: 'SMS' };
 const EVENT_ALERTS: Array<{ type: NotificationType; title: string; note: string }> = [
+  { type: 'EVENT_INVITE', title: 'Event invitation from a friend', note: 'When an accepted friend invites you to an event.' },
   { type: 'REGISTRATION_CONFIRMED', title: 'Registration confirmed', note: 'When you choose Attending.' },
   { type: 'REGISTRATION_CANCELLED', title: 'Registration cancelled', note: 'When you cancel your registration.' },
   { type: 'EVENT_STARTS_24H', title: 'Event starts in 24 hours', note: 'For events you are attending.' },

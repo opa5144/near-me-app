@@ -101,7 +101,8 @@ async function materialize(job, workerId) {
   const initial = await loadNotificationContext(job);
   if (!initial) return finish(job, workerId, 'skipped', 'NO_LONGER_ELIGIBLE');
   try {
-    return await withActiveAccounts([job.userId, initial.event.hostId], async session => {
+    return await withActiveAccounts([job.userId, initial.event.hostId,
+      ...(job.type === 'EVENT_INVITE' && job.actorId ? [job.actorId] : [])], async session => {
       await keepLease(job, workerId, session);
       // Re-read after acquiring the account fences. A concurrent cancellation,
       // registration edit, follow change or opt-out must precede or follow us.
