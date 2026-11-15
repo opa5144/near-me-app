@@ -49,6 +49,11 @@ export async function fetchMyStores(signal?: AbortSignal): Promise<StoreItem[]> 
   return response.data.stores;
 }
 
+export async function fetchStores(signal?: AbortSignal): Promise<StoreItem[]> {
+  const response = await api.get<{ stores: StoreItem[] }>('/stores', { signal });
+  return response.data.stores;
+}
+
 export async function fetchStore(id: string, signal?: AbortSignal): Promise<StoreItem> {
   const response = await api.get<{ store: StoreItem }>('/stores/' + encodeURIComponent(id), { signal });
   return response.data.store;
