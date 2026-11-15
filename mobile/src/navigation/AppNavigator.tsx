@@ -19,6 +19,7 @@ import { UserDataProvider, useUserData } from '../context/UserDataContext';
 
 import { fetchEvent } from '../api/events';
 import type { EventItem } from '../data/events';
+import type { StoreItem as SampleStoreItem } from '../data/stores';
 
 import { HomeScreen } from '../screens/event/HomeScreen';
 import { SearchScreen } from '../screens/event/SearchScreen';
@@ -50,7 +51,7 @@ export type RootStackParamList = {
   EventDetails: { eventId: string };
   EventHostDetail: { eventId: string };
   EditEvent: { eventId: string };
-  StoreDetails: { storeId: string };
+  StoreDetails: { storeId?: string; sampleStore?: SampleStoreItem };
   NotificationInbox: undefined;
   RateEvent: { eventId: string };
 };
@@ -252,6 +253,7 @@ function TabNavigator() {
               <SearchScreen
                 events={events}
                 onOpenEvent={event => props.navigation.navigate('EventDetails', { eventId: event.id })}
+                onOpenStore={store => props.navigation.navigate('StoreDetails', { storeId: store.id })}
               />
             </ScreenContainer>
           </EventsStatus>
@@ -451,10 +453,14 @@ function EventHostDetailsRoute({ route, navigation }: NativeStackScreenProps<Roo
 }
 
 function StoreDetailsRoute({ route, navigation }: NativeStackScreenProps<RootStackParamList, 'StoreDetails'>) {
-  return <ScreenContainer style={{ paddingHorizontal: 0 }}>
-    <StoreDetailsScreen storeId={route.params?.storeId ?? ''}
-      onBack={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MainTabs')} />
-  </ScreenContainer>;
+  return (
+    <ScreenContainer style={{ paddingHorizontal: 0 }}>
+      <StoreDetailsScreen
+        storeId={route.params?.storeId ?? ''}
+        onBack={() => navigation.goBack()}
+      />
+    </ScreenContainer>
+  );
 }
 
 function NotificationInboxRoute({ navigation }: NativeStackScreenProps<RootStackParamList, 'NotificationInbox'>) {
