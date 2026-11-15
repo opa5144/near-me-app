@@ -210,7 +210,7 @@ export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateSt
                 <Pressable onPress={() => onOpenEvent(analytics.mostAttended!.event)} style={styles.leaderRow}>
                   <View style={styles.leaderLabelGroup}>
                     <Ionicons name="people-outline" size={14} color={colors.primary} />
-                    <AppText style={[styles.leaderTag, { color: colors.muted }]}>Most Registrations</AppText>
+                    <AppText style={[styles.leaderTag, { color: colors.muted }]}>Most Booked</AppText>
                   </View>
                   <AppText numberOfLines={1} style={[styles.leaderEvent, { color: colors.text }]}>
                     {analytics.mostAttended.event.title}
