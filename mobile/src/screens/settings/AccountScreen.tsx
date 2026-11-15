@@ -1,4 +1,4 @@
-
+// screens/settings/AccountScreen.tsx
 import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { TextInputProps } from 'react-native';
@@ -8,6 +8,7 @@ import { ScreenHeader } from '../../components/ScreenHeader';
 import { AppButton } from '../../components/AppButton';
 import { FieldError } from '../../components/FieldError';
 import { useTheme } from '../../context/ThemeContext';
+import { useUserData } from '../../context/UserDataContext';
 import { fetchUserProfile, updateUserProfile } from '../../api/client';
 import type { UpdateUserProfileRequest, UserProfileErrorResponse, UserProfileResponse } from '../../api/client';
 import { AccountMaskedInput, formatPhoneNumber } from './AccountMaskedInput';
@@ -25,7 +26,6 @@ type AccountFieldProps = TextInputProps & {
   autoGrow?: boolean;
 };
 
-// This label/input pair belongs to Account Settings and follows its active theme.
 function AccountField({ label, error, mask, style, autoGrow = false, ...inputProps }: AccountFieldProps) {
   const { colors, theme } = useTheme();
   const [contentHeight, setContentHeight] = useState(90);
@@ -38,7 +38,6 @@ function AccountField({ label, error, mask, style, autoGrow = false, ...inputPro
     ...(autoGrow ? {
       scrollEnabled: false,
       onContentSizeChange: (event: Parameters<NonNullable<TextInputProps['onContentSizeChange']>>[0]) => {
-        // Let the surrounding page scroll; the bio itself grows and shrinks with its text.
         setContentHeight(Math.max(90, Math.ceil(event.nativeEvent.contentSize.height)));
         inputProps.onContentSizeChange?.(event);
       },
@@ -75,7 +74,6 @@ function accountValues(user: UserProfileResponse['user']): UpdateUserProfileRequ
   return {
     username: user.username,
     email: user.email,
-    // Reformat a complete saved number without truncating invalid older records.
     phone: /^(?:\d{11}|\d \d{3}-\d{3}-\d{4})$/.test(phone) ? formatPhoneNumber(phone) : phone,
     dob: formatCalendarDate(user.dob ?? ''),
     bio: user.bio ?? '',
@@ -123,6 +121,10 @@ function accountErrorMessage(error: unknown, fallback: string): string {
 export function AccountScreen({ navigation }: any) {
   const { colors, theme } = useTheme();
   const errorColor = theme === 'dark' ? '#FF8A80' : '#C62828';
+  
+  // Pull setUser and refreshProfile from global context to sync immediately
+  const { setUser: setGlobalUser, refreshProfile } = useUserData();
+
   const [profile, setProfile] = useState<UserProfileResponse['user'] | null>(null);
   const [form, setForm] = useState<UpdateUserProfileRequest>({
     username: '', email: '', phone: '', dob: '', bio: '',
@@ -138,7 +140,6 @@ export function AccountScreen({ navigation }: any) {
   const viewVersion = useRef(0);
   const pendingSave = useRef<Promise<UserProfileResponse> | null>(null);
 
-  // Reload on opening this screen, without resetting the form while typing.
   useFocusEffect(useCallback(() => {
     const version = ++viewVersion.current;
     const controller = new AbortController();
@@ -152,7 +153,6 @@ export function AccountScreen({ navigation }: any) {
 
     async function loadAccount() {
       try {
-        // If the user left during a save, read only after that write has settled.
         await pendingSave.current?.catch(() => undefined);
         if (controller.signal.aborted) return;
         const { user } = await fetchUserProfile(controller.signal);
@@ -184,14 +184,12 @@ export function AccountScreen({ navigation }: any) {
       const next = { ...current };
       const message = validateField(field, value);
       if (message) next[field] = message;
-      // A blur alone must not dismiss a server error such as an already-used email.
       return next;
     });
   }
 
   function editField(field: AccountFieldName, value: string) {
     setForm(current => ({ ...current, [field]: value }));
-    // Editing only clears stale feedback; validation waits until this field exits.
     setFieldErrors(current => {
       const next = { ...current };
       delete next[field];
@@ -202,7 +200,6 @@ export function AccountScreen({ navigation }: any) {
   }
 
   async function handleSave() {
-    // The ref also stops two fast taps before the disabled button rerenders.
     if (!profile || isLoading || isSaving || pendingSave.current) return;
 
     const errors = validateForm(form);
@@ -226,14 +223,16 @@ export function AccountScreen({ navigation }: any) {
     try {
       const { user } = await request;
       if (viewVersion.current !== version) return;
-      // Use the saved response so trimmed/normalized values match Atlas.
       setProfile(user);
       setForm(accountValues(user));
       setFieldErrors({});
       setSaveSuccess(true);
+      
+      // Update global user state so UserProfileScreen reflects changes immediately
+      setGlobalUser(user);
+      void refreshProfile(true);
     } catch (error: unknown) {
       if (viewVersion.current !== version) return;
-      // Keep the user's edits in place so a failed save can be corrected/retried.
       const serverErrors: AccountFieldErrors = {};
       if (isAxiosError<UserProfileErrorResponse>(error)) {
         for (const field of ACCOUNT_FIELDS) {

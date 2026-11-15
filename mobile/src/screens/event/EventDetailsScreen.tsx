@@ -7,6 +7,7 @@ import { AppButton } from '../../components/AppButton';
 import { AppText } from '../../components/AppText';
 import { PhotoCollection } from '../../components/PhotoCollection';
 import { useTheme } from '../../context/ThemeContext';
+import { useEvents } from '../../context/EventsContext';
 import { PublicProfileScreen } from '../settings/PublicProfileScreen'; 
 import { fetchUserProfile, fetchFriendsNetwork } from '../../api/client';
 import { FieldError } from '../../components/FieldError';
@@ -46,12 +47,13 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
   selectionsLoading, selectionsReady, selectionSaving, selectionError, onRetrySelections,
   onBack, navigation, onInviteFriend }: EventDetailsScreenProps) {
   const { colors, theme } = useTheme();
+  const { events: globalEvents } = useEvents();
   const errorColor = theme === 'dark' ? '#FF8A80' : '#C62828';
   const [mapError, setMapError] = useState<string | null>(null);
   const [openingMap, setOpeningMap] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   
-  // Store full friend network so host relationship is ready before opening modal
+  // Store full friend network and current user profile
   const [friendNetwork, setFriendNetwork] = useState<{
     friends: FriendItem[];
     pendingRequests: any[];
@@ -61,6 +63,8 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
     pendingRequests: [],
     sentRequests: [],
   });
+
+  const [currentUserProfile, setCurrentUserProfile] = useState<any>(null);
   
   // A screen left open becomes read-only as soon as the saved end time passes.
   const [hasEnded, setHasEnded] = useState(() => {
@@ -79,8 +83,8 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
   }, [event.endsAt]);
   const selectionDisabled = hasEnded || !selectionsReady || selectionsLoading || selectionSaving;
 
-  // Fetch friends, incoming requests, and sent requests on mount
-  const loadFriendNetwork = () => {
+  // Fetch friends and user profile on mount
+  useEffect(() => {
     fetchFriendsNetwork()
       .then((res: any) => {
         setFriendNetwork({
@@ -90,25 +94,17 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
         });
       })
       .catch(() => {});
-  };
 
-  useEffect(() => {
-    loadFriendNetwork();
+    fetchUserProfile()
+      .then((res: any) => {
+        const profileData = res?.user || res;
+        setCurrentUserProfile(profileData);
+      })
+      .catch(() => {});
   }, [event.id]);
 
   // Modal state for viewing host profile popup
   const [showHostModal, setShowHostModal] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-
-  // Fetch current user ID on mount to check if the host is yourself
-  useEffect(() => {
-    fetchUserProfile()
-      .then((res: any) => {
-        const profileData = res?.user || res;
-        setCurrentUserId(profileData?._id || profileData?.id);
-      })
-      .catch(() => {});
-  }, []);
 
   const handleShare = async () => {
     try {
@@ -156,7 +152,63 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
     }
   };
 
-  const hostUserId = (event.hostId as any)?._id || (event.hostId as any)?.id || event.hostId;
+  // Robustly resolve host details across event object, friends list, and current user profile
+  const getResolvedHost = () => {
+    const DEFAULT_AVATAR = 'https://static.vecteezy.com/system/resources/previews/077/167/094/non_2x/simple-icon-of-a-person-with-a-round-head-and-rounded-body-vector.jpg';
+    const hostRaw = event.hostId;
+    if (!hostRaw) return { avatar: DEFAULT_AVATAR, username: 'member', _id: '' };
+
+    const hostObj = typeof hostRaw === 'object' ? (hostRaw as any) : {};
+    const hostIdStr = typeof hostRaw === 'object' ? String(hostObj._id || hostObj.id || '') : String(hostRaw);
+    const hostUsername = hostObj.username;
+
+    const currentUserId = currentUserProfile?._id || currentUserProfile?.id;
+    const isSelf = currentUserId && hostIdStr && String(currentUserId) === hostIdStr;
+
+    // 1. If host is current user, pull from currentUserProfile
+    if (isSelf && currentUserProfile) {
+      const avatar = currentUserProfile.avatarUrl || currentUserProfile.avatar || currentUserProfile.profilePicture || currentUserProfile.picture || DEFAULT_AVATAR;
+      return {
+        ...currentUserProfile,
+        _id: currentUserId,
+        username: currentUserProfile.username || 'member',
+        avatar,
+        avatarUrl: avatar,
+      };
+    }
+
+    // 2. Look for matching friend in network
+    const matchedFriend = friendNetwork.friends.find((f: any) =>
+      (hostIdStr && String(f.id) === hostIdStr) ||
+      (hostUsername && f.username?.toLowerCase() === hostUsername.toLowerCase())
+    );
+
+    const resolvedAvatar =
+      hostObj.avatarUrl ||
+      hostObj.avatar ||
+      hostObj.profilePicture ||
+      hostObj.picture ||
+      hostObj.photo ||
+      matchedFriend?.avatar ||
+      (matchedFriend as any)?.avatarUrl ||
+      (matchedFriend as any)?.profilePicture ||
+      DEFAULT_AVATAR;
+
+    const resolvedUsername = hostObj.username || matchedFriend?.username || 'member';
+    const resolvedId = hostIdStr || (matchedFriend ? String(matchedFriend.id) : '');
+
+    return {
+      ...hostObj,
+      ...(matchedFriend || {}),
+      _id: resolvedId,
+      username: resolvedUsername,
+      avatar: resolvedAvatar,
+      avatarUrl: resolvedAvatar,
+    };
+  };
+
+  const resolvedHost = getResolvedHost();
+  const currentUserId = currentUserProfile?._id || currentUserProfile?.id;
 
   // Compute exact relationship status with the host before opening the modal
   const getHostRelationship = (): {
@@ -164,15 +216,17 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
     requestId?: string;
     isFriend: boolean;
   } => {
-    if (!hostUserId) return { status: 'none', isFriend: false };
-    const targetId = String(hostUserId);
+    if (!resolvedHost._id || (currentUserId && resolvedHost._id === String(currentUserId))) {
+      return { status: 'none', isFriend: false };
+    }
+    const targetId = String(resolvedHost._id);
 
-    const matchedFriend = friendNetwork.friends.find(f => String(f.id) === targetId);
+    const matchedFriend = friendNetwork.friends.find((f: any) => String(f.id) === targetId);
     if (matchedFriend) {
       return { status: 'accepted', isFriend: true };
     }
 
-    const matchedReceived = friendNetwork.pendingRequests.find(r => String(r.id) === targetId);
+    const matchedReceived = friendNetwork.pendingRequests.find((r: any) => String(r.id) === targetId);
     if (matchedReceived) {
       return {
         status: 'pending_received',
@@ -181,7 +235,7 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
       };
     }
 
-    const matchedSent = friendNetwork.sentRequests.find(s => String(s.id) === targetId);
+    const matchedSent = friendNetwork.sentRequests.find((s: any) => String(s.id) === targetId);
     if (matchedSent) {
       return { status: 'pending_sent', isFriend: false };
     }
@@ -193,7 +247,7 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
 
   // Handle host row click: If it's your own event, go straight to your profile tab. Otherwise, open the modal.
   const handlePressHost = () => {
-    if (currentUserId && hostUserId && String(currentUserId) === String(hostUserId)) {
+    if (currentUserId && resolvedHost._id && String(currentUserId) === String(resolvedHost._id)) {
       if (navigation) {
         navigation.navigate('MainTabs', { screen: 'Profile' });
       }
@@ -236,21 +290,17 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
       </View>
 
       {/* See event host - Navigates to own profile tab if self, or opens popup modal if other */}
-      {event.hostId && typeof event.hostId === 'object' && event.hostId.username && (
+      {resolvedHost.username && (
         <Pressable
           onPress={handlePressHost}
           style={styles.hostInlineRow}
         >
           <Image
-            source={{
-              uri:
-                (event.hostId as any).avatarUrl ||
-                'https://static.vecteezy.com/system/resources/previews/077/167/094/non_2x/simple-icon-of-a-person-with-a-round-head-and-rounded-body-vector.jpg',
-            }}
+            source={{ uri: resolvedHost.avatar }}
             style={styles.hostInlineAvatar}
           />
           <AppText style={[styles.infoSub, { color: colors.muted, marginBottom: 0, fontWeight: '700' }]}>
-            Hosted by @{event.hostId.username}
+            Hosted by @{resolvedHost.username}
           </AppText>
         </Pressable>
       )}
@@ -306,14 +356,13 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
       <PhotoCollection photos={event.photos ?? []} fallbackUri={event.bannerImage} title={event.title}
         emoji={event.emoji} accent={event.accent} mode="gallery" />
 
-      {/* --- HOST PROFILE POPUP MODAL (Only opens for other users) --- */}
+      {/* --- HOST PROFILE POPUP MODAL --- */}
       <Modal
         visible={showHostModal}
         animationType="slide"
         presentationStyle="pageSheet"
         onRequestClose={() => {
           setShowHostModal(false);
-          loadFriendNetwork(); // Refresh network state when closing modal
         }}
       >
         <View style={[styles.modalWrapper, { backgroundColor: colors.background }]}>
@@ -322,7 +371,6 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
             <TouchableOpacity
               onPress={() => {
                 setShowHostModal(false);
-                loadFriendNetwork();
               }}
               style={styles.closeBtn}
             >
@@ -330,8 +378,8 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
             </TouchableOpacity>
           </View>
           <PublicProfileScreen
-            publicUser={event.hostId}
-            events={[]}
+            publicUser={resolvedHost}
+            events={globalEvents}
             initialFriendshipStatus={hostRelationship.status}
             pendingRequestId={hostRelationship.requestId}
             isFriend={hostRelationship.isFriend}

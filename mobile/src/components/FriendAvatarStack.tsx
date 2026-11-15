@@ -9,6 +9,14 @@ interface FriendAvatarStackProps {
   onPress?: () => void;
 }
 
+const DEFAULT_AVATAR = 'https://static.vecteezy.com/system/resources/previews/077/167/094/non_2x/simple-icon-of-a-person-with-a-round-head-and-rounded-body-vector.jpg';
+
+function getFriendAvatar(friend: any): string {
+  if (!friend) return DEFAULT_AVATAR;
+  const url = friend.avatar || friend.avatarUrl || friend.profilePicture || friend.picture || friend.photo;
+  return typeof url === 'string' && url.trim() !== '' ? url.trim() : DEFAULT_AVATAR;
+}
+
 export function FriendAvatarStack({ friendsAttending, onPress }: FriendAvatarStackProps) {
   const { colors } = useTheme();
   if (!friendsAttending || friendsAttending.length === 0) return null;
@@ -33,7 +41,7 @@ export function FriendAvatarStack({ friendsAttending, onPress }: FriendAvatarSta
         {visibleFriends.map((friend, index) => (
           <Image
             key={friend.id}
-            source={{ uri: friend.avatar }}
+            source={{ uri: getFriendAvatar(friend) }}
             style={[
               styles.avatar,
               { borderColor: colors.surface, marginLeft: index === 0 ? 0 : -10 },

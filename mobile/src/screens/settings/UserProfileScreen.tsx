@@ -12,6 +12,8 @@ import { respondToFriendRequest } from '../../api/friends';
 import { EventItem } from '../../data/events';
 import { EventCard } from '../../components/EventCard';
 import { AcceptRequestCard } from '../../components/AcceptRequestCard';
+import { formatCalendarDate } from '../../utils/dateFormat';
+import { PublicProfileScreen } from './PublicProfileScreen'; // Adjust path if needed to match your project structure
 
 export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigation: any; events: EventItem[]; onOpenEvent: (event: EventItem) => void }) {
   const { colors, theme } = useTheme();
@@ -37,6 +39,7 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
   const DEFAULT_AVATAR = 'https://static.vecteezy.com/system/resources/previews/077/167/094/non_2x/simple-icon-of-a-person-with-a-round-head-and-rounded-body-vector.jpg';
 
   const [avatarUri, setAvatarUri] = useState<string>(DEFAULT_AVATAR);
+  const [selectedFriend, setSelectedFriend] = useState<any | null>(null);
 
   useEffect(() => {
     const savedAvatar = user?.avatarUrl || user?.avatar || user?.profilePicture;
@@ -116,6 +119,8 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
     ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username
     : 'Profile';
 
+  const bioText = typeof user?.bio === 'string' ? user.bio.trim() : '';
+  const formattedDob = user?.dob ? formatCalendarDate(user.dob) : '';
   const interestedEvents = events || [];
 
   const [showFriendsModal, setShowFriendsModal] = useState(false);
@@ -131,6 +136,8 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
     { id: '1', name: 'Sarah Jenkins', lastMessage: 'Are we heading to the concert together?', time: '10m ago', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330' },
   ]);
 
+  const accentTint = theme === 'dark' ? 'rgba(105, 240, 174, 0.10)' : 'rgba(27, 135, 63, 0.08)';
+
   return (
     <ScrollView
       contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}
@@ -142,7 +149,7 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
 
       {/* Top Private Actions Row */}
       <View style={styles.topActionsRow}>
-        <TouchableOpacity style={[styles.topIconButton, { backgroundColor: colors.surface, borderColor: colors.border }]} activeOpacity={0.8} onPress={() => alert('Edit Profile')}>
+        <TouchableOpacity style={[styles.topIconButton, { backgroundColor: colors.surface, borderColor: colors.border }]} activeOpacity={0.8} onPress={() => navigation.navigate('Account')}>
           <Ionicons name="create-outline" size={16} color={colors.text} style={styles.editIcon} />
           <AppText variant="bodyMedium" style={styles.topIconText}>Edit</AppText>
         </TouchableOpacity>
@@ -182,7 +189,48 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
           </View>
         </TouchableOpacity>
         <AppText variant="headerMedium" style={styles.userName}>{displayName}</AppText>
-        <AppText variant="bodyMedium" color={colors.muted} style={styles.userLocation}>{user?.username ? `@${user.username}` : 'Erie, United States'}</AppText>
+
+        {/* Username in Primary Color */}
+        <AppText variant="bodyMedium" color={colors.primary} style={styles.userHandle}>
+          {user?.username ? `@${user.username}` : '@member'}
+        </AppText>
+
+        {/* Wide Boxless Editorial Bio */}
+        <TouchableOpacity
+          activeOpacity={0.75}
+          onPress={() => navigation.navigate('Account')}
+          style={styles.bioSection}
+        >
+          {bioText ? (
+            <View style={[styles.bioQuoteContainer, { borderLeftColor: colors.primary }]}>
+              <AppText variant="bodyMedium" color={colors.text} style={styles.bioText}>
+                {bioText}
+              </AppText>
+            </View>
+          ) : (
+            <View style={[styles.addBioPill, { backgroundColor: accentTint }]}>
+              <Ionicons name="sparkles" size={13} color={colors.primary} />
+              <AppText style={[styles.addBioText, { color: colors.primary }]}>
+                Add a short bio to introduce yourself
+              </AppText>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {/* Modern Inline Metadata Pills */}
+        <View style={styles.metaPillsRow}>
+          <View style={styles.metaPill}>
+            <Ionicons name="location-sharp" size={13} color={colors.primary} />
+            <AppText style={[styles.metaPillText, { color: colors.muted }]}>Erie, United States</AppText>
+          </View>
+
+          {formattedDob ? (
+            <View style={styles.metaPill}>
+              <Ionicons name="gift-outline" size={13} color={colors.primary} />
+              <AppText style={[styles.metaPillText, { color: colors.muted }]}>Born {formattedDob}</AppText>
+            </View>
+          ) : null}
+        </View>
       </View>
 
       {/* Private Dashboard Cards */}
@@ -281,16 +329,18 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
               keyExtractor={item => item.id}
               ListEmptyComponent={<AppText style={{ textAlign: 'center', color: colors.muted, marginTop: 20 }}>No friends added yet.</AppText>}
               renderItem={({ item }) => (
-                <View style={[styles.modalItem, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => setSelectedFriend(item)}
+                  style={[styles.modalItem, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                >
                   <Image source={{ uri: item.avatar }} style={styles.friendAvatar} />
                   <View style={{ flex: 1 }}>
                     <AppText style={{ fontWeight: '800', color: colors.text }} numberOfLines={1}>{item.name}</AppText>
                     <AppText style={{ fontSize: 11, color: colors.muted }} numberOfLines={1}>@{item.username}</AppText>
                   </View>
-                  <TouchableOpacity style={[styles.modalActionBtn, { backgroundColor: colors.primary }]} activeOpacity={0.8}>
-                    <AppText style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>Message</AppText>
-                  </TouchableOpacity>
-                </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+                </TouchableOpacity>
               )}
             />
           ) : (
@@ -306,6 +356,36 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
                   onReject={(reqId) => handleRequestResponse(reqId, 'reject')}
                 />
               )}
+            />
+          )}
+        </View>
+      </Modal>
+
+      {/* Friend Public Profile Popup Modal */}
+      <Modal
+        visible={!!selectedFriend}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setSelectedFriend(null)}
+      >
+        <View style={[styles.modalContainer, { backgroundColor: colors.background, paddingTop: 16 }]}>
+          <View style={styles.modalHeader}>
+            <AppText variant="headerMedium" style={{ color: colors.text, fontWeight: '900' }}>Friend Profile</AppText>
+            <TouchableOpacity onPress={() => setSelectedFriend(null)}>
+              <Ionicons name="close-circle" size={28} color={colors.muted} />
+            </TouchableOpacity>
+          </View>
+          {selectedFriend && (
+            <PublicProfileScreen
+              publicUser={selectedFriend}
+              events={events}
+              onOpenEvent={(e) => {
+                setSelectedFriend(null);
+                setShowFriendsModal(false);
+                onOpenEvent(e);
+              }}
+              initialFriendshipStatus="accepted"
+              isFriend={true}
             />
           )}
         </View>
@@ -384,8 +464,16 @@ const styles = StyleSheet.create({
   avatarImage: { width: 94, height: 94, borderRadius: 47 },
   avatarFrame: { borderWidth: 2, borderRadius: 51, padding: 3, marginBottom: 12, position: 'relative' },
   cameraBadge: { position: 'absolute', bottom: 2, right: 2, width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFFFFF' },
-  userName: { fontWeight: '900', marginBottom: 4, letterSpacing: 0.2 },
-  userLocation: { fontWeight: '500' },
+  userName: { fontWeight: '900', marginBottom: 2, letterSpacing: 0.2 },
+  userHandle: { fontWeight: '700', marginBottom: 10 },
+  bioSection: { width: '100%', alignItems: 'center', marginBottom: 12 },
+  bioQuoteContainer: { borderLeftWidth: 3, paddingLeft: 12, paddingVertical: 2, width: '100%' },
+  bioText: { lineHeight: 19, fontSize: 13 },
+  addBioPill: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16 },
+  addBioText: { fontSize: 12, fontWeight: '700' },
+  metaPillsRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: 12 },
+  metaPill: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  metaPillText: { fontSize: 12, fontWeight: '600' },
   tripleCardRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
   miniCard: { flex: 1, height: 105, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
   miniCardTitle: { fontWeight: '800' },
