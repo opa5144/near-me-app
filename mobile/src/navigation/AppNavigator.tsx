@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -14,6 +13,7 @@ import { ScreenContainer } from '../components/ScreenContainer';
 
 import { useTheme } from '../context/ThemeContext';
 import { EventsProvider, useEvents } from '../context/EventsContext';
+import { UserDataProvider, useUserData } from '../context/UserDataContext';
 
 import { fetchEvent } from '../api/events';
 import type { EventItem } from '../data/events';
@@ -147,6 +147,7 @@ function EventsStatus({ children }: { children: ReactNode }) {
 function HostNavigator() {
   const { colors } = useTheme();
   const { myEvents, addCreatedEvent, refreshEvents } = useEvents();
+  const { refreshStores } = useUserData();
 
   return (
     <HostStack.Navigator screenOptions={{
@@ -187,7 +188,15 @@ function HostNavigator() {
         }}
       </HostStack.Screen>
       <HostStack.Screen name="CreateStore">
-        {props => <CreateStoreScreen onBack={() => props.navigation.goBack()} onCreated={() => props.navigation.goBack()} />}
+        {props => (
+          <CreateStoreScreen
+            onBack={() => props.navigation.goBack()}
+            onCreated={() => {
+              void refreshStores(true);
+              props.navigation.goBack();
+            }}
+          />
+        )}
       </HostStack.Screen>
     </HostStack.Navigator>
   );
@@ -195,12 +204,11 @@ function HostNavigator() {
 
 function TabNavigator() {
   const { events, interestedEventIds, attendingEventIds } = useEvents();
-  // Either independent choice makes an event part of the user's plans.
   const plannedEvents = events.filter(event => interestedEventIds.includes(event.id) || attendingEventIds.includes(event.id));
 
   return (
     <Tab.Navigator
-      screenOptions={{ headerShown: false }}
+      screenOptions={{ headerShown: false, lazy: false }}
       tabBar={({ state, navigation }) => (
         <BottomTabBar
           active={state.routes[state.index].name as TabName}
@@ -283,7 +291,6 @@ function EventDetailsRoute({ route, navigation }: NativeStackScreenProps<RootSta
       })
       .catch((reason: unknown) => {
         if (!active) return;
-
         const status = isAxiosError(reason) ? reason.response?.status : undefined;
         setError(status === 400 || status === 404
           ? 'Event not found. It may have been removed.'
@@ -365,8 +372,6 @@ function EventHostDetailsRoute({ route, navigation }: NativeStackScreenProps<Roo
         setIsLoading(false);
         return;
       }
-      // A choice can still be saving when the host navigates here. Its completion
-      // reruns this focused effect so a pre-save response cannot become the total.
       if (selectionSaving) return;
       const pending = new AbortController();
       controller = pending;
@@ -471,7 +476,9 @@ function RootNavigator() {
 export function AppNavigator() {
   return (
     <EventsProvider>
-      <RootNavigator />
+      <UserDataProvider>
+        <RootNavigator />
+      </UserDataProvider>
     </EventsProvider>
   );
 }

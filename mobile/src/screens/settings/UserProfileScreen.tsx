@@ -1,149 +1,84 @@
-import { useCallback, useEffect, useState } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import { useEffect, useState } from 'react';
 import { isAxiosError } from 'axios';
-import { View, Share, TouchableOpacity, StyleSheet, Image, ScrollView, Modal, FlatList, Alert, ActivityIndicator } from 'react-native';
+import { View, Share, TouchableOpacity, StyleSheet, Image, ScrollView, Modal, FlatList, Alert, ActivityIndicator, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../context/ThemeContext';
+import { useUserData } from '../../context/UserDataContext';
 import { AppButton } from '../../components/AppButton';
 import { AppText } from '../../components/AppText';
-import { fetchUserProfile, updateUserAvatar } from '../../api/client';
-import { fetchFriendsNetwork, respondToFriendRequest } from '../../api/friends';
+import { updateUserAvatar } from '../../api/client';
+import { respondToFriendRequest } from '../../api/friends';
 import { EventItem } from '../../data/events';
 import { EventCard } from '../../components/EventCard';
-import { fetchBookingHistory } from '../../api/events';
-import type { BookingHistoryItem } from '../../api/events';
-import { FriendActionButton } from '../../components/FriendActionButton';
 import { AcceptRequestCard } from '../../components/AcceptRequestCard';
 
 export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigation: any; events: EventItem[]; onOpenEvent: (event: EventItem) => void }) {
   const { colors, theme } = useTheme();
   const attendedErrorColor = theme === 'dark' ? '#FF8A80' : '#C62828';
 
-  // User state
-  const [user, setUser] = useState<any>(null);
+  const {
+    user,
+    setUser,
+    friends,
+    friendRequests,
+    attendedBookings,
+    isInitialLoading,
+    refreshFriends,
+    refreshAttended,
+    refreshAll,
+  } = useUserData();
+
   const [activeTab, setActiveTab] = useState<'interested' | 'attended'>('interested');
-  const [attendedBookings, setAttendedBookings] = useState<BookingHistoryItem[]>([]);
-  const [loadingAttended, setLoadingAttended] = useState(true);
+  const [loadingAttended, setLoadingAttended] = useState(false);
   const [attendedError, setAttendedError] = useState<string | null>(null);
-  const [attendedAttempt, setAttendedAttempt] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   const DEFAULT_AVATAR = 'https://static.vecteezy.com/system/resources/previews/077/167/094/non_2x/simple-icon-of-a-person-with-a-round-head-and-rounded-body-vector.jpg';
 
-  // Local avatar state
   const [avatarUri, setAvatarUri] = useState<string>(DEFAULT_AVATAR);
 
-  // Modals & Sub-tabs state
-  const [showFriendsModal, setShowFriendsModal] = useState(false);
-  const [showInboxModal, setShowInboxModal] = useState(false);
-  const [friendsSubTab, setFriendsSubTab] = useState<'friends' | 'requests'>('friends');
-  const [inboxSubTab, setInboxSubTab] = useState<'notifications' | 'messages'>('notifications');
+  useEffect(() => {
+    const savedAvatar = user?.avatarUrl || user?.avatar || user?.profilePicture;
+    if (savedAvatar && typeof savedAvatar === 'string' && savedAvatar.trim() !== '') {
+      setAvatarUri(`${savedAvatar}?t=${Date.now()}`);
+    } else {
+      setAvatarUri(DEFAULT_AVATAR);
+    }
+  }, [user]);
 
-  const [friends, setFriends] = useState<any[]>([]);
-  const [friendRequests, setFriendRequests] = useState<any[]>([]);
-  const [sentRequests, setSentRequests] = useState<any[]>([]);
-  const [loadingFriends, setLoadingFriends] = useState(false);
-
-  const [notifications] = useState([
-    { id: '1', title: 'Event Reminder', body: 'Tech Meetup starts tomorrow at 6:00 PM.', time: '2h ago', icon: 'alarm-outline' },
-    { id: '2', title: 'Host Update', body: 'Venue location updated for Jazz Night.', time: '1d ago', icon: 'information-circle-outline' },
-  ]);
-  const [directMessages] = useState([
-    { id: '1', name: 'Sarah Jenkins', lastMessage: 'Are we heading to the concert together?', time: '10m ago', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330' },
-  ]);
-
-  // Refresh profile details and keep friend count accurate upon screen focus
-  useFocusEffect(
-    useCallback(() => {
-      const controller = new AbortController();
-      let active = true;
-
-      fetchUserProfile(controller.signal)
-        .then((res: any) => {
-          if (!active) return;
-          const profileData = res.user;
-          setUser(profileData);
-
-          const savedAvatar = profileData?.avatarUrl || profileData?.avatar || profileData?.profilePicture;
-          if (savedAvatar && typeof savedAvatar === 'string' && savedAvatar.trim() !== '') {
-            setAvatarUri(`${savedAvatar}?t=${Date.now()}`);
-          } else {
-            setAvatarUri(DEFAULT_AVATAR);
-          }
-        })
-        .catch((err) => {
-          if (!active || controller.signal.aborted) return;
-          console.log('Failed to fetch user profile:', err.message);
-          setAvatarUri(DEFAULT_AVATAR);
-        });
-
-      // Silently pre-fetch friends network to keep the badge count accurate instantly
-      void fetchFriendsNetwork()
-        .then(data => {
-          if (active && data?.friends) {
-            setFriends(data.friends);
-          }
-        })
-        .catch(err => {
-          console.log('Failed to pre-fetch friends count:', err.message);
-        });
-
-      return () => {
-        active = false;
-        controller.abort();
-      };
-    }, [])
-  );
-
-  useFocusEffect(useCallback(() => {
+  useEffect(() => {
     if (activeTab !== 'attended') return;
     let active = true;
-    const controller = new AbortController();
-    setLoadingAttended(true);
+    if (attendedBookings.length === 0 && isInitialLoading) {
+      setLoadingAttended(true);
+    }
     setAttendedError(null);
-    setAttendedBookings([]);
-    void fetchBookingHistory(controller.signal)
-      .then(bookings => {
-        if (active) setAttendedBookings(bookings.filter(booking => booking.attending));
-      })
+    void refreshAttended()
       .catch((reason: unknown) => {
-        if (!active || controller.signal.aborted) return;
+        if (!active) return;
         const message = isAxiosError<{ message?: string }>(reason) ? reason.response?.data?.message : undefined;
-        setAttendedError(typeof message === 'string' && message.trim()
-          ? message : 'Unable to load your attended events. Please try again.');
+        if (attendedBookings.length === 0) {
+          setAttendedError(typeof message === 'string' && message.trim()
+            ? message : 'Unable to load your attended events. Please try again.');
+        }
       })
       .finally(() => { if (active) setLoadingAttended(false); });
     return () => {
       active = false;
-      controller.abort();
     };
-  }, [activeTab, attendedAttempt]));
+  }, [activeTab, refreshAttended, attendedBookings.length, isInitialLoading]);
 
-  // Fetch real friends, pending requests, and sent requests when modal opens
-  const loadFriendsNetwork = async () => {
-    try {
-      setLoadingFriends(true);
-      const data: any = await fetchFriendsNetwork();
-      setFriends(data.friends || []);
-      setFriendRequests(data.pendingRequests || []);
-      setSentRequests(data.sentRequests || []);
-    } catch (error: any) {
-      console.error('Error fetching friends network:', error.message);
-    } finally {
-      setLoadingFriends(false);
-    }
+  const onPullToRefresh = async () => {
+    setRefreshing(true);
+    await refreshAll();
+    setRefreshing(false);
   };
-
-  useEffect(() => {
-    if (showFriendsModal) {
-      loadFriendsNetwork();
-    }
-  }, [showFriendsModal]);
 
   const handleRequestResponse = async (requestId: string, action: 'accept' | 'reject') => {
     try {
       await respondToFriendRequest(requestId, action);
-      loadFriendsNetwork();
+      await refreshFriends(true);
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Could not process request');
     }
@@ -167,12 +102,12 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
 
       try {
         const response: any = await updateUserAvatar(newUri);
-        if (response && response.user && response.user.avatarUrl) {
-          setAvatarUri(`${response.user.avatarUrl}?t=${Date.now()}`);
+        if (response && response.user) {
+          setUser(response.user);
         }
       } catch (error: any) {
         const errorMsg = error.response?.data?.message || error.message || 'Unknown error';
-        Alert.alert('Error Saving Avatar', errorMsg); 
+        Alert.alert('Error Saving Avatar', errorMsg);
       }
     }
   };
@@ -183,8 +118,27 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
 
   const interestedEvents = events || [];
 
+  const [showFriendsModal, setShowFriendsModal] = useState(false);
+  const [showInboxModal, setShowInboxModal] = useState(false);
+  const [friendsSubTab, setFriendsSubTab] = useState<'friends' | 'requests'>('friends');
+  const [inboxSubTab, setInboxSubTab] = useState<'notifications' | 'messages'>('notifications');
+
+  const [notifications] = useState([
+    { id: '1', title: 'Event Reminder', body: 'Tech Meetup starts tomorrow at 6:00 PM.', time: '2h ago', icon: 'alarm-outline' },
+    { id: '2', title: 'Host Update', body: 'Venue location updated for Jazz Night.', time: '1d ago', icon: 'information-circle-outline' },
+  ]);
+  const [directMessages] = useState([
+    { id: '1', name: 'Sarah Jenkins', lastMessage: 'Are we heading to the concert together?', time: '10m ago', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330' },
+  ]);
+
   return (
-    <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onPullToRefresh} tintColor={colors.primary} />
+      }
+    >
 
       {/* Top Private Actions Row */}
       <View style={styles.topActionsRow}>
@@ -285,10 +239,7 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
           {loadingAttended ? (
             <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />
           ) : attendedError ? (
-            <>
-              <AppText accessibilityRole="alert" color={attendedErrorColor} style={styles.empty}>{attendedError}</AppText>
-              <AppButton title="Retry" variant="secondary" onPress={() => setAttendedAttempt(current => current + 1)} />
-            </>
+            <AppText accessibilityRole="alert" color={attendedErrorColor} style={styles.empty}>{attendedError}</AppText>
           ) : attendedBookings.length ? attendedBookings.map(booking => (
             <EventCard key={booking.id} event={booking.event} horizontal
               onPress={() => navigation.navigate('BookingHistoryDetails', { bookingId: booking.id })} />
@@ -324,9 +275,7 @@ export function UserProfileScreen({ navigation, events, onOpenEvent }: { navigat
             </TouchableOpacity>
           </View>
 
-          {loadingFriends ? (
-            <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 20 }} />
-          ) : friendsSubTab === 'friends' ? (
+          {friendsSubTab === 'friends' ? (
             <FlatList
               data={friends}
               keyExtractor={item => item.id}
