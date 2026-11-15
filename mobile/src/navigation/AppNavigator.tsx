@@ -22,7 +22,7 @@ import type { EventItem } from '../data/events';
 
 import { HomeScreen } from '../screens/event/HomeScreen';
 import { SearchScreen } from '../screens/event/SearchScreen';
-import { MyEventsScreen } from '../screens/event/MyEventsScreen';
+import { ItineraryScreen } from '../screens/event/ItineraryScreen';
 import { EventDetailsScreen } from '../screens/event/EventDetailsScreen';
 
 import { EventHostScreen } from '../screens/host/EventHostScreen';
@@ -261,7 +261,7 @@ function TabNavigator() {
         {props => (
           <EventsStatus>
             <ScreenContainer style={{ paddingHorizontal: 0 }}>
-              <MyEventsScreen
+              <ItineraryScreen
                 events={plannedEvents}
                 onOpenEvent={event => props.navigation.navigate('EventDetails', { eventId: event.id })}
               />
