@@ -2,11 +2,18 @@ import React from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { AppText } from './AppText';
 import { useTheme } from '../context/ThemeContext';
-import { FriendItem } from '../api/friends';
+import type { FriendItem } from '../api/friends';
 
 interface FriendAvatarStackProps {
   friendsAttending: FriendItem[];
   onPress?: () => void;
+}
+
+const DEFAULT_AVATAR = 'https://static.vecteezy.com/system/resources/previews/077/167/094/non_2x/simple-icon-of-a-person-with-a-round-head-and-rounded-body-vector.jpg';
+
+function getFriendAvatar(friend: FriendItem): string {
+  // Friend API responses use the canonical avatar field; empty images get a fallback.
+  return typeof friend.avatar === 'string' && friend.avatar.trim() ? friend.avatar.trim() : DEFAULT_AVATAR;
 }
 
 export function FriendAvatarStack({ friendsAttending, onPress }: FriendAvatarStackProps) {
@@ -33,7 +40,7 @@ export function FriendAvatarStack({ friendsAttending, onPress }: FriendAvatarSta
         {visibleFriends.map((friend, index) => (
           <Image
             key={friend.id}
-            source={{ uri: friend.avatar }}
+            source={{ uri: getFriendAvatar(friend) }}
             style={[
               styles.avatar,
               { borderColor: colors.surface, marginLeft: index === 0 ? 0 : -10 },

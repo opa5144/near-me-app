@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { EventItem } from '../../data/events';
 import { EventCard } from '../../components/EventCard';
 import { ScreenHeader } from '../../components/ScreenHeader';
@@ -9,7 +9,7 @@ import { AppButton } from '../../components/AppButton';
 import { AppText } from '../../components/AppText';
 import { useTheme } from '../../context/ThemeContext';
 import { useEvents } from '../../context/EventsContext';
-import { fetchMyStores } from '../../api/stores';
+import { useUserData } from '../../context/UserDataContext';
 import type { StoreItem } from '../../api/stores';
 import { estimatedRevenueCents, formatCurrency } from '../../utils/eventPrice';
 
@@ -47,34 +47,23 @@ export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateSt
   onOpenStore: (store: StoreItem) => void;
 }) {
   const { colors, theme } = useTheme();
-  const { refreshEvents, isLoading } = useEvents();
-  const [stores, setStores] = useState<StoreItem[]>([]);
-  const [storesLoading, setStoresLoading] = useState(true);
-  const [storesError, setStoresError] = useState<string | null>(null);
-  const [storeAttempt, setStoreAttempt] = useState(0);
+  const { refreshEvents, isLoading: eventsLoading } = useEvents();
+  const { stores, storesError, storesLoading, refreshStores } = useUserData();
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Cached reads are shared; returning here refreshes only once they are stale.
+  useFocusEffect(useCallback(() => { void refreshStores(); }, [refreshStores]));
 
   const revenueColor = theme === 'dark' ? '#69F0AE' : '#1B873F';
 
-  // Other accounts can change their choices while this screen is away.
-  useFocusEffect(useCallback(() => {
-    void refreshEvents();
-  }, [refreshEvents]));
-
-  // Reload on returning from Create Store; ownership is filtered by the backend session.
-  useFocusEffect(useCallback(() => {
-    let active = true;
-    const controller = new AbortController();
-    setStoresLoading(true);
-    setStoresError(null);
-    setStores([]);
-    void fetchMyStores(controller.signal)
-      .then(saved => { if (active) setStores(saved); })
-      .catch(() => {
-        if (active && !controller.signal.aborted) setStoresError('Unable to load your stores. Please try again.');
-      })
-      .finally(() => { if (active) setStoresLoading(false); });
-    return () => { active = false; controller.abort(); };
-  }, [storeAttempt]));
+  const onPullToRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([
+      refreshEvents(),
+      refreshStores(true),
+    ]);
+    setRefreshing(false);
+  };
 
   // Full portfolio stats and top-performer rankings
   const analytics = useMemo(() => {
@@ -126,10 +115,10 @@ export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateSt
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
-          refreshing={isLoading}
+          refreshing={refreshing}
           tintColor={colors.primary}
           colors={[colors.primary]}
-          onRefresh={() => { void refreshEvents(); setStoreAttempt(current => current + 1); }}
+          onRefresh={onPullToRefresh}
         />
       }
     >
@@ -149,13 +138,13 @@ export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateSt
       <View style={styles.metricsGrid}>
         <View style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <AppText variant="headerMedium" style={[styles.valueToken, { color: revenueColor }]}>
-            {isLoading ? '…' : analytics.estRevenueCents === null ? '—' : formatCurrency(analytics.estRevenueCents / 100)}
+            {eventsLoading && events.length === 0 ? '…' : analytics.estRevenueCents === null ? '—' : formatCurrency(analytics.estRevenueCents / 100)}
           </AppText>
           <AppText variant="bodyMedium" color={colors.muted} style={styles.labelToken}>TOTAL EST. REVENUE</AppText>
         </View>
         <View style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <AppText variant="headerMedium" style={[styles.valueToken, { color: colors.primary }]}>
-            {isLoading ? '…' : analytics.totalAttending}
+            {eventsLoading && events.length === 0 ? '…' : analytics.totalAttending}
           </AppText>
           <AppText variant="bodyMedium" color={colors.muted} style={styles.labelToken}>ATTENDING</AppText>
         </View>
@@ -169,13 +158,13 @@ export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateSt
         </View>
         <View style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <AppText variant="headerMedium" style={[styles.valueToken, { color: colors.text }]}>
-            {isLoading ? '…' : analytics.totalInterested}
+            {eventsLoading && events.length === 0 ? '…' : analytics.totalInterested}
           </AppText>
           <AppText variant="bodyMedium" color={colors.muted} style={styles.labelToken}>INTERESTED</AppText>
         </View>
         <View style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <AppText variant="headerMedium" style={[styles.valueToken, { color: colors.text }]}>
-            {isLoading ? '…' : analytics.upcomingEvents}
+            {eventsLoading && events.length === 0 ? '…' : analytics.upcomingEvents}
           </AppText>
           <AppText variant="bodyMedium" color={colors.muted} style={styles.labelToken}>UPCOMING EVENTS</AppText>
         </View>
@@ -291,13 +280,19 @@ export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateSt
       )) : <AppText variant="bodyMedium" color={colors.muted} style={styles.empty}>You have no events to display.</AppText>}
 
       <AppText variant="bodyLarge" style={[styles.section, { color: colors.text, marginTop: 24 }]}>Your Stores</AppText>
-      {storesLoading ? <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} /> : storesError ? (
+      {storesLoading && stores.length === 0 ? (
+        <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />
+      ) : storesError && stores.length === 0 ? (
         <View>
           <AppText accessibilityRole="alert" color={theme === 'dark' ? '#FF8A80' : '#C62828'}>{storesError}</AppText>
-          <AppButton title="Retry stores" variant="secondary" onPress={() => setStoreAttempt(current => current + 1)} style={{ marginTop: 12 }} />
+          <AppButton title="Retry stores" variant="secondary" onPress={() => { void refreshStores(true); }} style={{ marginTop: 12 }} />
         </View>
       ) : stores.length ? stores.map(store => <StoreCard key={store.id} store={store} onPress={() => onOpenStore(store)} />)
         : <AppText variant="bodyMedium" color={colors.muted} style={styles.empty}>You have no stores yet. Create a store to publish your business.</AppText>}
+      {storesError && stores.length > 0 && <View>
+        <AppText accessibilityRole="alert" color={theme === 'dark' ? '#FF8A80' : '#C62828'}>{storesError}</AppText>
+        <AppButton title="Retry stores" variant="secondary" onPress={() => { void refreshStores(true); }} style={{ marginTop: 12 }} />
+      </View>}
     </ScrollView>
   );
 }
