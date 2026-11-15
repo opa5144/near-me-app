@@ -52,15 +52,15 @@ function renderNotification(type, context) {
   let message;
   switch (type) {
     case 'REGISTRATION_CONFIRMED':
-      heading = 'Registration confirmed'; message = `Your registration for ${title} is confirmed. It starts ${start}.`; break;
+      heading = 'Registration confirmed'; message = `Registration confirmed for ${title}. Event start: ${start}.`; break;
     case 'EVENT_INVITE':
       heading = 'Event invitation'; message = `${text(context.sender?.username, 25) || 'A friend'} invited you to ${title}, starting ${start}.`; break;
     case 'REGISTRATION_CANCELLED':
       heading = 'Registration cancelled'; message = `Your registration for ${title} has been cancelled.`; break;
     case 'EVENT_STARTS_24H':
-      heading = 'Your event starts in 24 hours'; message = `${title} starts ${start} at ${venue}.`; break;
+      heading = '24-hour event reminder'; message = `${title} starts ${start} at ${venue}.`; break;
     case 'EVENT_STARTS_1H':
-      heading = 'Your event starts in 1 hour'; message = `${title} starts ${start} at ${venue}.`; break;
+      heading = '1-hour event reminder'; message = `${title} starts ${start} at ${venue}.`; break;
     case 'EVENT_CANCELLED': {
       heading = 'Event cancelled';
       const reason = text(context.payload.cancellationReason ?? event.cancellationReason, 600);
@@ -71,7 +71,7 @@ function renderNotification(type, context) {
     case 'EVENT_LOCATION_CHANGED':
       heading = 'Event location changed'; message = `The location for ${title} was updated to ${venue}${event.address && event.address !== venue ? ', ' + text(event.address, 500) : ''}.`; break;
     case 'SAVED_EVENT_REGISTRATION_CLOSING': {
-      heading = 'Registration closes in 24 hours';
+      heading = '24-hour registration reminder';
       const closes = event.registrationClosesAt ?? event.startsAt;
       message = `Registration for your saved event ${title} closes ${dateLabel(closes, zone)} at ${clockLabel(closes, zone)} (${zone}).`; break;
     }

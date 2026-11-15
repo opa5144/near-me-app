@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, AppState, Image, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { EventItem } from '../../data/events';
@@ -50,9 +50,45 @@ export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateSt
   const { refreshEvents, isLoading: eventsLoading } = useEvents();
   const { stores, storesError, storesLoading, refreshStores } = useUserData();
   const [refreshing, setRefreshing] = useState(false);
+  const [eventFilter, setEventFilter] = useState<'active' | 'completed'>('active');
+  const [clockNow, setClockNow] = useState(Date.now());
 
   // Cached reads are shared; returning here refreshes only once they are stale.
   useFocusEffect(useCallback(() => { void refreshStores(); }, [refreshStores]));
+
+  // Move open cards to Completed at their actual end instant, including when
+  // the app resumes. Only the focused host screen keeps a clock running.
+  useFocusEffect(useCallback(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const updateClock = () => {
+      if (timer) clearTimeout(timer);
+      const current = Date.now();
+      setClockNow(current);
+      const nextEnd = events.reduce((next, event) => {
+        const end = Date.parse(event.endsAt);
+        return Number.isFinite(end) && end > current ? Math.min(next, end) : next;
+      }, current + 60000);
+      timer = setTimeout(updateClock, Math.max(1, nextEnd - current));
+    };
+    updateClock();
+    const listener = AppState.addEventListener('change', state => { if (state === 'active') updateClock(); });
+    return () => { if (timer) clearTimeout(timer); listener.remove(); };
+  }, [events]));
+
+  const eventGroups = useMemo(() => {
+    const active: EventItem[] = [];
+    const completed: EventItem[] = [];
+    for (const event of events) {
+      const end = Date.parse(event.endsAt);
+      // Keep retained/cancelled records visible; their cards label cancellation.
+      if (Number.isFinite(end) && end <= clockNow) completed.push(event);
+      else active.push(event);
+    }
+    active.sort((first, second) => Date.parse(first.startsAt) - Date.parse(second.startsAt));
+    completed.sort((first, second) => Date.parse(second.endsAt) - Date.parse(first.endsAt));
+    return { active, completed };
+  }, [events, clockNow]);
+  const visibleEvents = eventGroups[eventFilter];
 
   const revenueColor = theme === 'dark' ? '#69F0AE' : '#1B873F';
 
@@ -70,7 +106,7 @@ export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateSt
     const totalEvents = events.length;
     const totalInterested = events.reduce((sum, e) => sum + (e.interestedCount ?? 0), 0);
     const totalAttending = events.reduce((sum, e) => sum + (e.attendingCount ?? 0), 0);
-    const now = Date.now();
+    const now = clockNow;
     const upcomingEvents = events.filter(event => event.status !== 'cancelled' && Date.parse(event.startsAt) > now).length;
 
     const enriched = events.map(e => {
@@ -107,7 +143,7 @@ export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateSt
       mostInterested,
       lowReachItem,
     };
-  }, [events]);
+  }, [events, clockNow]);
 
   return (
     <ScrollView
@@ -268,7 +304,18 @@ export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateSt
       </View>
 
       <AppText variant="bodyLarge" style={[styles.section, { color: colors.text }]}>Your Events</AppText>
-      {events.length ? events.map(event => (
+      <View style={[styles.eventFilters, { borderColor: colors.border }]} accessibilityRole="tablist">
+        {(['active', 'completed'] as const).map(filter => <Pressable key={filter}
+          accessibilityRole="tab" accessibilityState={{ selected: eventFilter === filter }}
+          accessibilityLabel={`${filter === 'active' ? 'Active' : 'Completed'} events, ${eventGroups[filter].length}`}
+          onPress={() => setEventFilter(filter)}
+          style={[styles.eventFilter, { backgroundColor: eventFilter === filter ? colors.primary : colors.surface }]}>
+          <AppText style={styles.eventFilterLabel} color={eventFilter === filter ? '#FFFFFF' : colors.text}>
+            {filter === 'active' ? 'Active' : 'Completed'} ({eventGroups[filter].length})
+          </AppText>
+        </Pressable>)}
+      </View>
+      {visibleEvents.length ? visibleEvents.map(event => (
         <EventCard
           key={event.id}
           event={event}
@@ -277,7 +324,9 @@ export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateSt
           attendingCount={event.attendingCount}
           onPress={() => onOpenEvent(event)}
         />
-      )) : <AppText variant="bodyMedium" color={colors.muted} style={styles.empty}>You have no events to display.</AppText>}
+      )) : <AppText variant="bodyMedium" color={colors.muted} style={styles.empty}>
+        {eventFilter === 'active' ? 'No active events. Your ended events appear under Completed.' : 'No completed events yet. Events move here after their end time.'}
+      </AppText>}
 
       <AppText variant="bodyLarge" style={[styles.section, { color: colors.text, marginTop: 24 }]}>Your Stores</AppText>
       {storesLoading && stores.length === 0 ? (
@@ -319,6 +368,9 @@ const styles = StyleSheet.create({
   actionRow: { flexDirection: 'row', gap: 10, marginBottom: 18 },
   halfButton: { flex: 1 },
   section: { fontWeight: '900', marginBottom: 10, marginTop: 4 },
+  eventFilters: { flexDirection: 'row', borderWidth: 1, borderRadius: 12, overflow: 'hidden', marginBottom: 10, padding: 3, gap: 4 },
+  eventFilter: { flex: 1, minHeight: 44, borderRadius: 9, paddingVertical: 9, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' },
+  eventFilterLabel: { fontSize: 12, fontWeight: '800', textAlign: 'center' },
   empty: { lineHeight: 19, marginTop: 4 },
   storeCard: { flexDirection: 'row', borderWidth: 1, borderRadius: 16, overflow: 'hidden', marginBottom: 12 },
   storeImage: { width: 90, minHeight: 105 },

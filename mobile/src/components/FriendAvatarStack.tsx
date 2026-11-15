@@ -7,6 +7,7 @@ import type { FriendItem } from '../api/friends';
 interface FriendAvatarStackProps {
   friendsAttending: FriendItem[];
   onPress?: () => void;
+  compact?: boolean;
 }
 
 const DEFAULT_AVATAR = 'https://static.vecteezy.com/system/resources/previews/077/167/094/non_2x/simple-icon-of-a-person-with-a-round-head-and-rounded-body-vector.jpg';
@@ -16,7 +17,7 @@ function getFriendAvatar(friend: FriendItem): string {
   return typeof friend.avatar === 'string' && friend.avatar.trim() ? friend.avatar.trim() : DEFAULT_AVATAR;
 }
 
-export function FriendAvatarStack({ friendsAttending, onPress }: FriendAvatarStackProps) {
+export function FriendAvatarStack({ friendsAttending, onPress, compact = false }: FriendAvatarStackProps) {
   const { colors } = useTheme();
   if (!friendsAttending || friendsAttending.length === 0) return null;
 
@@ -31,10 +32,14 @@ export function FriendAvatarStack({ friendsAttending, onPress }: FriendAvatarSta
       ? `${firstName} and ${friendsAttending.length - 1} friends are attending`
       : `${firstName} & ${friendsAttending[1].name.split(' ')[0]} are attending`;
 
+  const displayLabel = compact ? `${friendsAttending.length} ${friendsAttending.length === 1 ? 'friend' : 'friends'}` : label;
+
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}
+      accessibilityLabel={label}
+      pointerEvents={onPress ? 'auto' : 'none'}
+      style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }, compact && styles.compactContainer]}
     >
       <View style={styles.avatarGroup}>
         {visibleFriends.map((friend, index) => (
@@ -43,13 +48,14 @@ export function FriendAvatarStack({ friendsAttending, onPress }: FriendAvatarSta
             source={{ uri: getFriendAvatar(friend) }}
             style={[
               styles.avatar,
-              { borderColor: colors.surface, marginLeft: index === 0 ? 0 : -10 },
+              compact && styles.compactAvatar,
+              { borderColor: colors.surface, marginLeft: index === 0 ? 0 : compact ? -6 : -10 },
             ]}
           />
         ))}
       </View>
-      <AppText style={[styles.label, { color: colors.text }]} numberOfLines={1}>
-        {label}
+      <AppText style={[styles.label, { color: colors.text }, compact && styles.compactLabel]} numberOfLines={1}>
+        {displayLabel}
       </AppText>
     </Pressable>
   );
@@ -68,6 +74,9 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   avatarGroup: { flexDirection: 'row', alignItems: 'center' },
+  compactContainer: { paddingVertical: 0, paddingHorizontal: 0, borderWidth: 0, marginBottom: 0, gap: 3, flexShrink: 0 },
+  compactAvatar: { width: 16, height: 16, borderRadius: 8 },
+  compactLabel: { fontSize: 9, lineHeight: 11 },
   avatar: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5 },
   label: { fontSize: 11, fontWeight: '700' },
 });
