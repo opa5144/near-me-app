@@ -5,7 +5,8 @@ const { ServiceError } = require('../serviceError');
 
 function notificationDto(notification) {
   return {
-    id: String(notification._id), eventId: String(notification.eventId),
+    id: String(notification._id), eventId: notification.eventId ? String(notification.eventId) : null,
+    requestId: notification.requestId ? String(notification.requestId) : null,
     actorId: notification.actorId ? String(notification.actorId) : null,
     type: notification.type, title: notification.title, message: notification.message,
     data: notification.data ?? {}, action: notification.action ?? null,

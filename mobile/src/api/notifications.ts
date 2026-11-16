@@ -5,7 +5,7 @@ export const NOTIFICATION_TYPES = [
   'REGISTRATION_CONFIRMED', 'REGISTRATION_CANCELLED', 'EVENT_STARTS_24H', 'EVENT_STARTS_1H',
   'EVENT_CANCELLED', 'EVENT_DATETIME_CHANGED', 'EVENT_LOCATION_CHANGED',
   'SAVED_EVENT_REGISTRATION_CLOSING', 'FOLLOWED_ORGANIZER_NEW_EVENT', 'RATE_ATTENDED_EVENT',
-  'EVENT_INVITE',
+  'EVENT_INVITE', 'FRIEND_REQUEST',
 ] as const;
 export type NotificationType = typeof NOTIFICATION_TYPES[number];
 export const NOTIFICATION_CHANNELS = ['inApp', 'push', 'email', 'sms'] as const;
@@ -17,10 +17,11 @@ export interface NotificationPreferences {
   channels: ChannelChoices;
   typeChannels: TypeChannelChoices;
 }
-export type NotificationAction = { type: 'OPEN_EVENT' | 'RATE_EVENT'; eventId: string };
+export type NotificationAction = { type: 'OPEN_EVENT' | 'RATE_EVENT'; eventId: string }
+  | { type: 'OPEN_FRIEND_REQUEST'; requestId: string; actorId?: string };
 export interface AppNotification {
   id: string;
-  eventId: string;
+  eventId: string | null;
   actorId: string | null;
   type: NotificationType;
   title: string;
@@ -36,6 +37,20 @@ export interface InboxPage { notifications: AppNotification[]; nextCursor: strin
 
 // Interpret only known app actions. Do not navigate to a route/URL supplied by stored data.
 export function notificationAction(notification: AppNotification): NotificationAction | null {
+  if (notification.type === 'FRIEND_REQUEST') {
+    const requestId = notification.data.requestId;
+    const action = notification.action;
+    if (typeof requestId !== 'string' || !/^[a-f0-9]{24}$/i.test(requestId) ||
+        !action || typeof action !== 'object' || Array.isArray(action)) return null;
+    const candidate = action as Record<string, unknown>;
+    if (candidate.type !== 'OPEN_FRIEND_REQUEST' || typeof candidate.requestId !== 'string' ||
+        candidate.requestId.toLowerCase() !== requestId.toLowerCase()) return null;
+    if (candidate.actorId !== undefined && (typeof candidate.actorId !== 'string' ||
+        !/^[a-f0-9]{24}$/i.test(candidate.actorId) ||
+        candidate.actorId.toLowerCase() !== notification.actorId?.toLowerCase())) return null;
+    return { type: 'OPEN_FRIEND_REQUEST', requestId,
+      ...(notification.actorId ? { actorId: notification.actorId } : {}) };
+  }
   const eventId = notification.eventId;
   if (typeof eventId !== 'string' || !/^[a-f0-9]{24}$/i.test(eventId)) return null;
   const action = notification.action;

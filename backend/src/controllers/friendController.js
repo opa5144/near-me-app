@@ -34,4 +34,10 @@ async function respondToRequest(req, res) {
   }
 }
 
-module.exports = { getNetwork, sendRequest, respondToRequest };
+async function getRequest(req, res) {
+  res.set('Cache-Control', 'no-store');
+  try { return res.json(await friendService.getFriendRequest(getAuthContext(req), req.params.requestId, apiBaseUrl(req))); }
+  catch (error) { return sendFriendError(res, error, 'Unable to load friend request'); }
+}
+
+module.exports = { getNetwork, sendRequest, respondToRequest, getRequest };

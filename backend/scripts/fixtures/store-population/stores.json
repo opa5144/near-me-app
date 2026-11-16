@@ -1,0 +1,79 @@
+{
+  "version": "store-history-v1",
+  "contentPolicy": "Normal app-managed store records at previously verified NYC addresses. Store names and weekly trading hours are app-configured, not representations of the real venue's business or ownership. Photos are category illustrations, not photographs of these particular stores.",
+  "groups": [
+    {
+      "category": "Music",
+      "names": ["Sound Lane Records", "Neighborhood Instrument House", "Vinyl Corner", "Rhythm Room Music", "Harmony Audio"],
+      "venueKeys": ["music-bowery", "music-brooklyn"],
+      "photoCategory": "Music",
+      "description": "Explore music, discover fresh sounds, and connect with other listeners in a welcoming neighborhood space.",
+      "weekdayHours": ["10:00", "20:00"], "saturdayHours": ["10:00", "20:00"], "sundayHours": ["11:00", "18:00"]
+    },
+    {
+      "category": "Dance",
+      "names": ["Tempo Dance Studio", "Motion Collective", "Step House Studio", "Groove Dance Space", "Center Stage Dance"],
+      "venueKeys": ["dance-ailey", "dance-broadway"],
+      "photoCategory": "Dance",
+      "description": "Build confidence through movement with room to practice, meet fellow dancers, and discover a style that fits you.",
+      "weekdayHours": ["09:00", "21:00"], "saturdayHours": ["09:00", "18:00"], "sundayHours": ["10:00", "18:00"]
+    },
+    {
+      "category": "Food",
+      "names": ["Market Table", "Neighborhood Pantry", "Garden Bowl Kitchen", "Hearth Street Bakery", "Riverside Coffee"],
+      "venueKeys": ["food-chelsea", "food-essex"],
+      "photoCategory": "Food",
+      "description": "Discover flavorful food and refreshments, enjoy a relaxed stop, and spend time around a shared neighborhood table.",
+      "weekdayHours": ["08:00", "21:00"], "saturdayHours": ["08:00", "21:00"], "sundayHours": ["09:00", "20:00"]
+    },
+    {
+      "category": "Film",
+      "names": ["Frame House Cinema", "The Reel Room", "Story Screen", "Lantern Picture House", "Neighborhood Film Club"],
+      "venueKeys": ["film-ifc", "film-forum"],
+      "photoCategory": "Film",
+      "description": "Find a place for film discovery, screen culture, and conversations with other people who love the movies.",
+      "weekdayHours": ["12:00", "23:00"], "saturdayHours": ["11:00", "23:00"], "sundayHours": ["11:00", "22:00"]
+    },
+    {
+      "category": "Workshop",
+      "names": ["Makers Bench", "Craft Corner Studio", "Hands On Workshop", "Creative Foundry", "Neighborhood Maker Space"],
+      "venueKeys": ["workshop-village", "workshop-chelsea"],
+      "photoCategory": "Workshop",
+      "description": "Make time for practical creativity, learn a hands-on technique, and share ideas with other local makers.",
+      "weekdayHours": ["10:00", "20:00"], "saturdayHours": ["10:00", "18:00"], "sundayHours": ["11:00", "17:00"]
+    },
+    {
+      "category": "Art",
+      "names": ["Canvas Corner Gallery", "Color House Studio", "Local Lens Gallery", "Brush and Clay", "Studio North Art"],
+      "venueKeys": ["art-whitney", "art-moma"],
+      "photoCategory": "Art",
+      "description": "Explore visual creativity, discover artwork and materials, and make connections through a shared interest in art.",
+      "closedDays": ["Monday"],
+      "weekdayHours": ["11:00", "19:00"], "saturdayHours": ["10:00", "19:00"], "sundayHours": ["11:00", "18:00"]
+    },
+    {
+      "category": "Clothing",
+      "names": ["Thread and Company", "Everyday Threads", "Harbor Wardrobe", "Common Ground Clothing", "Ninth Avenue Styles"],
+      "venueKeys": ["food-chelsea", "food-essex"],
+      "photoCategory": "Clothing",
+      "description": "Browse apparel and everyday style, find a fresh wardrobe idea, and enjoy a relaxed neighborhood shopping stop.",
+      "weekdayHours": ["10:00", "20:00"], "saturdayHours": ["10:00", "20:00"], "sundayHours": ["11:00", "19:00"]
+    },
+    {
+      "category": "Entertainment",
+      "names": ["Play House Social", "Neon Game Room", "After Hours Lounge", "City Stage", "Weekend Clubhouse"],
+      "venueKeys": ["music-bowery", "music-brooklyn", "film-ifc", "film-forum"],
+      "photoCategory": "Entertainment",
+      "description": "Spend time with friends, discover games and social entertainment, and find another reason to get out together.",
+      "weekdayHours": ["12:00", "23:00"], "fridayHours": ["12:00", "01:00"], "saturdayHours": ["12:00", "01:00"], "sundayHours": ["12:00", "22:00"]
+    },
+    {
+      "category": "Retail",
+      "names": ["Corner Goods", "Urban Home Market", "Everyday Essentials", "Market Square Shop", "Local Finds"],
+      "venueKeys": ["food-chelsea", "food-essex", "art-moma"],
+      "photoCategory": "Retail",
+      "description": "Find useful everyday goods, thoughtful accessories, and small discoveries while browsing local retail.",
+      "weekdayHours": ["10:00", "20:00"], "saturdayHours": ["10:00", "20:00"], "sundayHours": ["11:00", "18:00"]
+    }
+  ]
+}

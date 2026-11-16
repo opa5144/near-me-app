@@ -4,6 +4,8 @@ const Event = require('../../models/Event');
 const EventSelection = require('../../models/EventSelection');
 const EventRating = require('../../models/EventRating');
 const EventInvite = require('../../models/EventInvite');
+const Friendship = require('../../models/Friendship');
+const { versionOf, requestedAt } = require('./friendRequestService');
 const Notification = require('../../models/Notification');
 const NotificationJob = require('../../models/NotificationJob');
 const NotificationDelivery = require('../../models/NotificationDelivery');
@@ -48,12 +50,14 @@ async function readState(session) {
   const jobs = await read(NotificationJob.find());
   const deliveries = await read(NotificationDelivery.find());
   const invites = await read(EventInvite.find());
+  const friendships = await read(Friendship.find());
   return {
     users: new Map(users.map(user => [id(user), user])), events: new Map(events.map(event => [id(event), event])),
     selections: new Map(selections.map(selection => [pair(selection.userId, selection.eventId), selection])),
     rated: new Set(ratings.map(rating => pair(rating.userId, rating.eventId))), notifications, jobs,
     jobsByKey: new Map(jobs.map(job => [job.key, job])), deliveries,
     invites: new Map(invites.map(invite => [id(invite), invite])),
+    friendships: new Map(friendships.map(request => [id(request), request])),
   };
 }
 
@@ -72,7 +76,10 @@ function snapshotMatches(snapshot, event) {
 function sourceFact(row, state) {
   const job = state.jobsByKey.get(row.dedupeKey);
   return job?.kind === 'notification' && job.state === 'done' && job.type === row.type &&
-    id(job.userId) === id(row.userId) && id(job.eventId) === id(row.eventId) &&
+    id(job.userId) === id(row.userId) &&
+    (row.type === 'FRIEND_REQUEST' ? (id(job.actorId) === id(row.actorId) &&
+      job.payload?.requestId === String(row.requestId || row.data?.requestId) &&
+      job.payload?.requestVersion === dataPayload(row).requestVersion) : id(job.eventId) === id(row.eventId)) &&
     sameTime(notificationOccurrence(job), row.occurredAt) ? job : null;
 }
 
@@ -80,6 +87,22 @@ function assess(row, state, now) {
   if (isFixture(row)) return { valid: false, reason: 'UNVERIFIED_TEST_FIXTURE' };
   const context = stateFor(row, state);
   const { user, event, host, selection, payload } = context;
+  if (row.type === 'FRIEND_REQUEST') {
+    const requestId = row.requestId || row.data?.requestId || payload.requestId;
+    const request = state.friendships.get(id(requestId));
+    const sender = state.users.get(id(row.actorId));
+    const occurrence = time(row.occurredAt);
+    const historicalJob = sourceFact(row, state);
+    const currentOccurrence = request && id(request.recipient) === id(row.userId) &&
+      id(request.requester) === id(row.actorId) && payload.requestVersion === versionOf(request) &&
+      sameTime(requestedAt(request), row.occurredAt);
+    if (!user || !sender || user.deletedAt != null || sender.deletedAt != null || !request ||
+        !Number.isFinite(occurrence) || occurrence > now.getTime() ||
+        !(currentOccurrence || historicalJob)) return { valid: false, reason: 'FRIEND_REQUEST_SOURCE_UNAVAILABLE' };
+    const content = renderNotification('FRIEND_REQUEST', { user, sender, request, payload,
+      job: { type: row.type, payload, createdAt: row.createdAt, dueAt: row.occurredAt } });
+    return { valid: true, content };
+  }
   if (!user || !event || !host || !validSchedule(event)) return { valid: false, reason: 'SOURCE_UNAVAILABLE' };
   if (user.deletedAt != null || host.deletedAt != null) return { valid: false, reason: 'ACCOUNT_ARCHIVED' };
   const occurred = time(row.occurredAt);
@@ -204,6 +227,7 @@ async function makePlan(now, session) {
   const liveKeys = new Set();
   for (const row of state.notifications) {
     if (state.users.get(id(row.userId))?.deletedAt != null ||
+        (row.type === 'FRIEND_REQUEST' && state.users.get(id(row.actorId))?.deletedAt != null) ||
         state.users.get(id(state.events.get(id(row.eventId))?.hostId))?.deletedAt != null) {
       throw new Error('Resolve archived-account notification history before running this active-account repair.');
     }

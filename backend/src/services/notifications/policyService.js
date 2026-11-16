@@ -3,6 +3,8 @@ const Event = require('../../models/Event');
 const EventSelection = require('../../models/EventSelection');
 const EventRating = require('../../models/EventRating');
 const EventInvite = require('../../models/EventInvite');
+const Friendship = require('../../models/Friendship');
+const { versionOf, requestedAt } = require('./friendRequestService');
 const { areAcceptedFriends } = require('../friendshipAccess');
 const OrganizerFollow = require('../../models/OrganizerFollow');
 const { NOTIFICATION_TYPES, TIMED_TYPES } = require('../../constants/notificationTypes');
@@ -36,13 +38,30 @@ async function read(query, session) {
 // Eligibility reads have no side effects. Call again within the inbox transaction
 // and immediately before a provider send, since choices/schedules may have changed.
 async function loadNotificationContext(job, now = new Date(), { session } = {}) {
-  if (!job?.userId || !job.eventId || !NOTIFICATION_TYPES.includes(job.type)) return null;
+  if (!job?.userId || !NOTIFICATION_TYPES.includes(job.type)) return null;
   const currentTime = instant(now);
   if (!Number.isFinite(currentTime)) return null;
   const payload = payloadFor(job);
   const user = await read(User.findOne({ _id: job.userId, deletedAt: null })
     .select('_id firstName username'), session);
   if (!user) return null;
+  if (job.type === 'FRIEND_REQUEST') {
+    if (typeof payload.requestId !== 'string' || !/^[a-f0-9]{24}$/i.test(payload.requestId) || !job.actorId) return null;
+    const request = await read(Friendship.findOne({ _id: payload.requestId, recipient: user._id,
+      requester: job.actorId, status: 'pending' }), session);
+    if (!request || payload.requestVersion !== versionOf(request) ||
+        !sameInstant(payload.requestedAt, requestedAt(request)) || instant(requestedAt(request)) > currentTime) return null;
+    const sender = await read(User.findOne({ _id: request.requester, deletedAt: null })
+      .select('_id firstName lastName username'), session);
+    if (!sender) return null;
+    const conflicting = Friendship.exists({ status: { $in: ['blocked', 'accepted'] }, $or: [
+      { requester: user._id, recipient: sender._id }, { requester: sender._id, recipient: user._id },
+    ] });
+    if (session) conflicting.session(session);
+    if (await conflicting) return null;
+    return { job, payload, user, sender, request, event: null, host: null, eventSnapshot: null };
+  }
+  if (!job.eventId) return null;
   const event = await read(Event.findById(job.eventId), session);
   if (!event?.hostId) return null;
   const host = await read(User.findOne({ _id: event.hostId, deletedAt: null })

@@ -76,6 +76,7 @@ async function insertDelivery(notification, channel, deviceId, job, session) {
   const destinationKey = channel === 'push' ? 'device:' + deviceId : channel;
   const [delivery] = await NotificationDelivery.create([{
     notificationId: notification._id, userId: notification.userId, eventId: notification.eventId,
+    requestId: notification.requestId ?? null,
     channel, destinationKey, ...(deviceId ? { deviceId } : {}),
     provider: CHANNEL_PROVIDERS[channel], status: 'pending',
   }], { session });
@@ -101,8 +102,8 @@ async function materialize(job, workerId) {
   const initial = await loadNotificationContext(job);
   if (!initial) return finish(job, workerId, 'skipped', 'NO_LONGER_ELIGIBLE');
   try {
-    return await withActiveAccounts([job.userId, initial.event.hostId,
-      ...(job.type === 'EVENT_INVITE' && job.actorId ? [job.actorId] : [])], async session => {
+    return await withActiveAccounts([job.userId, ...(initial.event?.hostId ? [initial.event.hostId] : []),
+      ...(['EVENT_INVITE', 'FRIEND_REQUEST'].includes(job.type) && job.actorId ? [job.actorId] : [])], async session => {
       await keepLease(job, workerId, session);
       // Re-read after acquiring the account fences. A concurrent cancellation,
       // registration edit, follow change or opt-out must precede or follow us.
@@ -115,7 +116,9 @@ async function materialize(job, workerId) {
       if (existing) return finish(job, workerId, 'done', null, session);
       const content = renderNotification(job.type, context);
       const [notification] = await Notification.create([{
-        userId: job.userId, eventId: job.eventId, actorId: job.actorId ?? null, type: job.type,
+        userId: job.userId, eventId: job.eventId ?? null,
+        requestId: job.type === 'FRIEND_REQUEST' ? context.request._id : null,
+        actorId: job.actorId ?? null, type: job.type,
         title: content.title, message: content.message, data: content.data, action: content.action,
         channels, dedupeKey: job.key, occurredAt: occurredAt(job, context),
       }], { session });

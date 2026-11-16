@@ -13,12 +13,11 @@ import { toPhotoInput } from '../../api/photos';
 import type { EventPlace } from '../../api/maps';
 import { createStore } from '../../api/stores';
 import type { CreateStoreRequest, StoreItem } from '../../api/stores';
-import { categories } from '../../data/events';
+import { storeCategories } from '../../data/events';
 import { useTheme } from '../../context/ThemeContext';
 import { clockTime, hasHostErrors, hostRequestError, mergeHostFieldErrors, validateStoreDraft } from './hostFormUtils';
 import type { HostFieldErrors, StoreDraft } from './hostFormUtils';
 
-const storeCategories = categories.filter(category => category !== 'All');
 const initialHours = (): BusinessHoursData => Object.fromEntries(businessDays.map(day => {
   const openTime = new Date();
   openTime.setHours(9, 0, 0, 0);

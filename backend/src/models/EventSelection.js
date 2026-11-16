@@ -11,6 +11,9 @@ const eventSelectionSchema = new mongoose.Schema({
   registrationVersion: { type: Number, default: 0, min: 0, validate: Number.isSafeInteger },
   selectionVersion: { type: Number, default: 0, min: 0, validate: Number.isSafeInteger },
   registeredAt: { type: Date, default: null },
+  // A past attendance can be imported after signup without claiming an earlier
+  // in-app registration. Its recording time is separate from registeredAt.
+  historyRecordedAt: { type: Date, default: null },
   cancelledAt: { type: Date, default: null },
   savedAt: { type: Date, default: null },
 }, { timestamps: true, collection: 'EventSelections' });

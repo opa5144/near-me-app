@@ -23,13 +23,17 @@ const EVENT_ALERTS: Array<{ type: NotificationType; title: string; note: string 
   { type: 'FOLLOWED_ORGANIZER_NEW_EVENT', title: 'New event from a user you follow', note: 'When a followed user hosts a new event.' },
   { type: 'RATE_ATTENDED_EVENT', title: 'Rate an attended event', note: 'One hour after it ends, if you have not rated it yet.' },
 ];
+const SOCIAL_ALERTS: Array<{ type: NotificationType; title: string; note: string }> = [
+  { type: 'FRIEND_REQUEST', title: 'New friend request', note: 'When another user sends you a friend request.' },
+];
 const LEGACY_FILTERS: Partial<Record<NotificationType, Partial<Record<NotificationChannel, NotificationKey>>>> = {
+  FRIEND_REQUEST: { email: 'friendRequestsEmail', sms: 'friendRequestsPhone' },
   EVENT_STARTS_24H: { email: 'attendingEmailReminders', sms: 'attendingPhoneReminders' },
   EVENT_STARTS_1H: { email: 'attendingEmailReminders', sms: 'attendingPhoneReminders' },
   SAVED_EVENT_REGISTRATION_CLOSING: { email: 'bookingInterestEmail' },
   FOLLOWED_ORGANIZER_NEW_EVENT: { email: 'organizerAnnounceEmail', sms: 'organizerAnnouncePhone' },
 };
-const CONNECTED_LEGACY = new Set<NotificationKey>(['attendingEmailReminders', 'attendingPhoneReminders', 'bookingInterestEmail', 'organizerAnnounceEmail', 'organizerAnnouncePhone']);
+const CONNECTED_LEGACY = new Set<NotificationKey>(['attendingEmailReminders', 'attendingPhoneReminders', 'bookingInterestEmail', 'organizerAnnounceEmail', 'organizerAnnouncePhone', 'friendRequestsEmail', 'friendRequestsPhone']);
 
 type ToggleDefinition = { key: NotificationKey; title: string; channel?: 'email' | 'sms' };
 const GENERAL: ToggleDefinition[] = [
@@ -42,6 +46,8 @@ const GENERAL: ToggleDefinition[] = [
   { key: 'topEventsEmail', title: 'Top events in cities you follow (Email)', channel: 'email' },
 ];
 const SOCIAL: ToggleDefinition[] = [
+  { key: 'friendRequestsEmail', title: 'Friend requests (Email)', channel: 'email' },
+  { key: 'friendRequestsPhone', title: 'Friend requests (SMS)', channel: 'sms' },
   { key: 'organizerAnnounceEmail', title: 'New events from organizers you follow (Email)', channel: 'email' },
   { key: 'organizerAnnouncePhone', title: 'New events from organizers you follow (SMS)', channel: 'sms' },
   { key: 'followerEmail', title: 'When someone follows you (Email)', channel: 'email' },
@@ -133,8 +139,26 @@ export function NotificationsScreen({ navigation }: any) {
   }
   function renderRows(definitions: ToggleDefinition[]) {
     return definitions.map(definition => <NotificationRow key={definition.key} title={definition.title}
-      note={CONNECTED_LEGACY.has(definition.key) ? 'Also filters the event notification choices above.' : 'Preference saved; this alert is not connected yet.'}
+      note={CONNECTED_LEGACY.has(definition.key) ? 'Also filters the matching notification type.' : 'Preference saved; this alert is not connected yet.'}
       value={settings?.[definition.key] === true} disabled={isDisabled(definition)} onChange={value => editSetting(definition.key, value)} />);
+  }
+  function renderTypeAlerts(alerts: typeof EVENT_ALERTS) {
+    if (!settings) return null;
+    return alerts.map(alert => <View key={alert.type} style={styles.alertSection}>
+      <Text style={[styles.alertTitle, { color: colors.text }]}>{alert.title}</Text>
+      <Text style={[styles.note, { color: colors.muted }]}>{alert.note}</Text>
+      {NOTIFICATION_CHANNELS.map(channel => {
+        const legacy = LEGACY_FILTERS[alert.type]?.[channel];
+        const filtered = legacy !== undefined && !settings[legacy];
+        return <NotificationRow key={channel} title={CHANNEL_LABELS[channel]}
+          note={filtered ? 'Enable the related reminder filter below to use this channel.' : undefined}
+          value={typeChannels[alert.type]?.[channel] !== false}
+          disabled={isSaving || !channelEnabled(channel) || filtered}
+          onChange={value => editTypeChannel(alert.type, channel, value)} />;
+      })}
+      {Object.keys(typeChannels[alert.type] ?? {}).length > 0 && <AppButton title="Use channel defaults" variant="quiet" alignment="left"
+        disabled={isSaving} onPress={() => { setTypeChannels(current => ({ ...current, [alert.type]: {} })); setSaveError(null); setSaved(false); }} />}
+    </View>);
   }
   async function handleSave() {
     if (!settings || !channels || !model || isLoading || isSaving || pendingSave.current) return;
@@ -159,7 +183,7 @@ export function NotificationsScreen({ navigation }: any) {
   return (
     <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]}>
       <AppButton title="Back to Settings" variant="quiet" alignment="left" onPress={() => navigation.goBack()} disabled={isSaving} style={styles.backButton} />
-      <ScreenHeader title="Notification Settings" subtitle="Choose your channels and event alerts." />
+      <ScreenHeader title="Notification Settings" subtitle="Choose your channels and alerts." />
       {isLoading ? <View style={styles.status}><ActivityIndicator color={colors.primary} /><Text style={[styles.note, { color: colors.muted }]}>Loading notification preferences...</Text></View> : loadError ? (
         <View style={styles.status}><Text accessibilityRole="alert" style={[styles.note, { color: errorColor }]}>{loadError}</Text><AppButton title="Retry" onPress={() => setLoadAttempt(current => current + 1)} /></View>
       ) : model && settings && channels ? (
@@ -173,21 +197,7 @@ export function NotificationsScreen({ navigation }: any) {
 
           <Text style={[styles.sectionHeader, { color: colors.text }]}>Event Notifications</Text>
           <Text style={[styles.note, { color: colors.muted }]}>Individual choices are kept when a channel is off. Email and SMS also use the reminder filters below.</Text>
-          {EVENT_ALERTS.map(alert => <View key={alert.type} style={styles.alertSection}>
-            <Text style={[styles.alertTitle, { color: colors.text }]}>{alert.title}</Text>
-            <Text style={[styles.note, { color: colors.muted }]}>{alert.note}</Text>
-            {NOTIFICATION_CHANNELS.map(channel => {
-              const legacy = LEGACY_FILTERS[alert.type]?.[channel];
-              const filtered = legacy !== undefined && !settings[legacy];
-              return <NotificationRow key={channel} title={CHANNEL_LABELS[channel]}
-                note={filtered ? 'Enable the related reminder filter below to use this channel.' : undefined}
-                value={typeChannels[alert.type]?.[channel] !== false}
-                disabled={isSaving || !channelEnabled(channel) || filtered}
-                onChange={value => editTypeChannel(alert.type, channel, value)} />;
-            })}
-            {Object.keys(typeChannels[alert.type] ?? {}).length > 0 && <AppButton title="Use channel defaults" variant="quiet" alignment="left"
-              disabled={isSaving} onPress={() => { setTypeChannels(current => ({ ...current, [alert.type]: {} })); setSaveError(null); setSaved(false); }} />}
-          </View>)}
+          {renderTypeAlerts(EVENT_ALERTS)}
 
           <Text style={[styles.sectionHeader, { color: colors.text }]}>Contact Details</Text>
           <Text style={[styles.note, { color: colors.muted }]}>These details come from your account.</Text>
@@ -201,6 +211,7 @@ export function NotificationsScreen({ navigation }: any) {
           <NotificationRow title="Google Calendar Synchronization" note="Saves your preference. Google Calendar is not connected yet." value={settings.calendarSync} disabled={isSaving} onChange={value => editSetting('calendarSync', value)} />
           {renderRows(GENERAL)}
           <Text style={[styles.sectionHeader, { color: colors.text }]}>Social & Follower Alerts</Text>
+          {renderTypeAlerts(SOCIAL_ALERTS)}
           {renderRows(SOCIAL)}
           <Text style={[styles.sectionHeader, { color: colors.text }]}>Host Preferences · Saved for Later</Text>
           {renderRows(HOST)}

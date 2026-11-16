@@ -19,6 +19,8 @@ const NOTIFICATION_DEFAULTS = Object.freeze({
   followerPhone: true,
   newMessageEmail: true,
   newMessagePhone: true,
+  friendRequestsEmail: true,
+  friendRequestsPhone: true,
   hostEventLiveEmail: true,
   hostNewsletterEmail: true,
   hostNewCommentEmail: true,

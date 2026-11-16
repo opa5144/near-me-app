@@ -7,6 +7,7 @@ router.use(requireAuth);
 
 router.get('/', friendController.getNetwork);
 router.post('/request', friendController.sendRequest);
+router.get('/request/:requestId', friendController.getRequest);
 router.patch('/request/:requestId', friendController.respondToRequest);
 
 module.exports = router;

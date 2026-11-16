@@ -3,6 +3,7 @@ const User = require('../models/User');
 const { withActiveAccountWrite } = require('./activeAccountWrite');
 const { ServiceError } = require('./serviceError');
 const { avatarUrlsForUsers } = require('./accountReadService');
+const { versionOf, requestedAt, enqueueFriendRequest, markFriendRequestRead } = require('./notifications/friendRequestService');
 
 const DEFAULT_AVATAR = 'https://static.vecteezy.com/system/resources/previews/077/167/094/non_2x/simple-icon-of-a-person-with-a-round-head-and-rounded-body-vector.jpg';
 
@@ -77,20 +78,26 @@ async function createFriendRequest(auth, input) {
     if (incoming) {
       incoming.status = 'accepted';
       await incoming.save({ session });
+      await markFriendRequestRead(incoming._id, session);
       return incoming;
     }
     const pending = relationships.find(relationship => relationship.status === 'pending');
-    if (pending) return pending;
+    if (pending) { await enqueueFriendRequest(pending, session); return pending; }
     const rejected = relationships.find(relationship => relationship.status === 'rejected' && String(relationship.requester) === userId) ||
       relationships.find(relationship => relationship.status === 'rejected');
     if (rejected) {
+      await markFriendRequestRead(rejected._id, session);
       rejected.requester = userId;
       rejected.recipient = recipientId;
       rejected.status = 'pending';
+      rejected.requestVersion = versionOf(rejected) + 1;
+      rejected.requestedAt = new Date();
       await rejected.save({ session });
+      await enqueueFriendRequest(rejected, session);
       return rejected;
     }
     const [friendship] = await Friendship.create([{ requester: userId, recipient: recipientId, status: 'pending' }], { session });
+    await enqueueFriendRequest(friendship, session);
     return friendship;
   });
 }
@@ -99,7 +106,8 @@ async function respondToFriendRequest(auth, requestId, input) {
   const userId = objectId(String(auth.userId || ''), 401, 'Please log in again.');
   const id = objectId(requestId, 400, 'Invalid request ID.');
   if (!input || typeof input !== 'object' || Array.isArray(input) ||
-      Object.keys(input).some(key => key !== 'action') || !['accept', 'reject'].includes(input.action)) {
+      Object.keys(input).some(key => !['action', 'requestVersion'].includes(key)) || !['accept', 'reject'].includes(input.action) ||
+      (input.requestVersion !== undefined && (!Number.isSafeInteger(input.requestVersion) || input.requestVersion < 1))) {
     throw new ServiceError(400, 'Choose accept or reject.');
   }
   const existing = await Friendship.findById(id).select('requester recipient').lean();
@@ -111,17 +119,44 @@ async function respondToFriendRequest(auth, requestId, input) {
   return withActiveAccountWrite(auth, [existing.requester], async session => {
     const friendship = await Friendship.findOne({ _id: id, requester: existing.requester, recipient: userId }).session(session);
     if (!friendship) throw new ServiceError(404, 'Friend request not found.');
+    if (input.requestVersion !== undefined && input.requestVersion !== versionOf(friendship)) {
+      throw new ServiceError(409, 'This friend request changed. Refresh before responding.');
+    }
     const blocked = await Friendship.exists({ ...pairFilter(userId, String(existing.requester)), status: 'blocked' }).session(session);
     if (blocked) throw new ServiceError(403, 'This friendship is unavailable.');
-    if (friendship.status === status) return friendship;
+    if (friendship.status === status) { await markFriendRequestRead(friendship._id, session); return friendship; }
     if (friendship.status !== 'pending') {
       throw new ServiceError(409, `Friend request is already ${friendship.status}.`);
     }
     const updated = await Friendship.findOneAndUpdate({ _id: id, requester: existing.requester, recipient: userId, status: 'pending' },
       { $set: { status } }, { new: true, runValidators: true, session });
     if (!updated) throw new ServiceError(409, 'Friend request has already been processed.');
+    await markFriendRequestRead(updated._id, session);
     return updated;
   });
 }
 
-module.exports = { fetchFriendsNetwork, createFriendRequest, respondToFriendRequest };
+// Opening a request never returns contacts/credentials, and only its recipient
+// may inspect or respond. Active sender/block state is checked again on writes.
+async function getFriendRequest(auth, requestId, publicApiBaseUrl) {
+  const userId = objectId(String(auth.userId || ''), 401, 'Please log in again.');
+  const id = objectId(requestId, 400, 'Invalid request ID.');
+  if (!(await User.exists({ _id: userId, deletedAt: null }))) throw new ServiceError(401, 'Please log in again.');
+  const request = await Friendship.findOne({ _id: id, recipient: userId }).lean();
+  if (!request) throw new ServiceError(404, 'Friend request not found.');
+  const sender = await User.findOne({ _id: request.requester, deletedAt: null }).select('_id firstName lastName username').lean();
+  if (!sender) throw new ServiceError(404, 'This account is unavailable.');
+  const blocked = await Friendship.exists({ ...pairFilter(userId, String(sender._id)), status: 'blocked' });
+  const alreadyFriends = await Friendship.exists({ ...pairFilter(userId, String(sender._id)), status: 'accepted' });
+  const avatars = await avatarUrlsForUsers([sender._id], publicApiBaseUrl);
+  return { request: {
+    id: String(request._id), recipientId: userId, status: blocked ? 'blocked' : request.status,
+    requestVersion: versionOf(request), requestedAt: requestedAt(request), createdAt: request.createdAt,
+    canRespond: request.status === 'pending' && !blocked && !alreadyFriends,
+    requester: { id: String(sender._id), username: sender.username,
+      name: `${sender.firstName || ''} ${sender.lastName || ''}`.trim() || sender.username,
+      avatar: avatars.get(String(sender._id)) || DEFAULT_AVATAR },
+  } };
+}
+
+module.exports = { fetchFriendsNetwork, createFriendRequest, respondToFriendRequest, getFriendRequest };

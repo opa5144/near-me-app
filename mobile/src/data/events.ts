@@ -43,8 +43,10 @@ export type EventItem = {
 
 // All is a list filter. Saved events need one or more specific categories.
 // Actual event records now come from the API, not an exported sample array.
-export const categories = ['All', 'Music', 'Dance', 'Food', 'Film', 'Workshop', 'Art', 'Clothing', 'Entertainment', 'Retail']
-export const eventCategories = categories.filter(category => category !== 'All');
+export const eventCategories = ['Music', 'Dance', 'Food', 'Film', 'Workshop', 'Art'];
+export const storeCategories = [...eventCategories, 'Clothing', 'Entertainment', 'Retail'];
+// Search covers both events and stores; creation validates each resource's choices.
+export const categories = ['All', ...storeCategories];
 
 // Older API records may contain one category. Normalize that bridge once at
 // the API boundary so every screen works with the same ordered category array.

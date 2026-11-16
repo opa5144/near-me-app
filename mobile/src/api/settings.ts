@@ -33,6 +33,7 @@ export const NOTIFICATION_KEYS = [
   'organizerAnnounceEmail', 'organizerAnnouncePhone', 'followerEmail',
   'followerPhone', 'newMessageEmail', 'newMessagePhone', 'hostEventLiveEmail',
   'hostNewsletterEmail', 'hostNewCommentEmail',
+  'friendRequestsEmail', 'friendRequestsPhone',
 ] as const;
 
 export type NotificationKey = typeof NOTIFICATION_KEYS[number];

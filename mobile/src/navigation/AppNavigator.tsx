@@ -45,6 +45,7 @@ import { DisplayScreen } from '../screens/settings/DisplayScreen';
 import { AboutScreen } from '../screens/settings/AboutScreen';
 import { NotificationInboxScreen } from '../screens/settings/NotificationInboxScreen';
 import { RateEventScreen } from '../screens/event/RateEventScreen';
+import { FriendRequestScreen } from '../screens/settings/FriendRequestScreen';
 
 export type RootStackParamList = {
   MainTabs: undefined;
@@ -54,6 +55,7 @@ export type RootStackParamList = {
   StoreDetails: { storeId?: string; sampleStore?: SampleStoreItem };
   NotificationInbox: undefined;
   RateEvent: { eventId: string };
+  FriendRequest: { requestId: string };
 };
 
 const Tab = createBottomTabNavigator();
@@ -63,6 +65,10 @@ const RootStack = createNativeStackNavigator<RootStackParamList>();
 
 // Inbox content supplies IDs, never arbitrary navigation routes or URLs.
 function openNotificationAction(navigation: any, action: NotificationAction) {
+  if (action.type === 'OPEN_FRIEND_REQUEST') {
+    if (/^[a-f0-9]{24}$/i.test(action.requestId)) navigation.navigate('FriendRequest', { requestId: action.requestId });
+    return;
+  }
   if (typeof action.eventId !== 'string' || !/^[a-f0-9]{24}$/i.test(action.eventId)) return;
   if (action.type === 'OPEN_EVENT') navigation.navigate('EventDetails', { eventId: action.eventId });
   if (action.type === 'RATE_EVENT') navigation.navigate('RateEvent', { eventId: action.eventId });
@@ -478,6 +484,13 @@ function RateEventRoute({ route, navigation }: NativeStackScreenProps<RootStackP
   </ScreenContainer>;
 }
 
+function FriendRequestRoute({ route, navigation }: NativeStackScreenProps<RootStackParamList, 'FriendRequest'>) {
+  return <ScreenContainer style={{ paddingHorizontal: 0 }}>
+    <FriendRequestScreen requestId={route.params?.requestId ?? ''}
+      onBack={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MainTabs')} />
+  </ScreenContainer>;
+}
+
 function RootNavigator() {
   const { colors } = useTheme();
   const { refreshEvents } = useEvents();
@@ -494,6 +507,7 @@ function RootNavigator() {
       <RootStack.Screen name="StoreDetails" component={StoreDetailsRoute} />
       <RootStack.Screen name="NotificationInbox" component={NotificationInboxRoute} />
       <RootStack.Screen name="RateEvent" component={RateEventRoute} />
+      <RootStack.Screen name="FriendRequest" component={FriendRequestRoute} />
       <RootStack.Screen name="EditEvent">
         {props => {
           const route = props.route as { params?: { eventId: string } };

@@ -39,6 +39,23 @@ export interface FriendMutationResponse {
   friendship: FriendshipRecord;
 }
 
+// The server returns this only to the request's recipient. A request has no event ID.
+export interface FriendRequestDetail {
+  id: string;
+  requester: FriendItem;
+  recipientId: string;
+  status: 'pending' | 'accepted' | 'rejected' | 'blocked';
+  canRespond: boolean;
+  requestVersion: number;
+  requestedAt: string;
+  createdAt: string;
+}
+
+export async function fetchFriendRequest(requestId: string, signal?: AbortSignal): Promise<FriendRequestDetail> {
+  const { data } = await api.get<{ request: FriendRequestDetail }>('/friends/request/' + encodeURIComponent(requestId), { signal });
+  return data.request;
+}
+
 // Request IDs identify Friendship records. Network item IDs identify User records.
 export function friendshipFromNetwork(network: FriendsNetworkResponse, targetUserId: string): {
   status: FriendshipStatus; requestId?: string;
@@ -70,7 +87,9 @@ export async function sendFriendRequest(recipientId: string): Promise<FriendMuta
 }
 
 // Accept or reject a pending friend request ('accept' | 'reject')
-export async function respondToFriendRequest(requestId: string, action: 'accept' | 'reject'): Promise<FriendMutationResponse> {
-  const response = await api.patch<FriendMutationResponse>(`/friends/request/${encodeURIComponent(requestId)}`, { action });
+export async function respondToFriendRequest(requestId: string, action: 'accept' | 'reject', requestVersion?: number): Promise<FriendMutationResponse> {
+  const response = await api.patch<FriendMutationResponse>(`/friends/request/${encodeURIComponent(requestId)}`, {
+    action, ...(requestVersion === undefined ? {} : { requestVersion }),
+  });
   return response.data;
 }

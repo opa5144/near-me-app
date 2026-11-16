@@ -1,5 +1,5 @@
 import { isAxiosError } from 'axios';
-import { eventCategories } from '../../data/events';
+import { eventCategories, storeCategories } from '../../data/events';
 import { toPhotoInput } from '../../api/photos';
 import type { EditablePhoto } from '../../api/photos';
 import { businessDays } from '../../components/BusinessHoursEditor';
@@ -49,9 +49,9 @@ function photoError(photos: EditablePhoto[]) {
   catch (reason) { return reason instanceof Error ? reason.message : 'Remove the photo that could not be prepared and add it again.'; }
 }
 
-function validCategories(values: string[]) {
-  return values.length >= 1 && values.length <= eventCategories.length &&
-    new Set(values).size === values.length && values.every(value => eventCategories.includes(value));
+function validCategories(values: string[], choices = eventCategories) {
+  return values.length >= 1 && values.length <= choices.length &&
+    new Set(values).size === values.length && values.every(value => choices.includes(value));
 }
 
 export interface EventDraft {
@@ -116,7 +116,7 @@ export function validateStoreDraft(draft: StoreDraft): HostFieldErrors {
     description: requiredText(draft.description, 'a store description', 5000),
     location: locationError(draft.venue), timeZone: timeZoneError(draft.timeZone), photos: photoError(draft.photos),
   };
-  if (!validCategories(draft.categories)) errors.categories = 'Choose at least one vendor category.';
+  if (!validCategories(draft.categories, storeCategories)) errors.categories = 'Choose at least one vendor category.';
   for (const day of businessDays) {
     const hours = draft.hours[day];
     if (!hours || typeof hours.open !== 'boolean') errors[`hours.${day}`] = 'Choose open or closed for this day.';

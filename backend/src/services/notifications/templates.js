@@ -35,13 +35,26 @@ function clockLabel(value, timeZone) {
 function safePayload(payload) {
   const result = {};
   for (const key of ['expectedStartsAt', 'expectedEndsAt', 'expectedClosesAt', 'registrationVersion',
-    'selectionVersion', 'eventVersion', 'occurredAt', 'changes', 'eventSnapshot', 'cancelledAt', 'cancellationReason', 'inviteId']) {
+    'selectionVersion', 'eventVersion', 'occurredAt', 'changes', 'eventSnapshot', 'cancelledAt', 'cancellationReason', 'inviteId',
+    'requestId', 'requestVersion', 'requestedAt']) {
     if (payload[key] !== undefined) result[key] = payload[key];
   }
   return result;
 }
 
 function renderNotification(type, context) {
+  if (type === 'FRIEND_REQUEST') {
+    const requestId = String(context.request._id);
+    const actorId = String(context.sender._id);
+    const name = text(`${context.sender.firstName || ''} ${context.sender.lastName || ''}`, 150) ||
+      text(context.sender.username, 25) || 'Someone';
+    return renderStoredNotification({ title: 'New friend request',
+      message: `${name} (@${text(context.sender.username, 25)}) sent you a friend request.`,
+      data: { type, requestId, actorId, requestVersion: context.payload.requestVersion,
+        payload: safePayload(context.payload), dueAt: iso(notificationOccurrence(context.job)), expiresAt: null },
+      action: { type: 'OPEN_FRIEND_REQUEST', requestId, actorId },
+    });
+  }
   const event = TIMED_TYPES.includes(type) ? context.event : context.eventSnapshot;
   const title = text(event.title, 150) || 'Your event';
   const zone = text(event.timeZone, 100) || text(context.event.timeZone, 100) || 'UTC';

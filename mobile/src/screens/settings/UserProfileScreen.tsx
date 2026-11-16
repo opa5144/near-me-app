@@ -431,6 +431,7 @@ export function UserProfileScreen({ navigation, events, onOpenEvent, onOpenNotif
             <NotificationInbox onOpenAction={action => {
               setShowInboxModal(false);
               if (onOpenNotificationAction) onOpenNotificationAction(action);
+              else if (action.type === 'OPEN_FRIEND_REQUEST') navigation.navigate('FriendRequest', { requestId: action.requestId });
               else navigation.navigate(action.type === 'RATE_EVENT' ? 'RateEvent' : 'EventDetails', { eventId: action.eventId });
             }} />
           ) : (

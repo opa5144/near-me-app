@@ -12,10 +12,13 @@ import { FieldError } from './FieldError';
 import { EventInviteCard } from './EventInviteCard';
 import { EventInvitesPanel } from './EventInvitesPanel';
 import { useEvents } from '../context/EventsContext';
+import { useUserData } from '../context/UserDataContext';
+import { FriendRequestCard } from './FriendRequestCard';
 
 export function NotificationInbox({ onOpenAction }: { onOpenAction: (action: NotificationAction) => void }) {
   const { colors } = useTheme();
   const { refreshSelections, refreshEvents } = useEvents();
+  const { refreshFriends } = useUserData();
   const { notifications, unreadCount, isLoading, refreshing, loadingMore, hasMore, error, actionError,
     saving, refresh, loadMore, setRead, readAll } = useNotifications();
   const [inviteRefreshGeneration, setInviteRefreshGeneration] = useState(0);
@@ -27,8 +30,11 @@ export function NotificationInbox({ onOpenAction }: { onOpenAction: (action: Not
   useFocusEffect(useCallback(() => { refreshInbox(); }, [refreshInbox]));
   const inviteIdFor = (item: AppNotification) => item.type === 'EVENT_INVITE' && typeof item.data.inviteId === 'string' &&
     /^[a-f0-9]{24}$/i.test(item.data.inviteId) ? item.data.inviteId : undefined;
+  const requestIdFor = (item: AppNotification) => item.type === 'FRIEND_REQUEST' && typeof item.data.requestId === 'string' &&
+    /^[a-f0-9]{24}$/i.test(item.data.requestId) ? item.data.requestId : undefined;
   const notificationInviteIds = new Set(notifications.map(inviteIdFor).filter((value): value is string => Boolean(value)));
   const invitationUpdated = () => { refreshInbox(); void refreshSelections(); void refreshEvents(); };
+  const friendRequestUpdated = () => { refreshInbox(); void refreshFriends(true); };
   const openInvitedEvent = (eventId: string) => onOpenAction({ type: 'OPEN_EVENT', eventId });
 
   async function open(item: AppNotification) {
@@ -50,23 +56,24 @@ export function NotificationInbox({ onOpenAction }: { onOpenAction: (action: Not
       ListHeaderComponent={<EventInvitesPanel notificationInviteIds={notificationInviteIds} refreshGeneration={inviteRefreshGeneration}
         onUpdated={invitationUpdated} onOpenEvent={openInvitedEvent} />}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refreshInbox} tintColor={colors.primary} colors={[colors.primary]} />}
-      ListEmptyComponent={!error ? <Text style={[styles.empty, { color: colors.muted }]}>No notifications yet. Your event updates will appear here.</Text> : undefined}
+      ListEmptyComponent={!error ? <Text style={[styles.empty, { color: colors.muted }]}>No notifications yet. Your event and friend updates will appear here.</Text> : undefined}
       renderItem={({ item }) => {
         const action = notificationAction(item);
         const created = new Date(item.createdAt);
         const timestamp = Number.isFinite(created.getTime()) ? `${formatEventDate(item.createdAt)} · ${created.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : '';
         return <View style={[styles.card, { backgroundColor: colors.surface, borderColor: item.isRead ? colors.border : colors.primary }]}>
           <View style={styles.headingRow}>
-            <Ionicons name={item.type === 'RATE_ATTENDED_EVENT' ? 'happy-outline' : 'notifications-outline'} size={21} color={colors.primary} />
+            <Ionicons name={item.type === 'FRIEND_REQUEST' ? 'person-add-outline' : item.type === 'RATE_ATTENDED_EVENT' ? 'happy-outline' : 'notifications-outline'} size={21} color={colors.primary} />
             <Text style={[styles.title, { color: colors.text, fontWeight: item.isRead ? '600' : '800' }]}>{item.title}</Text>
             {!item.isRead && <View accessibilityLabel="Unread" style={[styles.dot, { backgroundColor: colors.primary }]} />}
           </View>
           <Text style={[styles.message, { color: colors.text }]}>{item.message}</Text>
           <Text style={[styles.time, { color: colors.muted }]}>{timestamp}</Text>
           {inviteIdFor(item) && <EventInviteCard inviteId={inviteIdFor(item)!} refreshGeneration={inviteRefreshGeneration} onUpdated={invitationUpdated} />}
+          {requestIdFor(item) && <FriendRequestCard requestId={requestIdFor(item)!} refreshGeneration={inviteRefreshGeneration} onUpdated={friendRequestUpdated} />}
           <View style={styles.actions}>
             {action && <Pressable accessibilityRole="button" disabled={saving} onPress={() => { void open(item); }} style={styles.action}>
-              <Text style={[styles.actionText, { color: colors.primary }]}>{action.type === 'RATE_EVENT' ? 'Rate event' : 'View event'}</Text>
+              <Text style={[styles.actionText, { color: colors.primary }]}>{action.type === 'OPEN_FRIEND_REQUEST' ? 'View friend request' : action.type === 'RATE_EVENT' ? 'Rate event' : 'View event'}</Text>
             </Pressable>}
             <Pressable accessibilityRole="button" disabled={saving} onPress={() => { void setRead(item.id, !item.isRead); }} style={styles.action}>
               <Text style={[styles.actionText, { color: colors.primary }]}>{item.isRead ? 'Mark unread' : 'Mark read'}</Text>

@@ -8,6 +8,7 @@ const { ServiceError } = require('../serviceError');
 const objectBody = value => value && typeof value === 'object' && !Array.isArray(value);
 const valueAt = (value, key) => value instanceof Map ? value.get(key) : value?.[key];
 const LEGACY_TYPE_FLAGS = Object.freeze({
+  FRIEND_REQUEST: { email: 'friendRequestsEmail', sms: 'friendRequestsPhone' },
   EVENT_STARTS_24H: { email: 'attendingEmailReminders', sms: 'attendingPhoneReminders' },
   EVENT_STARTS_1H: { email: 'attendingEmailReminders', sms: 'attendingPhoneReminders' },
   SAVED_EVENT_REGISTRATION_CLOSING: { email: 'bookingInterestEmail' },

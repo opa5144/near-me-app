@@ -17,6 +17,9 @@ const friendshipSchema = new mongoose.Schema(
       enum: ['pending', 'accepted', 'rejected', 'blocked'],
       default: 'pending',
     },
+    // A rejected request may be sent again; each pending occurrence has one alert.
+    requestVersion: { type: Number, default: 1, min: 1, validate: Number.isSafeInteger },
+    requestedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

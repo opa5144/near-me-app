@@ -5,7 +5,8 @@ const { EXTERNAL_CHANNELS } = require('../constants/notificationTypes');
 const schema = new mongoose.Schema({
   notificationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Notification', required: true },
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  eventId: { type: mongoose.Schema.Types.ObjectId, ref: 'Event', required: true },
+  eventId: { type: mongoose.Schema.Types.ObjectId, ref: 'Event', default: null },
+  requestId: { type: mongoose.Schema.Types.ObjectId, ref: 'Friendship', default: null },
   channel: { type: String, enum: EXTERNAL_CHANNELS, required: true },
   destinationKey: { type: String, required: true, maxlength: 200 },
   deviceId: { type: mongoose.Schema.Types.ObjectId, ref: 'PushDevice', default: null },

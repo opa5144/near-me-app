@@ -7,10 +7,11 @@ import type { FriendItem } from '../api/friends';
 import { formatEventPrice } from '../utils/eventPrice';
 
 // Reused by event lists. The parent supplies the record and decides where a tap navigates.
-export function EventCard({ event, onPress, horizontal = false, interestedCount, attendingCount, friendsAttending }: {
+export function EventCard({ event, onPress, horizontal = false, interestedCount, attendingCount, friendsAttending, isOwnEvent = false }: {
   event: EventItem; onPress: () => void; horizontal?: boolean;
   interestedCount?: number; attendingCount?: number;
   friendsAttending?: FriendItem[];
+  isOwnEvent?: boolean;
 }) {
   const { colors } = useTheme();
   const { fontScale } = useWindowDimensions();
@@ -30,7 +31,7 @@ export function EventCard({ event, onPress, horizontal = false, interestedCount,
   // Cards share a compact height at the device's font scale; their full text
   // stays in the accessible summary and on the event's details page.
   const cardHeight = Math.ceil(128 + (Math.max(1, fontScale) - 1) * 108);
-  const summary = [event.title, cancelled ? 'Cancelled' : '', event.categories.join(', '),
+  const summary = [event.title, isOwnEvent ? 'Mine' : '', cancelled ? 'Cancelled' : '', event.categories.join(', '),
     event.date, event.time, formatEventPrice(event), event.venue, audience,
     goingFriends.length ? `${goingFriends.length} friends attending` : ''].filter(Boolean).join('. ');
 
@@ -66,6 +67,11 @@ export function EventCard({ event, onPress, horizontal = false, interestedCount,
           {goingFriends.length > 0 && <FriendAvatarStack friendsAttending={goingFriends} compact />}
         </View>}
       </View>
+      {isOwnEvent && <View pointerEvents="none" style={styles.ownershipColumn}>
+        <View style={[styles.ownershipBadge, { backgroundColor: colors.surface, borderColor: colors.primary }]}>
+          <Text style={[styles.ownershipText, { color: colors.primary }]} numberOfLines={2}>Mine</Text>
+        </View>
+      </View>}
     </Pressable>
   );
 }
@@ -90,4 +96,8 @@ const styles = StyleSheet.create({
   venue: { fontSize: 10, lineHeight: 12, marginTop: 2 },
   footer: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2, minHeight: 18 },
   audience: { fontSize: 9, lineHeight: 11, flex: 1 },
+  // A trailing column centers the badge without covering event text or changing card height.
+  ownershipColumn: { width: 66, flexShrink: 0, alignSelf: 'stretch', justifyContent: 'center', alignItems: 'flex-end' },
+  ownershipBadge: { maxWidth: '100%', borderWidth: 1, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 5 },
+  ownershipText: { fontSize: 10, lineHeight: 13, fontWeight: '800', textAlign: 'center' },
 });

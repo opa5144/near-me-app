@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const STORE_CATEGORIES = ['Music', 'Dance', 'Food', 'Film', 'Workshop', 'Art'];
+const { STORE_CATEGORIES } = require('../constants/storeCategories');
 const BUSINESS_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const CLOCK_TIME = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 
@@ -59,9 +59,12 @@ const storeSchema = new mongoose.Schema({
     },
   },
   // Photos are separate StorePhotos records; StoreList stores store metadata only.
+  // Administrative imports use a stable key; ordinary app-created stores omit it.
+  seedKey: { type: String },
 }, { timestamps: true, collection: 'StoreList' });
 
 storeSchema.index({ createdAt: -1, _id: -1 });
+storeSchema.index({ seedKey: 1 }, { unique: true, sparse: true });
 
 const Store = mongoose.model('Store', storeSchema);
 module.exports = Store;

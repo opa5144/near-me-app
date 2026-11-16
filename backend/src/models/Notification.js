@@ -4,7 +4,10 @@ const { NOTIFICATION_TYPES, CHANNELS } = require('../constants/notificationTypes
 // One logical notification per recipient/occurrence. Read state is independent of delivery.
 const schema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  eventId: { type: mongoose.Schema.Types.ObjectId, ref: 'Event', required: true },
+  eventId: { type: mongoose.Schema.Types.ObjectId, ref: 'Event', default: null,
+    required() { return this.type !== 'FRIEND_REQUEST'; } },
+  requestId: { type: mongoose.Schema.Types.ObjectId, ref: 'Friendship', default: null,
+    required() { return this.type === 'FRIEND_REQUEST'; } },
   actorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   type: { type: String, enum: NOTIFICATION_TYPES, required: true },
   title: { type: String, required: true, maxlength: 200 },

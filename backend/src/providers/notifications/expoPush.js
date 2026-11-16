@@ -13,7 +13,9 @@ async function send({ to, content }, config) {
     method: 'POST', headers: headers(config), body: JSON.stringify({
       to, title: content.pushTitle, body: content.pushBody,
       // Push needs routing data only; keep policy snapshots in the backend inbox.
-      data: { eventId: content.data.eventId, type: content.data.type, action: content.action },
+      data: { ...(content.data.eventId ? { eventId: content.data.eventId } : {}),
+        ...(content.data.requestId ? { requestId: content.data.requestId } : {}),
+        type: content.data.type, action: content.action },
       sound: 'default', ttl: 3600,
     }),
   });
