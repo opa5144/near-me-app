@@ -3,7 +3,6 @@ import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } fro
 import { Ionicons } from '@expo/vector-icons';
 import { EventItem } from '../../data/events';
 import { EventCard } from '../../components/EventCard';
-import { ScreenHeader } from '../../components/ScreenHeader';
 import { AppText } from '../../components/AppText';
 import { useTheme } from '../../context/ThemeContext';
 import { useEvents } from '../../context/EventsContext';
@@ -43,7 +42,7 @@ export function ItineraryScreen({ events: plannedEvents, onOpenEvent }: { events
     setTimeout(() => {
       const sorted = sortChronologically(availablePlan(plannedEvents));
       setActivePlan(sorted);
-      setPlanTitle('Chronological Master Itinerary');
+      setPlanTitle('Chronological Itinerary');
       setPlanGenerated(true);
       setIsSmartLoading(false);
     }, 500);
@@ -59,7 +58,7 @@ export function ItineraryScreen({ events: plannedEvents, onOpenEvent }: { events
       const sortedSurprise = sortChronologically(surpriseSelection);
 
       setActivePlan(sortedSurprise);
-      setPlanTitle('AI Discovery Itinerary');
+      setPlanTitle('Discovery Itinerary');
       setPlanGenerated(true);
       setIsSurpriseLoading(false);
     }, 500);
@@ -78,32 +77,27 @@ export function ItineraryScreen({ events: plannedEvents, onOpenEvent }: { events
 
   return (
     <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
-      <ScreenHeader
-        title="My Itinerary"
-        subtitle={
-          planGenerated
-            ? 'Your custom multi-day itinerary, fully optimized.'
-            : `${savedOutings.length} saved ${savedOutings.length === 1 ? 'event' : 'events'} ready to plan around.`
-        }
-      />
+      <View style={styles.pageHeader}>
+        <AppText accessibilityRole="header" style={[styles.pageTitle, { color: colors.text }]}>My Itinerary</AppText>
+        <AppText style={[styles.pageSubtitle, { color: colors.muted }]}>{planGenerated
+          ? 'Your planned outings, in time order.'
+          : `${savedOutings.length} saved ${savedOutings.length === 1 ? 'event' : 'events'}`}</AppText>
+      </View>
 
-      {/* Interactive AI Gimmick Card */}
+      {/* Keep planning controls compact so the first outing stays near the heading. */}
       {(savedOutings.length > 0 || globalEvents.length > 0) && (
         <View style={[styles.assistantCard, { backgroundColor: colors.surface, borderColor: colors.primary }]}>
           <View style={styles.assistantHeader}>
-            <Ionicons name="sparkles" size={16} color={colors.primary} />
-            <AppText style={[styles.assistantEyebrow, { color: colors.primary }]}>SMART ITINERARY ASSISTANT</AppText>
+            <Ionicons name="sparkles" size={14} color={colors.primary} />
+            <AppText style={[styles.assistantTitle, { color: colors.text }]}>Plan your outings</AppText>
           </View>
-
-          <AppText style={[styles.assistantTitle, { color: colors.text }]}>Find what's happening NearMe</AppText>
-          <AppText style={[styles.assistantBody, { color: colors.muted }]}>
-            Generate a smart chronological timeline from your saved items, or hit Surprise Me to instantly discover a 1-2 day local adventure.
-          </AppText>
 
           <View style={styles.actionRow}>
             <TouchableOpacity
               style={[styles.primaryActionBtn, { backgroundColor: colors.primary }]}
               activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Smart Plan: sort saved events in time order"
               onPress={handleGenerateSmartPlan}
               disabled={isSmartLoading || isSurpriseLoading}
             >
@@ -120,6 +114,8 @@ export function ItineraryScreen({ events: plannedEvents, onOpenEvent }: { events
             <TouchableOpacity
               style={[styles.secondaryActionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
               activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Surprise Me: discover available events"
               onPress={handleSurprisePlan}
               disabled={isSmartLoading || isSurpriseLoading}
             >
@@ -153,7 +149,7 @@ export function ItineraryScreen({ events: plannedEvents, onOpenEvent }: { events
 
           {Object.entries(groupedByDate).map(([dateStr, dateEvents]) => (
             <View key={dateStr} style={styles.dateSection}>
-              {/* Premium Date Header Banner */}
+              {/* One small date heading groups the event cards below it. */}
               <View style={[styles.dateBanner, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={[styles.dateIconBox, { backgroundColor: colors.primary }]}>
                   <Ionicons name="calendar" size={14} color="#FFFFFF" />
@@ -173,10 +169,7 @@ export function ItineraryScreen({ events: plannedEvents, onOpenEvent }: { events
                     {index < arr.length - 1 && <View style={[styles.line, { backgroundColor: colors.border }]} />}
                   </View>
                   <View style={styles.eventWrapper}>
-                    <View style={styles.timeBadgeRow}>
-                      <Ionicons name="time" size={13} color={colors.primary} />
-                      <AppText style={[styles.time, { color: colors.primary }]}>{event.time}</AppText>
-                    </View>
+                    {/* The shared card already includes this event's date and time. */}
                     <EventCard event={event} horizontal onPress={() => onOpenEvent(event)} />
                   </View>
                 </View>
@@ -202,27 +195,31 @@ export function ItineraryScreen({ events: plannedEvents, onOpenEvent }: { events
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingBottom: 24, flexGrow: 1 },
-  assistantCard: { borderRadius: 14, borderWidth: 1, padding: 14, marginBottom: 22 },
-  assistantHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
-  assistantEyebrow: { fontSize: 10, fontWeight: '900', letterSpacing: 0.6 },
-  assistantTitle: { fontSize: 13, fontWeight: '800', marginBottom: 3 },
-  assistantBody: { fontSize: 12, lineHeight: 17, marginBottom: 14 },
-  actionRow: { flexDirection: 'row', gap: 10 },
+  content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 20, flexGrow: 1 },
+  pageHeader: { marginBottom: 10 },
+  pageTitle: { fontSize: 28, fontWeight: '900' },
+  pageSubtitle: { fontSize: 12, fontWeight: '600', marginTop: 3 },
+  assistantCard: { borderRadius: 14, borderWidth: 1, padding: 10, marginBottom: 12 },
+  assistantHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  assistantTitle: { fontSize: 12, fontWeight: '800' },
+  actionRow: { flexDirection: 'row', gap: 8 },
   primaryActionBtn: {
     flex: 1,
-    height: 42,
+    minWidth: 0,
+    paddingHorizontal: 6,
+    minHeight: 44,
     borderRadius: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
   },
-  primaryActionText: { color: '#FFFFFF', fontWeight: '800', fontSize: 13 },
+  primaryActionText: { color: '#FFFFFF', fontWeight: '800', fontSize: 12, paddingVertical: 8, flexShrink: 1, textAlign: 'center' },
   secondaryActionBtn: {
     flex: 1,
-    height: 42,
-    paddingHorizontal: 14,
+    minWidth: 0,
+    minHeight: 44,
+    paddingHorizontal: 8,
     borderRadius: 10,
     borderWidth: 1,
     flexDirection: 'row',
@@ -230,51 +227,44 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
   },
-  secondaryActionText: { fontWeight: '800', fontSize: 13 },
-  timelineContainer: { marginTop: 4 },
-  timelineHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16 },
+  secondaryActionText: { fontWeight: '800', fontSize: 12, paddingVertical: 8, flexShrink: 1, textAlign: 'center' },
+  timelineContainer: { marginTop: 0 },
+  timelineHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   statusDotLive: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' },
   timelineHeaderLabel: { fontSize: 11, fontWeight: '900', letterSpacing: 0.8, flex: 1 },
   resetText: { fontSize: 11, fontWeight: '700' },
-  dateSection: { marginBottom: 20 },
+  dateSection: { marginBottom: 10 },
   dateBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
+    gap: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 10,
     borderWidth: 1,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
+    marginBottom: 8,
   },
   dateIconBox: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+    width: 22,
+    height: 22,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dateBannerText: { fontSize: 13, fontWeight: '900', flex: 1 },
+  dateBannerText: { fontSize: 12, fontWeight: '800', flex: 1 },
   eventCountPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: 8,
   },
   eventCountText: { fontSize: 11, fontWeight: '800' },
-  row: { flexDirection: 'row', gap: 14, marginBottom: 4 },
-  timeline: { width: 16, alignItems: 'center' },
-  dot: { width: 12, height: 12, borderRadius: 6, marginTop: 14, borderWidth: 2, borderColor: '#FFFFFF' },
+  row: { flexDirection: 'row', gap: 8 },
+  timeline: { width: 12, alignItems: 'center' },
+  dot: { width: 10, height: 10, borderRadius: 5, marginTop: 14, borderWidth: 2, borderColor: '#FFFFFF' },
   line: { width: 2.5, flex: 1, marginTop: 6, marginBottom: -6 },
-  eventWrapper: { flex: 1, marginBottom: 14 },
-  timeBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 6, marginTop: 10 },
-  time: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3 },
-  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60, paddingHorizontal: 20 },
-  emptyIconCircle: { width: 64, height: 64, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  eventWrapper: { flex: 1, minWidth: 0 },
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 32, paddingHorizontal: 16 },
+  emptyIconCircle: { width: 48, height: 48, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
   emptyTitle: { fontWeight: '900', fontSize: 18, marginBottom: 6 },
   emptyText: { lineHeight: 20, textAlign: 'center' },
 });

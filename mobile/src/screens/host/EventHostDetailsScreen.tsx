@@ -145,13 +145,17 @@ export function EventHostDetailsScreen({ event, onEditEvent, onRescheduleEvent, 
 
       <PhotoCollection photos={event.photos ?? []} fallbackUri={event.bannerImage} title={event.title}
         emoji={event.emoji} accent={event.accent} mode="hero" getImageHeaders={uri => eventPhotoHeaders(uri, isDraft)} />
+      <View style={styles.titleRow}>
+        <AppText style={[styles.title, { color: colors.text }]}>{event.title || 'Untitled draft'}</AppText>
+        <AppText style={[styles.price, { color: colors.primary }]}>{formatEventPrice(event)}</AppText>
+      </View>
       <View style={styles.categoryList}>
         {event.categories.map(category => <AppText key={category} style={[styles.photoCategory, { color: colors.primary, borderColor: colors.primary }]}>{category.toUpperCase()}</AppText>)}
         <AppText style={{ color: colors.muted, fontSize: 11 }}>EVENT • HOST VIEW</AppText>
+        <AppText style={{ color: colors.primary, fontWeight: '800', fontSize: 11 }}>
+          {isDraft ? 'Private draft' : cancelled ? 'Cancelled' : archived ? 'Archived' : hasEnded ? 'Completed' : 'Active'}
+        </AppText>
       </View>
-      <AppText style={{ color: colors.primary, fontWeight: '800', marginBottom: 12 }}>
-        {isDraft ? 'Private draft' : cancelled ? 'Cancelled' : archived ? 'Archived' : hasEnded ? 'Completed' : 'Active'}
-      </AppText>
 
       {/* Host Analytics Performance Summary */}
       {!isDraft && <View style={[styles.metricsContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -173,13 +177,8 @@ export function EventHostDetailsScreen({ event, onEditEvent, onRescheduleEvent, 
         </View>
       </View>}
 
-      <View style={styles.titleRow}>
-        <AppText style={[styles.title, { color: colors.text }]}>{event.title || 'Untitled draft'}</AppText>
-        <AppText style={[styles.price, { color: colors.primary }]}>{formatEventPrice(event)}</AppText>
-      </View>
-
       <View style={[styles.info, { borderBottomColor: colors.border }]}>
-        <Ionicons name="calendar-outline" size={20} color={colors.primary} style={styles.infoIcon} />
+        <Ionicons name="calendar-outline" size={18} color={colors.primary} style={styles.infoIcon} />
         <View style={styles.infoText}>
           <AppText style={[styles.infoMain, { color: colors.text }]}>{event.date || 'Not scheduled'}</AppText>
           <AppText style={[styles.infoSub, { color: colors.muted }]}>{event.time}</AppText>
@@ -195,7 +194,7 @@ export function EventHostDetailsScreen({ event, onEditEvent, onRescheduleEvent, 
       <FieldError message={calendarError} />
 
       <View style={[styles.info, { borderBottomColor: colors.border }]}>
-        <Ionicons name="location-outline" size={20} color={colors.primary} style={styles.infoIcon} />
+        <Ionicons name="location-outline" size={18} color={colors.primary} style={styles.infoIcon} />
         <View style={styles.infoText}>
           <AppText style={[styles.infoMain, { color: colors.text }]}>{event.venue}</AppText>
           <AppText style={[styles.infoSub, { color: colors.muted }]}>{event.address || event.location}</AppText>
@@ -219,8 +218,8 @@ export function EventHostDetailsScreen({ event, onEditEvent, onRescheduleEvent, 
         <AppText style={styles.editButtonText}>{isDraft ? 'Edit Draft / Publish' : 'Edit Event Details'}</AppText>
       </Pressable>}
       {hasEnded && !cancelled && !archived && !isDraft && <AppButton title="Reschedule as New Event" onPress={onRescheduleEvent}
-        style={{ marginTop: 16, marginBottom: 12 }} disabled={refreshing} />}
-      {!readOnly && !isDraft && <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+        style={{ marginTop: 10, marginBottom: 8 }} disabled={refreshing} />}
+      {!readOnly && !isDraft && <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
         <AppButton title={changing ? 'Updating...' : 'Archive Event'} variant="secondary" onPress={() => confirmLifecycle('archive')} disabled={changing || refreshing} style={{ flex: 1 }} />
         <AppButton title="Cancel Event" variant="secondary" onPress={() => confirmLifecycle('cancel')} disabled={changing || refreshing} style={{ flex: 1 }} />
       </View>}
@@ -248,32 +247,32 @@ export function EventHostDetailsScreen({ event, onEditEvent, onRescheduleEvent, 
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingBottom: 28, flexGrow: 1 },
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 13 },
+  content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 20, flexGrow: 1 },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   topBarActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   back: { fontWeight: '800', fontSize: 13 },
   invitePillButton: { height: 34, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 5 },
   invitePillText: { fontSize: 12, fontWeight: '800' },
   shareButton: { width: 34, height: 34, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  categoryList: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 12 },
-  photoCategory: { fontSize: 11, fontWeight: '700', borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
-  metricsContainer: { flexDirection: 'row', borderRadius: 16, borderWidth: 1, padding: 12, marginBottom: 18, alignItems: 'center' },
+  categoryList: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, alignItems: 'center', marginBottom: 6 },
+  photoCategory: { fontSize: 10, fontWeight: '700', borderWidth: 1, borderRadius: 7, paddingHorizontal: 6, paddingVertical: 3 },
+  metricsContainer: { flexDirection: 'row', borderRadius: 14, borderWidth: 1, padding: 8, marginBottom: 8, alignItems: 'center' },
   metricItem: { flex: 1, alignItems: 'center' },
   metricValue: { fontSize: 18, fontWeight: '900' },
   metricLabel: { fontSize: 9, fontWeight: '800', marginTop: 2, letterSpacing: 0.5 },
   metricDivider: { width: 1, height: 28 },
-  titleRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', marginBottom: 17 },
-  title: { flex: 1, fontSize: 23, fontWeight: '900', lineHeight: 28 },
-  price: { fontSize: 15, fontWeight: '900', marginTop: 4 },
-  info: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1 },
-  infoIcon: { width: 24, textAlign: 'center' },
-  infoText: { flex: 1 },
+  titleRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', marginBottom: 6 },
+  title: { flex: 1, minWidth: 0, fontSize: 22, fontWeight: '900', lineHeight: 27 },
+  price: { flexShrink: 0, fontSize: 15, fontWeight: '900', marginTop: 3 },
+  info: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, borderBottomWidth: 1 },
+  infoIcon: { width: 20, textAlign: 'center' },
+  infoText: { flex: 1, minWidth: 0 },
   infoMain: { fontSize: 12, fontWeight: '800' },
   infoSub: { fontSize: 11, marginTop: 3 },
-  editButton: { height: 48, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 17, marginBottom: 22 },
+  editButton: { minHeight: 44, paddingVertical: 10, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10, marginBottom: 12 },
   editButtonText: { color: '#FFFFFF', fontWeight: '800', fontSize: 14 },
-  section: { fontSize: 16, fontWeight: '900', marginTop: 6, marginBottom: 9 },
-  description: { fontSize: 12, lineHeight: 19, marginBottom: 20 },
+  section: { fontSize: 16, fontWeight: '900', marginTop: 6, marginBottom: 6 },
+  description: { fontSize: 12, lineHeight: 19, marginBottom: 12 },
   mapButton: { flexDirection: 'row', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   mapButtonText: { fontSize: 11, fontWeight: '800' },
 });

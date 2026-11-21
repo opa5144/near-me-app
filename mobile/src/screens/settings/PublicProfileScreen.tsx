@@ -46,6 +46,7 @@ export function PublicProfileScreen({
   initialFriendshipStatus,
   pendingRequestId,
   isFriend,
+  embedded = false,
 }: {
   publicUser: any;
   events: EventItem[];
@@ -53,6 +54,7 @@ export function PublicProfileScreen({
   initialFriendshipStatus?: FriendshipStatus;
   pendingRequestId?: string;
   isFriend?: boolean;
+  embedded?: boolean;
 }) {
   const { colors, theme } = useTheme();
   const [activeTab, setActiveTab] = useState<'hosting' | 'interested' | 'attended'>('hosting');
@@ -199,7 +201,7 @@ export function PublicProfileScreen({
 
   return (
     <ScrollView
-      contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}
+      contentContainerStyle={[styles.container, embedded && styles.embeddedContainer, { backgroundColor: colors.background }]}
       showsVerticalScrollIndicator={false}
     >
       {/* Read-Only Profile Header */}
@@ -384,40 +386,42 @@ export function PublicProfileScreen({
 }
 
 const styles = StyleSheet.create({
-  container: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40, flexGrow: 1 },
-  profileHeader: { alignItems: 'center', marginBottom: 18 },
-  avatarImage: { width: 94, height: 94, borderRadius: 47 },
-  avatarFrame: { borderWidth: 2, borderRadius: 51, padding: 3, marginBottom: 12 },
+  container: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 24, flexGrow: 1 },
+  // A modal already supplies the page gutter; do not inset its content twice.
+  embeddedContainer: { paddingHorizontal: 0, paddingTop: 0, paddingBottom: 12 },
+  profileHeader: { alignItems: 'center', marginBottom: 12 },
+  avatarImage: { width: 80, height: 80, borderRadius: 40 },
+  avatarFrame: { borderWidth: 2, borderRadius: 45, padding: 3, marginBottom: 8 },
   userName: { fontWeight: '900', marginBottom: 2, letterSpacing: 0.2 },
-  userHandle: { fontWeight: '700', marginBottom: 10 },
-  bioSection: { width: '100%', alignItems: 'center', marginBottom: 12 },
+  userHandle: { fontWeight: '700', marginBottom: 6 },
+  bioSection: { width: '100%', alignItems: 'center', marginBottom: 8 },
   bioQuoteContainer: { borderLeftWidth: 3, paddingLeft: 12, paddingVertical: 2, width: '100%' },
   bioText: { lineHeight: 19, fontSize: 13 },
-  metaPillsRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: 14, marginBottom: 14 },
+  metaPillsRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: 8, marginBottom: 8 },
   metaPill: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   metaPillText: { fontSize: 12, fontWeight: '600' },
-  friendActionContainer: { marginTop: 12, alignSelf: 'stretch' },
-  followSection: { alignSelf: 'stretch', marginTop: 12, gap: 6 },
-  followNote: { fontSize: 12, textAlign: 'center', lineHeight: 18 },
-  sectionHeading: { fontWeight: '900', marginBottom: 10 },
-  metricScope: { fontSize: 12, marginBottom: 10 },
-  metricsGrid: { flexDirection: 'row', gap: 10, marginBottom: 22 },
+  friendActionContainer: { marginTop: 8, alignSelf: 'stretch' },
+  followSection: { alignSelf: 'stretch', marginTop: 8, gap: 4 },
+  followNote: { fontSize: 11, textAlign: 'center', lineHeight: 16 },
+  sectionHeading: { fontWeight: '900', marginBottom: 6 },
+  metricScope: { fontSize: 11, marginBottom: 6 },
+  metricsGrid: { flexDirection: 'row', gap: 8, marginBottom: 14 },
   metricCard: {
     flex: 1,
     borderRadius: 14,
     borderWidth: 1,
-    paddingVertical: 14,
+    paddingVertical: 9,
     paddingHorizontal: 10,
     alignItems: 'center',
   },
-  valueToken: { fontWeight: '900', fontSize: 20 },
+  valueToken: { fontWeight: '900', fontSize: 18 },
   labelToken: { fontSize: 9, fontWeight: '800', marginTop: 4, textAlign: 'center', letterSpacing: 0.5 },
-  tabsRow: { flexDirection: 'row', borderBottomWidth: 1, marginBottom: 20 },
-  tabButton: { flex: 1, alignItems: 'center', paddingBottom: 12, position: 'relative' },
+  tabsRow: { flexDirection: 'row', borderBottomWidth: 1, marginBottom: 12 },
+  tabButton: { flex: 1, alignItems: 'center', paddingBottom: 9, position: 'relative' },
   activeTabText: { fontWeight: '800' },
   activeIndicator: { position: 'absolute', bottom: -1, left: 0, right: 0, height: 3, borderRadius: 2 },
   inactiveTabText: { fontWeight: '700' },
-  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   section: { fontWeight: '800' },
   empty: { lineHeight: 19, marginTop: 12 },
 });

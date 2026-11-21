@@ -89,6 +89,7 @@ export function StoreDetailsScreen({
         title="Back"
         variant="quiet"
         alignment="left"
+        style={styles.backButton}
         onPress={onBack}
       />
 
@@ -193,15 +194,16 @@ export function StoreDetailsScreen({
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingBottom: 32, flexGrow: 1 },
-  loading: { marginTop: 32 },
-  message: { fontSize: 13, lineHeight: 20, marginVertical: 12 },
-  title: { fontSize: 25, fontWeight: '800', marginTop: 16, marginBottom: 8 },
-  categories: { fontSize: 14, fontWeight: '700' },
-  section: { fontSize: 18, fontWeight: '800', marginTop: 24, marginBottom: 8 },
-  body: { fontSize: 14, lineHeight: 22 },
-  caption: { fontSize: 12, marginBottom: 8 },
-  hours: { flexDirection: 'row', gap: 10, borderBottomWidth: 1, paddingVertical: 12 },
-  day: { width: 90, fontSize: 13, fontWeight: '600' },
+  content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 20, flexGrow: 1 },
+  backButton: { paddingHorizontal: 0, marginBottom: 4 },
+  loading: { marginTop: 20 },
+  message: { fontSize: 12, lineHeight: 18, marginVertical: 6 },
+  title: { fontSize: 22, fontWeight: '800', marginBottom: 6 },
+  categories: { fontSize: 12, fontWeight: '700' },
+  section: { fontSize: 16, fontWeight: '800', marginTop: 10, marginBottom: 4 },
+  body: { fontSize: 13, lineHeight: 19 },
+  caption: { fontSize: 11, marginBottom: 4 },
+  hours: { flexDirection: 'row', gap: 8, borderBottomWidth: 1, paddingVertical: 8 },
+  day: { width: 84, fontSize: 13, fontWeight: '600' },
   hoursValue: { flex: 1, fontSize: 13, textAlign: 'right' },
 });

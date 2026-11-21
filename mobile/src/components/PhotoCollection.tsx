@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Image, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { FlatList, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { PersistedPhoto } from '../api/photos';
 import { AppButton } from './AppButton';
 import { useTheme } from '../context/ThemeContext';
+
+const HERO_HEIGHT = 180;
 
 export interface PhotoCollectionProps {
   photos: PersistedPhoto[];
@@ -57,11 +59,11 @@ export function PhotoCollection({ photos, fallbackUri, title = 'Photos', emoji, 
   return <View style={styles.collection}>
     {mode !== 'gallery' && <>
       <View onLayout={event => setHeroWidth(event.nativeEvent.layout.width)} style={[styles.hero, { backgroundColor: accent || colors.surface }]}>
-        {items.length && heroWidth > 0 ? <FlatList ref={heroList} data={items} horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={{ width: heroWidth, height: 220 }}
+        {items.length && heroWidth > 0 ? <FlatList ref={heroList} data={items} horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={{ width: heroWidth, height: HERO_HEIGHT }}
           keyExtractor={photo => photo.id} getItemLayout={(_, index) => ({ index, length: heroWidth, offset: heroWidth * index })}
           onMomentumScrollEnd={event => setHeroIndex(clampIndex(Math.round(event.nativeEvent.contentOffset.x / heroWidth)))}
           renderItem={({ item, index }) => <Pressable accessibilityRole="button" accessibilityLabel={title + ', photo ' + (index + 1) + ' of ' + items.length + '. Open full screen'}
-            onPress={() => setViewerIndex(index)} style={{ width: heroWidth, height: 220 }}>
+            onPress={() => setViewerIndex(index)} style={{ width: heroWidth, height: HERO_HEIGHT }}>
             <PhotoImage uri={item.url} headers={getImageHeaders?.(item.url)} label={title + ', photo ' + (index + 1)} />
           </Pressable>} /> : !items.length ? <Text style={[styles.emoji, { color: colors.text }]}>{emoji || 'No photos'}</Text> : null}
         {items.length > 0 && <View pointerEvents="none" style={styles.count}><Text style={styles.countText}>{heroIndex + 1} / {items.length}</Text></View>}
@@ -70,10 +72,11 @@ export function PhotoCollection({ photos, fallbackUri, title = 'Photos', emoji, 
     </>}
     {mode !== 'hero' && items.length > 0 && <>
       <Text style={[styles.heading, { color: colors.text }]}>Photo gallery</Text>
-      <View style={styles.thumbnails}>{items.map((photo, index) => <Pressable key={photo.id} onPress={() => setViewerIndex(index)}
+      {/* One square-thumbnail rail keeps a fifth photo from adding another row. */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbnails}>{items.map((photo, index) => <Pressable key={photo.id} onPress={() => setViewerIndex(index)}
         accessibilityRole="button" accessibilityLabel={'Open photo ' + (index + 1) + ' of ' + items.length} style={styles.thumbnail}>
         <PhotoImage uri={photo.url} headers={getImageHeaders?.(photo.url)} label={title + ', photo ' + (index + 1)} />
-      </Pressable>)}</View>
+      </Pressable>)}</ScrollView>
     </>}
     <Modal visible={viewerIndex !== null && items.length > 0} animationType="fade" presentationStyle="fullScreen" onRequestClose={() => setViewerIndex(null)}>
       <SafeAreaView edges={['top', 'bottom']} style={[styles.viewer, { backgroundColor: colors.background }]}>
@@ -100,18 +103,18 @@ export function PhotoCollection({ photos, fallbackUri, title = 'Photos', emoji, 
 }
 
 const styles = StyleSheet.create({
-  collection: { marginBottom: 18 },
-  hero: { height: 220, borderRadius: 20, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  collection: { marginBottom: 10 },
+  hero: { height: HERO_HEIGHT, borderRadius: 16, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   image: { width: '100%', height: '100%' },
   unavailable: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 8 },
   emoji: { fontSize: 48 },
-  count: { position: 'absolute', bottom: 10, right: 10, backgroundColor: '#00000099', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 4 },
-  countText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
-  dots: { flexDirection: 'row', gap: 6, justifyContent: 'center', paddingTop: 10 },
-  dot: { width: 7, height: 7, borderRadius: 4 },
-  heading: { fontSize: 15, fontWeight: '700', marginTop: 16, marginBottom: 10 },
-  thumbnails: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  thumbnail: { width: 88, height: 66, borderRadius: 10, overflow: 'hidden' },
+  count: { position: 'absolute', bottom: 8, right: 8, backgroundColor: '#00000099', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3 },
+  countText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
+  dots: { flexDirection: 'row', gap: 5, justifyContent: 'center', paddingTop: 6 },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  heading: { fontSize: 14, fontWeight: '700', marginTop: 10, marginBottom: 6 },
+  thumbnails: { flexDirection: 'row', gap: 6 },
+  thumbnail: { width: 64, height: 64, borderRadius: 8, overflow: 'hidden' },
   viewer: { flex: 1 },
   viewerHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 },
   viewerTitle: { flex: 1, fontSize: 16, fontWeight: '700' },

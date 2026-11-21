@@ -245,15 +245,15 @@ export function UserProfileScreen({ navigation, events, onOpenEvent, onOpenNotif
       {/* Private Dashboard Cards */}
       <View style={styles.tripleCardRow}>
         <TouchableOpacity style={[styles.miniCard, { backgroundColor: colors.surface, borderColor: colors.border }]} activeOpacity={0.7} onPress={() => alert('Tickets')}>
-          <Ionicons name="ticket-outline" size={26} color={colors.primary} />
+          <Ionicons name="ticket-outline" size={22} color={colors.primary} />
           <AppText variant="bodyMedium" style={styles.miniCardTitle}>Tickets</AppText>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.miniCard, { backgroundColor: colors.surface, borderColor: colors.border }]} activeOpacity={0.7} onPress={() => setShowFriendsModal(true)}>
-          <Ionicons name="people-outline" size={26} color={colors.primary} />
+          <Ionicons name="people-outline" size={22} color={colors.primary} />
           <AppText variant="bodyMedium" style={styles.miniCardTitle}>Friends ({friends.length})</AppText>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.miniCard, { backgroundColor: colors.surface, borderColor: colors.border }]} activeOpacity={0.7} onPress={() => setShowInboxModal(true)}>
-          <Ionicons name="chatbubble-ellipses-outline" size={26} color={colors.primary} />
+          <Ionicons name="chatbubble-ellipses-outline" size={22} color={colors.primary} />
           <AppText variant="bodyMedium" style={styles.miniCardTitle}>Inbox{unreadCount > 0 ? ` · ${unreadCount > 99 ? '99+' : unreadCount}` : ''}</AppText>
         </TouchableOpacity>
       </View>
@@ -403,6 +403,7 @@ export function UserProfileScreen({ navigation, events, onOpenEvent, onOpenNotif
               }}
               initialFriendshipStatus="accepted"
               isFriend={true}
+              embedded
             />
           )}
         </View>
@@ -447,45 +448,45 @@ export function UserProfileScreen({ navigation, events, onOpenEvent, onOpenNotif
 }
 
 const styles = StyleSheet.create({
-  container: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40, flexGrow: 1 },
-  topActionsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  topIconButton: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 24, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  container: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 24, flexGrow: 1 },
+  topActionsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  topIconButton: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 22, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
   editIcon: { marginRight: 2 },
   rightActionIcons: { flexDirection: 'row', gap: 10 },
   topIconButtonCircle: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   topIconText: { fontWeight: '700' },
-  profileHeader: { alignItems: 'center', marginBottom: 20 },
-  avatarImage: { width: 94, height: 94, borderRadius: 47 },
-  avatarFrame: { borderWidth: 2, borderRadius: 51, padding: 3, marginBottom: 12, position: 'relative' },
+  profileHeader: { alignItems: 'center', marginBottom: 12 },
+  avatarImage: { width: 80, height: 80, borderRadius: 40 },
+  avatarFrame: { borderWidth: 2, borderRadius: 45, padding: 3, marginBottom: 8, position: 'relative' },
   cameraBadge: { position: 'absolute', bottom: 2, right: 2, width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFFFFF' },
   userName: { fontWeight: '900', marginBottom: 2, letterSpacing: 0.2 },
-  userHandle: { fontWeight: '700', marginBottom: 10 },
-  bioSection: { width: '100%', alignItems: 'center', marginBottom: 12 },
+  userHandle: { fontWeight: '700', marginBottom: 6 },
+  bioSection: { width: '100%', alignItems: 'center', marginBottom: 8 },
   bioQuoteContainer: { borderLeftWidth: 3, paddingLeft: 12, paddingVertical: 2, width: '100%' },
   bioText: { lineHeight: 19, fontSize: 13 },
-  addBioPill: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16 },
+  addBioPill: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14 },
   addBioText: { fontSize: 12, fontWeight: '700' },
-  metaPillsRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: 12 },
+  metaPillsRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: 8 },
   metaPill: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   metaPillText: { fontSize: 12, fontWeight: '600' },
-  tripleCardRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
-  miniCard: { flex: 1, height: 105, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
-  miniCardTitle: { fontWeight: '800' },
-  bannerContainer: { marginBottom: 28 },
-  tabsRow: { flexDirection: 'row', borderBottomWidth: 1, marginBottom: 20, gap: 32 },
-  tabButton: { paddingBottom: 12, position: 'relative' },
+  tripleCardRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  miniCard: { flex: 1, minWidth: 0, minHeight: 72, paddingHorizontal: 4, paddingVertical: 8, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center', gap: 4 },
+  miniCardTitle: { fontSize: 11, lineHeight: 15, fontWeight: '800', textAlign: 'center' },
+  bannerContainer: { marginBottom: 16 },
+  tabsRow: { flexDirection: 'row', borderBottomWidth: 1, marginBottom: 12, gap: 12 },
+  tabButton: { flex: 1, alignItems: 'center', paddingBottom: 9, position: 'relative' },
   activeTabText: { fontWeight: '800' },
   activeIndicator: { position: 'absolute', bottom: -1, left: 0, right: 0, height: 3, borderRadius: 2 },
   inactiveTabText: { fontWeight: '700' },
-  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   section: { fontWeight: '800' },
   empty: { lineHeight: 19, marginTop: 12 },
-  modalContainer: { flex: 1, padding: 20 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  inviteBanner: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 14, borderWidth: 1, gap: 12, marginBottom: 16 },
-  modalSubTabs: { flexDirection: 'row', borderBottomWidth: 1, marginBottom: 16 },
+  modalContainer: { flex: 1, padding: 16 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  inviteBanner: { flexDirection: 'row', alignItems: 'center', padding: 10, borderRadius: 14, borderWidth: 1, gap: 8, marginBottom: 10 },
+  modalSubTabs: { flexDirection: 'row', borderBottomWidth: 1, marginBottom: 10 },
   subTab: { flex: 1, paddingVertical: 10, alignItems: 'center' },
-  modalItem: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 16, borderWidth: 1, marginBottom: 10, gap: 10 },
-  friendAvatar: { width: 42, height: 42, borderRadius: 21 },
+  modalItem: { flexDirection: 'row', alignItems: 'center', padding: 10, borderRadius: 14, borderWidth: 1, marginBottom: 8, gap: 8 },
+  friendAvatar: { width: 36, height: 36, borderRadius: 18 },
   modalActionBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
 });

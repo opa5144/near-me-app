@@ -213,20 +213,13 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
       
       <PhotoCollection photos={event.photos ?? []} fallbackUri={event.bannerImage} title={event.title}
         emoji={event.emoji} accent={event.accent} mode="hero" />
-      <View style={styles.categoryList}>
-        {event.categories.map(category => <AppText key={category} style={[styles.photoCategory, { color: colors.primary, borderColor: colors.primary }]}>{category.toUpperCase()}</AppText>)}
-        <AppText style={{ color: colors.muted, fontSize: 11 }}>EVENT</AppText>
-      </View>
-
-      {/* Social Proof Avatar Stack */}
-      <FriendAvatarStack friendsAttending={event.friendsAttending ?? []}
-        onPress={invitationsDisabled ? undefined : () => setShowInviteModal(true)} />
-      <FieldError message={friendNetworkError} />
-      {friendNetworkError && <AppButton title="Retry friendship status" variant="quiet" onPress={loadFriendNetwork} />}
-
       <View style={styles.titleRow}>
         <AppText style={[styles.title, { color: colors.text }]}>{event.title}</AppText>
         <AppText style={[styles.price, { color: colors.primary }]}>{formatEventPrice(event)}</AppText>
+      </View>
+      <View style={styles.categoryList}>
+        {event.categories.map(category => <AppText key={category} style={[styles.photoCategory, { color: colors.primary, borderColor: colors.primary }]}>{category.toUpperCase()}</AppText>)}
+        <AppText style={{ color: colors.muted, fontSize: 11 }}>EVENT</AppText>
       </View>
 
       {/* See event host - Navigates to own profile tab if self, or opens popup modal if other */}
@@ -247,8 +240,13 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
       <FieldError message={profileError} />
       {profileError && <AppButton title="Retry profile" variant="quiet" onPress={() => { void refreshProfile(true); }} />}
 
+      <FriendAvatarStack friendsAttending={event.friendsAttending ?? []}
+        onPress={invitationsDisabled ? undefined : () => setShowInviteModal(true)} />
+      <FieldError message={friendNetworkError} />
+      {friendNetworkError && <AppButton title="Retry friendship status" variant="quiet" onPress={loadFriendNetwork} />}
+
       <View style={[styles.info, { borderBottomColor: colors.border }]}>
-        <Ionicons name="calendar-outline" size={20} color={colors.primary} style={styles.infoIcon} />
+        <Ionicons name="calendar-outline" size={18} color={colors.primary} style={styles.infoIcon} />
         <View style={styles.infoText}>
           <AppText style={[styles.infoMain, { color: colors.text }]}>{event.date}</AppText>
           <AppText style={[styles.infoSub, { color: colors.muted }]}>{event.time}</AppText>
@@ -264,7 +262,7 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
       <FieldError message={calendarError} />
 
       <View style={[styles.info, { borderBottomColor: colors.border }]}>
-        <Ionicons name="location-outline" size={20} color={colors.primary} style={styles.infoIcon} />
+        <Ionicons name="location-outline" size={18} color={colors.primary} style={styles.infoIcon} />
         <View style={styles.infoText}>
           <AppText style={[styles.infoMain, { color: colors.text }]}>{event.venue}</AppText>
           <AppText style={[styles.infoSub, { color: colors.muted }]}>{event.address || event.location}</AppText>
@@ -293,10 +291,10 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
         This event has been archived. Registration is closed.{event.archiveReason ? ' ' + event.archiveReason : ''}
       </AppText>}
       <View style={styles.selectionRow}>
-        <AppButton title={interested ? 'Interested' : "I'm Interested"} onPress={onToggleInterested}
+        <AppButton title={interested ? 'Interested' : "I'm Interested"} onPress={onToggleInterested} minHeight={44}
           disabled={selectionDisabled} variant={interested ? 'primary' : 'secondary'} style={styles.selectionButton}
           textStyle={styles.selectionButtonText} />
-        <AppButton title={attending ? 'Attending' : "I'll Attend"}
+        <AppButton title={attending ? 'Attending' : "I'll Attend"} minHeight={44}
           onPress={onToggleAttending} disabled={selectionDisabled || (!attending && registrationClosed)} variant={attending ? 'primary' : 'secondary'}
           style={styles.selectionButton} textStyle={styles.selectionButtonText} />
       </View>
@@ -351,35 +349,35 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingBottom: 28, flexGrow: 1 },
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 13 },
+  content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 20, flexGrow: 1 },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   topBarActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   back: { fontWeight: '800', fontSize: 13 },
   invitePillButton: { height: 34, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 5 },
   invitePillText: { fontSize: 12, fontWeight: '800' },
   shareButton: { width: 34, height: 34, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  categoryList: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 12 },
-  photoCategory: { fontSize: 11, fontWeight: '700', borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
-  titleRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', marginBottom: 17 },
-  title: { flex: 1, fontSize: 23, fontWeight: '900', lineHeight: 28 },
-  price: { fontSize: 15, fontWeight: '900', marginTop: 4 },
-  hostInlineRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+  categoryList: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, alignItems: 'center', marginBottom: 6 },
+  photoCategory: { fontSize: 10, fontWeight: '700', borderWidth: 1, borderRadius: 7, paddingHorizontal: 6, paddingVertical: 3 },
+  titleRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', marginBottom: 6 },
+  title: { flex: 1, minWidth: 0, fontSize: 22, fontWeight: '900', lineHeight: 27 },
+  price: { flexShrink: 0, fontSize: 15, fontWeight: '900', marginTop: 3 },
+  hostInlineRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
   hostInlineAvatar: { width: 22, height: 22, borderRadius: 11 },
-  info: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1 },
-  infoIcon: { width: 24, textAlign: 'center' },
-  infoText: { flex: 1 },
+  info: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, borderBottomWidth: 1 },
+  infoIcon: { width: 20, textAlign: 'center' },
+  infoText: { flex: 1, minWidth: 0 },
   infoMain: { fontSize: 12, fontWeight: '800' },
   infoSub: { fontSize: 11, marginTop: 3 },
-  selectionRow: { flexDirection: 'row', gap: 10, marginTop: 17, marginBottom: 22 },
+  selectionRow: { flexDirection: 'row', gap: 8, marginTop: 10, marginBottom: 12 },
   selectionButton: { flex: 1, minWidth: 0, paddingHorizontal: 10 },
   selectionButtonText: { fontSize: 13, textAlign: 'center' },
-  selectionNotice: { marginTop: 12, marginBottom: 8 },
-  section: { fontSize: 16, fontWeight: '900', marginTop: 6, marginBottom: 9 },
-  description: { fontSize: 12, lineHeight: 19, marginBottom: 20 },
+  selectionNotice: { marginTop: 8, marginBottom: 6 },
+  section: { fontSize: 16, fontWeight: '900', marginTop: 6, marginBottom: 6 },
+  description: { fontSize: 12, lineHeight: 19, marginBottom: 12 },
   mapButton: { flexDirection: 'row', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   mapButtonText: { fontSize: 11, fontWeight: '800' },
-  modalWrapper: { flex: 1, paddingTop: 16 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 8 },
+  modalWrapper: { flex: 1, paddingTop: 12 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 6 },
   modalTitle: { fontSize: 18, fontWeight: '900' },
   closeBtn: { padding: 4 },
 });

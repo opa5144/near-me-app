@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, AppState, Image, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, AppState, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { EventItem } from '../../data/events';
 import { EventCard } from '../../components/EventCard';
+import { StoreCard } from '../../components/StoreCard';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { AppButton } from '../../components/AppButton';
 import { AppText } from '../../components/AppText';
@@ -12,32 +13,6 @@ import { useEvents } from '../../context/EventsContext';
 import { useUserData } from '../../context/UserDataContext';
 import type { StoreItem } from '../../api/stores';
 import { estimatedRevenueCents, formatCurrency } from '../../utils/eventPrice';
-
-function StoreCard({ store, onPress }: { store: StoreItem; onPress: () => void }) {
-  const { colors } = useTheme();
-  const [imageFailed, setImageFailed] = useState(false);
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={'View ' + store.name}
-      style={[styles.storeCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-    >
-      {store.bannerImage && !imageFailed ? (
-        <Image source={{ uri: store.bannerImage }} style={styles.storeImage} onError={() => setImageFailed(true)} />
-      ) : (
-        <View style={[styles.storeImage, styles.storePlaceholder]}>
-          <AppText style={{ fontSize: 32 }}>🏪</AppText>
-        </View>
-      )}
-      <View style={styles.storeText}>
-        <AppText variant="bodyLarge" color={colors.text} style={{ fontWeight: '800' }}>{store.name}</AppText>
-        <AppText variant="bodyMedium" color={colors.primary}>{store.categories.join(' · ')}</AppText>
-        <AppText variant="bodyMedium" color={colors.muted}>{store.address}</AppText>
-      </View>
-    </Pressable>
-  );
-}
 
 export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateStore, onOpenStore }: {
   events: EventItem[];
@@ -354,7 +329,7 @@ export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateSt
           <AppText accessibilityRole="alert" color={theme === 'dark' ? '#FF8A80' : '#C62828'}>{storesError}</AppText>
           <AppButton title="Retry stores" variant="secondary" onPress={() => { void refreshStores(true); }} style={{ marginTop: 12 }} />
         </View>
-      ) : stores.length ? stores.map(store => <StoreCard key={store.id} store={store} onPress={() => onOpenStore(store)} />)
+      ) : stores.length ? stores.map(store => <StoreCard key={store.id} store={store} horizontal onPress={() => onOpenStore(store)} />)
         : <AppText variant="bodyMedium" color={colors.muted} style={styles.empty}>You have no stores yet. Create a store to publish your business.</AppText>}
       {storesError && stores.length > 0 && <View>
         <AppText accessibilityRole="alert" color={theme === 'dark' ? '#FF8A80' : '#C62828'}>{storesError}</AppText>
@@ -392,8 +367,4 @@ const styles = StyleSheet.create({
   draftCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 16, padding: 14, minHeight: 112, marginBottom: 12 },
   draftIcon: { alignItems: 'center', justifyContent: 'center', width: 58, height: 72 },
   empty: { lineHeight: 19, marginTop: 4 },
-  storeCard: { flexDirection: 'row', borderWidth: 1, borderRadius: 16, overflow: 'hidden', marginBottom: 12 },
-  storeImage: { width: 90, minHeight: 105 },
-  storePlaceholder: { alignItems: 'center', justifyContent: 'center' },
-  storeText: { flex: 1, padding: 12, gap: 5 },
 });

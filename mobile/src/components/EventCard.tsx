@@ -30,7 +30,7 @@ export function EventCard({ event, onPress, horizontal = false, interestedCount,
   const hiddenCategoryCount = event.categories.length - shownCategories.length;
   // Cards share a compact height at the device's font scale; their full text
   // stays in the accessible summary and on the event's details page.
-  const cardHeight = Math.ceil(128 + (Math.max(1, fontScale) - 1) * 108);
+  const cardHeight = Math.ceil(108 + (Math.max(1, fontScale) - 1) * 92);
   const summary = [event.title || 'Untitled draft', isOwnEvent ? 'Mine' : '', statusLabel, event.categories.join(', '),
     event.date, event.time, formatEventPrice(event), event.venue, audience,
     goingFriends.length ? `${goingFriends.length} friends attending` : ''].filter(Boolean).join('. ');
@@ -38,7 +38,7 @@ export function EventCard({ event, onPress, horizontal = false, interestedCount,
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={summary}
       style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, horizontal && [styles.horizontal, { height: cardHeight }]]}>
-      <View style={[styles.art, { backgroundColor: event.accent }, horizontal && [styles.horizontalArt, { height: cardHeight - 16 }]]}>
+      <View style={[styles.art, { backgroundColor: event.accent }, horizontal && styles.horizontalArt]}>
         {event.status !== 'draft' && event.bannerImage && !imageFailed ? (
           <Image source={{ uri: event.bannerImage }} style={styles.bannerImage}
             accessibilityLabel={event.title} onError={() => setImageFailed(true)} />
@@ -58,9 +58,9 @@ export function EventCard({ event, onPress, horizontal = false, interestedCount,
         </View>
         <View style={styles.titleRow}>
           <Text style={[styles.title, { color: colors.text }]} numberOfLines={horizontal ? 1 : 2}>{event.title || 'Untitled draft'}</Text>
+          <Text style={[styles.price, { color: colors.primary }]} numberOfLines={1}>{formatEventPrice(event)}</Text>
         </View>
         <Text style={[styles.meta, { color: colors.primary }]} numberOfLines={2}>{event.date} · {event.time}</Text>
-        <Text style={[styles.price, { color: colors.primary }]} numberOfLines={1}>{formatEventPrice(event)}</Text>
         <Text style={[styles.venue, { color: colors.muted }]} numberOfLines={1}>⌖ {event.venue}</Text>
         {(audience || goingFriends.length > 0) && <View style={styles.footer}>
           {Boolean(audience) && <Text style={[styles.audience, { color: colors.muted }]} numberOfLines={1}>{audience}</Text>}
@@ -78,9 +78,9 @@ export function EventCard({ event, onPress, horizontal = false, interestedCount,
 
 const styles = StyleSheet.create({
   card: { borderRadius: 16, borderWidth: 1, overflow: 'hidden', marginBottom: 8 },
-  horizontal: { flexDirection: 'row', alignItems: 'center', padding: 7, gap: 9 },
+  horizontal: { flexDirection: 'row', alignItems: 'center', padding: 6, gap: 8 },
   art: { height: 112, alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' },
-  horizontalArt: { width: 82, borderRadius: 10, overflow: 'hidden', flexShrink: 0 },
+  horizontalArt: { width: 80, height: 80, borderRadius: 10, overflow: 'hidden', flexShrink: 0 },
   bannerImage: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', resizeMode: 'cover' },
   emoji: { fontSize: 45 },
   categories: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginBottom: 2 },
@@ -89,15 +89,15 @@ const styles = StyleSheet.create({
   categoryText: { fontSize: 9, lineHeight: 11, fontWeight: '700' },
   details: { padding: 8, flex: 1, minWidth: 0 },
   horizontalDetails: { padding: 0, justifyContent: 'center' },
-  titleRow: { flexDirection: 'row', alignItems: 'flex-start' },
-  title: { flex: 1, fontSize: 13, fontWeight: '800', lineHeight: 16 },
-  price: { fontSize: 12, lineHeight: 14, fontWeight: '800', marginTop: 2 },
+  titleRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
+  title: { flex: 1, minWidth: 0, fontSize: 13, fontWeight: '800', lineHeight: 16 },
+  price: { maxWidth: '45%', flexShrink: 1, textAlign: 'right', fontSize: 12, lineHeight: 16, fontWeight: '800' },
   meta: { fontSize: 10, lineHeight: 12, marginTop: 2 },
   venue: { fontSize: 10, lineHeight: 12, marginTop: 2 },
   footer: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2, minHeight: 18 },
   audience: { fontSize: 9, lineHeight: 11, flex: 1 },
   // A trailing column centers the badge without covering event text or changing card height.
-  ownershipColumn: { width: 66, flexShrink: 0, alignSelf: 'stretch', justifyContent: 'center', alignItems: 'flex-end' },
+  ownershipColumn: { width: 40, flexShrink: 0, alignSelf: 'stretch', justifyContent: 'center', alignItems: 'flex-end' },
   ownershipBadge: { maxWidth: '100%', borderWidth: 1, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 5 },
   ownershipText: { fontSize: 10, lineHeight: 13, fontWeight: '800', textAlign: 'center' },
 });
