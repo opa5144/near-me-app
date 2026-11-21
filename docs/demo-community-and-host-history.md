@@ -1,5 +1,11 @@
 # Community accounts, host history, and truthful notifications
 
+> Maintenance update — November 21, 2026: the one-time population/repair tools,
+> fixtures, and source photos described here have been retired. Their commands
+> and file inventory below are historical. Existing MongoDB accounts, events,
+> media, selections, ratings, and notifications remain unchanged. See the
+> [repository cleanup](repository-cleanup-2026-11-21.md).
+
 This update adds **50 demo accounts total**, shared across all events and hosts. It also separates host event lists into Active/Completed views, compacts event cards, and replaces the old synthetic notification previews with source-backed records.
 
 The added events, selections, ratings, and notifications are normal persisted app records. They use the existing app's venues and media; they are not claims about independently verified public listings. Added content has no Test/Demo wording in the app. Internal seed identifiers exist only for safe repeat runs.

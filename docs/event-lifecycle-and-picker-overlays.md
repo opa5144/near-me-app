@@ -1,5 +1,11 @@
 # Event lifecycle and picker overlays — November 21, 2026
 
+> Maintenance update: one-time import, repair, and manual reorganization scripts
+> referenced in this report were subsequently retired. The lifecycle worker still
+> performs automatic event moves; shared event reads, history, ratings, and photos
+> remain part of the app. The administrative command examples and those file-list
+> entries are historical. See the [repository cleanup](repository-cleanup-2026-11-21.md).
+
 Published upcoming and ongoing events live in `eventList`. Completed events move
 to `PastEventsList` at their end instant. Cancelled, manually archived, and private
 draft events live in `ArchivedEvents`, distinguished by `status`. Cancelled events

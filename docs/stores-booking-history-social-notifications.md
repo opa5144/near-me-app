@@ -1,5 +1,10 @@
 # Stores, booking history, and social notifications
 
+> Maintenance update — November 21, 2026: the completed import/backfill scripts,
+> fixtures, and administrative services described below have been retired. Their
+> commands and file inventory are historical. The running notification system and
+> stored photos remain in use. See the [repository cleanup](repository-cleanup-2026-11-21.md).
+
 This update aligns all nine store categories, adds five normal store records per category, populates attended booking history for Patrick, Demi, and Joshua, and connects actual pending friend requests to the notification inbox. Event invitations retain their existing notification and acceptance flow.
 
 ## Stores and booking history
