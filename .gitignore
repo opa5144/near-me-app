@@ -19,3 +19,7 @@ Thumbs.db
 desktop.ini
 .idea/
 .vscode/
+
+# Downloaded Windows installers do not belong in event photos
+/backend/NearMeEventSamplePhotos/*.exe
+/backend/NearMeEventSamplePhotos/*.msi
