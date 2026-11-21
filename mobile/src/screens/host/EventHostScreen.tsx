@@ -50,7 +50,7 @@ export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateSt
   const { refreshEvents, isLoading: eventsLoading } = useEvents();
   const { stores, storesError, storesLoading, refreshStores } = useUserData();
   const [refreshing, setRefreshing] = useState(false);
-  const [eventFilter, setEventFilter] = useState<'active' | 'completed'>('active');
+  const [eventFilter, setEventFilter] = useState<'active' | 'completed' | 'archived' | 'drafts'>('active');
   const [clockNow, setClockNow] = useState(Date.now());
 
   // Cached reads are shared; returning here refreshes only once they are stale.
@@ -78,15 +78,19 @@ export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateSt
   const eventGroups = useMemo(() => {
     const active: EventItem[] = [];
     const completed: EventItem[] = [];
+    const archived: EventItem[] = [];
+    const drafts: EventItem[] = [];
     for (const event of events) {
       const end = Date.parse(event.endsAt);
-      // Keep retained/cancelled records visible; their cards label cancellation.
-      if (Number.isFinite(end) && end <= clockNow) completed.push(event);
+      if (event.status === 'draft') drafts.push(event);
+      else if (event.status === 'cancelled' || event.status === 'archived') archived.push(event);
+      else if (event.storage === 'past' || Number.isFinite(end) && end <= clockNow) completed.push(event);
       else active.push(event);
     }
     active.sort((first, second) => Date.parse(first.startsAt) - Date.parse(second.startsAt));
     completed.sort((first, second) => Date.parse(second.endsAt) - Date.parse(first.endsAt));
-    return { active, completed };
+    archived.sort((first, second) => Date.parse(second.archivedAt || second.cancelledAt || second.endsAt) - Date.parse(first.archivedAt || first.cancelledAt || first.endsAt));
+    return { active, completed, archived, drafts };
   }, [events, clockNow]);
   const visibleEvents = eventGroups[eventFilter];
 
@@ -103,16 +107,18 @@ export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateSt
 
   // Full portfolio stats and top-performer rankings
   const analytics = useMemo(() => {
-    const totalEvents = events.length;
-    const totalInterested = events.reduce((sum, e) => sum + (e.interestedCount ?? 0), 0);
-    const totalAttending = events.reduce((sum, e) => sum + (e.attendingCount ?? 0), 0);
+    // Unpublished drafts have no audience and do not affect portfolio performance.
+    const published = events.filter(event => event.status !== 'draft');
+    const totalEvents = published.length;
+    const totalInterested = published.reduce((sum, e) => sum + (e.interestedCount ?? 0), 0);
+    const totalAttending = published.reduce((sum, e) => sum + (e.attendingCount ?? 0), 0);
     const now = clockNow;
-    const upcomingEvents = events.filter(event => event.status !== 'cancelled' && Date.parse(event.startsAt) > now).length;
+    const upcomingEvents = published.filter(event => event.status !== 'cancelled' && event.status !== 'archived' && Date.parse(event.startsAt) > now).length;
 
-    const enriched = events.map(e => {
+    const enriched = published.map(e => {
       const attending = e.attendingCount ?? 0;
       const interested = e.interestedCount ?? 0;
-      const revenueCents = e.status === 'cancelled' ? 0 : estimatedRevenueCents(e, attending);
+      const revenueCents = e.status === 'cancelled' || e.status === 'archived' ? 0 : estimatedRevenueCents(e, attending);
       return { event: e, attending, interested, revenueCents };
     });
 
@@ -128,7 +134,7 @@ export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateSt
 
     // Lowest-traction event needing reach assistance
     const lowReachItem = [...enriched]
-      .filter(item => item.event.status !== 'cancelled' && Date.parse(item.event.endsAt) > now)
+      .filter(item => item.event.status !== 'cancelled' && item.event.status !== 'archived' && Date.parse(item.event.endsAt) > now)
       .sort((a, b) => (a.attending + a.interested) - (b.attending + b.interested))
       .find(item => item.attending === 0 && item.interested < 3) ?? null;
 
@@ -213,7 +219,7 @@ export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateSt
           <AppText style={[styles.assistantEyebrow, { color: colors.primary }]}>REACH & STATS ASSISTANT</AppText>
         </View>
 
-        {!events.length ? (
+        {!analytics.totalEvents ? (
           <>
             <AppText style={[styles.assistantTitle, { color: colors.text }]}>Launch your first event</AppText>
             <AppText style={[styles.assistantBody, { color: colors.muted }]}>
@@ -305,17 +311,29 @@ export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateSt
 
       <AppText variant="bodyLarge" style={[styles.section, { color: colors.text }]}>Your Events</AppText>
       <View style={[styles.eventFilters, { borderColor: colors.border }]} accessibilityRole="tablist">
-        {(['active', 'completed'] as const).map(filter => <Pressable key={filter}
+        {(['active', 'completed', 'archived', 'drafts'] as const).map(filter => <Pressable key={filter}
           accessibilityRole="tab" accessibilityState={{ selected: eventFilter === filter }}
-          accessibilityLabel={`${filter === 'active' ? 'Active' : 'Completed'} events, ${eventGroups[filter].length}`}
+          accessibilityLabel={`${filter} events, ${eventGroups[filter].length}`}
           onPress={() => setEventFilter(filter)}
           style={[styles.eventFilter, { backgroundColor: eventFilter === filter ? colors.primary : colors.surface }]}>
           <AppText style={styles.eventFilterLabel} color={eventFilter === filter ? '#FFFFFF' : colors.text}>
-            {filter === 'active' ? 'Active' : 'Completed'} ({eventGroups[filter].length})
+            {{ active: 'Active', completed: 'Completed', archived: 'Archived', drafts: 'Drafts' }[filter]} ({eventGroups[filter].length})
           </AppText>
         </Pressable>)}
       </View>
-      {visibleEvents.length ? visibleEvents.map(event => (
+      {visibleEvents.length ? visibleEvents.map(event => event.status === 'draft' ? (
+        <Pressable key={event.id} onPress={() => onOpenEvent(event)} accessibilityRole="button"
+          accessibilityLabel={'Edit draft: ' + (event.title || 'Untitled draft')}
+          style={[styles.draftCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.draftIcon}><Ionicons name="document-text-outline" size={30} color={colors.primary} /></View>
+          <View style={{ flex: 1 }}>
+            <AppText style={{ color: colors.primary, fontSize: 11, fontWeight: '800' }}>PRIVATE DRAFT</AppText>
+            <AppText numberOfLines={1} style={{ color: colors.text, fontWeight: '800', marginTop: 4 }}>{event.title || 'Untitled draft'}</AppText>
+            <AppText numberOfLines={2} style={{ color: colors.muted, fontSize: 12, marginTop: 4 }}>{event.date ? event.date + (event.time ? ' · ' + event.time : '') : 'No schedule selected'}</AppText>
+          </View>
+          <Ionicons name="chevron-forward" color={colors.muted} size={18} />
+        </Pressable>
+      ) : (
         <EventCard
           key={event.id}
           event={event}
@@ -325,7 +343,7 @@ export function EventHostScreen({ events, onOpenEvent, onCreateEvent, onCreateSt
           onPress={() => onOpenEvent(event)}
         />
       )) : <AppText variant="bodyMedium" color={colors.muted} style={styles.empty}>
-        {eventFilter === 'active' ? 'No active events. Your ended events appear under Completed.' : 'No completed events yet. Events move here after their end time.'}
+        {{ active: 'No active events. Your ended events appear under Completed.', completed: 'No completed events yet. Events move here after their end time.', archived: 'No archived or cancelled events.', drafts: 'No drafts yet. Save an unfinished event as a draft to continue later.' }[eventFilter]}
       </AppText>}
 
       <AppText variant="bodyLarge" style={[styles.section, { color: colors.text, marginTop: 24 }]}>Your Stores</AppText>
@@ -368,9 +386,11 @@ const styles = StyleSheet.create({
   actionRow: { flexDirection: 'row', gap: 10, marginBottom: 18 },
   halfButton: { flex: 1 },
   section: { fontWeight: '900', marginBottom: 10, marginTop: 4 },
-  eventFilters: { flexDirection: 'row', borderWidth: 1, borderRadius: 12, overflow: 'hidden', marginBottom: 10, padding: 3, gap: 4 },
-  eventFilter: { flex: 1, minHeight: 44, borderRadius: 9, paddingVertical: 9, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' },
+  eventFilters: { flexDirection: 'row', flexWrap: 'wrap', borderWidth: 1, borderRadius: 12, overflow: 'hidden', marginBottom: 10, padding: 3, gap: 4 },
+  eventFilter: { flexGrow: 1, flexBasis: '45%', minHeight: 44, borderRadius: 9, paddingVertical: 9, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' },
   eventFilterLabel: { fontSize: 12, fontWeight: '800', textAlign: 'center' },
+  draftCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 16, padding: 14, minHeight: 112, marginBottom: 12 },
+  draftIcon: { alignItems: 'center', justifyContent: 'center', width: 58, height: 72 },
   empty: { lineHeight: 19, marginTop: 4 },
   storeCard: { flexDirection: 'row', borderWidth: 1, borderRadius: 16, overflow: 'hidden', marginBottom: 12 },
   storeImage: { width: 90, minHeight: 105 },

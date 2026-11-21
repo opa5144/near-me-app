@@ -36,8 +36,8 @@ function eventSnapshot(event) {
     place: event.place, address: event.address, placeId: event.placeId ?? null,
     latitude: event.latitude ?? null, longitude: event.longitude ?? null,
     startsAt: iso(event.startsAt), endsAt: iso(event.endsAt),
-    registrationClosesAt: iso(event.registrationClosesAt || event.startsAt), timeZone: event.timeZone,
-    status: event.status === 'cancelled' ? 'cancelled' : 'published',
+    registrationClosesAt: iso(event.registrationClosesAt || event.endsAt), timeZone: event.timeZone,
+    status: event.status || 'published',
     cancelledAt: event.cancelledAt ? iso(event.cancelledAt) : null,
     cancellationReason: event.cancellationReason || '',
   };
@@ -53,12 +53,12 @@ function contextFor(event, occurredAt, changes) {
 // One scheduling authority is shared with restart reconciliation. Missed due
 // times are never backfilled; existing legacy choices get future reminders only.
 async function scheduleSelectionNotifications(event, selection, session, { now = new Date() } = {}) {
-  if (event.status === 'cancelled') return 0;
+  if (['cancelled', 'archived', 'draft'].includes(event.status)) return 0;
   const currentTime = new Date(now).getTime();
   const start = new Date(event.startsAt).getTime();
   const end = new Date(event.endsAt).getTime();
-  const closing = new Date(event.registrationClosesAt || event.startsAt).getTime();
-  if (![currentTime, start, end, closing].every(Number.isFinite) || end <= start || closing > start) return 0;
+  const closing = new Date(event.registrationClosesAt || event.endsAt).getTime();
+  if (![currentTime, start, end, closing].every(Number.isFinite) || end <= start || closing > end) return 0;
   const eventVersion = generation(event.notificationVersion);
   const registrationVersion = generation(selection.registrationVersion);
   const selectionVersion = generation(selection.selectionVersion);
@@ -66,7 +66,7 @@ async function scheduleSelectionNotifications(event, selection, session, { now =
   const payload = {
     eventVersion, registrationVersion, selectionVersion,
     expectedStartsAt: iso(event.startsAt), expectedEndsAt: iso(event.endsAt),
-    expectedClosesAt: iso(event.registrationClosesAt || event.startsAt), occurredAt: iso(now),
+    expectedClosesAt: iso(event.registrationClosesAt || event.endsAt), occurredAt: iso(now),
   };
   const schedules = [];
   if (selection.attending) {

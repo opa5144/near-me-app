@@ -52,6 +52,7 @@ export type RootStackParamList = {
   EventDetails: { eventId: string };
   EventHostDetail: { eventId: string };
   EditEvent: { eventId: string };
+  RescheduleEvent: { eventId: string };
   StoreDetails: { storeId?: string; sampleStore?: SampleStoreItem };
   NotificationInbox: undefined;
   RateEvent: { eventId: string };
@@ -202,7 +203,7 @@ function HostNavigator() {
           return (
             <EditEventScreen
               eventId={eventId}
-              onUpdated={() => { void refreshEvents(); }}
+              onUpdated={event => { addCreatedEvent(event); void refreshEvents(); }}
               onBack={() => props.navigation.goBack()}
             />
           );
@@ -372,7 +373,7 @@ function EventDetailsRoute({ route, navigation }: NativeStackScreenProps<RootSta
 
 function EventHostDetailsRoute({ route, navigation }: NativeStackScreenProps<RootStackParamList, 'EventHostDetail'>) {
   const { colors } = useTheme();
-  const { selectionsSavingEventIds } = useEvents();
+  const { selectionsSavingEventIds, addCreatedEvent, refreshEvents } = useEvents();
   const eventId = route.params?.eventId;
   const selectionSaving = selectionsSavingEventIds.includes(eventId ?? '');
   const [event, setEvent] = useState<EventItem | null>(null);
@@ -449,6 +450,8 @@ function EventHostDetailsRoute({ route, navigation }: NativeStackScreenProps<Roo
     <EventHostDetailsScreen
       event={event}
       onEditEvent={() => navigation.navigate('EditEvent', { eventId: event.id })}
+      onRescheduleEvent={() => navigation.navigate('RescheduleEvent', { eventId: event.id })}
+      onChanged={saved => { setEvent(saved); addCreatedEvent(saved); void refreshEvents(); setAttempt(current => current + 1); }}
       onBack={goBack}
       onRefresh={() => setAttempt(current => current + 1)}
       refreshing={isLoading}
@@ -493,7 +496,7 @@ function FriendRequestRoute({ route, navigation }: NativeStackScreenProps<RootSt
 
 function RootNavigator() {
   const { colors } = useTheme();
-  const { refreshEvents } = useEvents();
+  const { refreshEvents, addCreatedEvent } = useEvents();
 
   return (
     <RootStack.Navigator screenOptions={{
@@ -516,11 +519,16 @@ function RootNavigator() {
           return (
             <EditEventScreen
               eventId={eventId}
-              onUpdated={() => { void refreshEvents(); }}
+              onUpdated={event => { addCreatedEvent(event); void refreshEvents(); }}
               onBack={() => props.navigation.goBack()}
             />
           );
         }}
+      </RootStack.Screen>
+      <RootStack.Screen name="RescheduleEvent">
+        {props => <EditEventScreen eventId={props.route.params.eventId} mode="reschedule"
+          onUpdated={event => { addCreatedEvent(event); void refreshEvents(); }}
+          onBack={() => props.navigation.goBack()} />}
       </RootStack.Screen>
     </RootStack.Navigator>
   );

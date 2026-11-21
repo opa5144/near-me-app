@@ -5,6 +5,7 @@ import { isAxiosError } from 'axios';
 import { fetchEvents, fetchMyEvents, fetchEventSelections, saveEventSelection } from '../api/events';
 import type { EventSelection } from '../api/events';
 import type { EventItem } from '../data/events';
+import { isAvailableEvent } from '../utils/eventAvailability';
 
 // Event lists and private choices share one provider for the signed-in account.
 interface EventsContextValue {
@@ -166,16 +167,16 @@ export function EventsProvider({ children }: { children: ReactNode }) {
   const events = useMemo(() => {
     // A response can arrive after an event ends, before the next timer callback.
     const instant = Math.max(now, Date.now());
-    return loadedEvents.filter(event => {
-      const start = Date.parse(event.startsAt);
-      const end = Date.parse(event.endsAt);
-      return Number.isFinite(start) && Number.isFinite(end) && start < end && end > instant;
-    });
+    return loadedEvents.filter(event => isAvailableEvent(event, instant));
   }, [loadedEvents, now]);
 
   const addCreatedEvent = useCallback((created: EventItem) => {
     ++mutationVersion.current;
-    setEvents(current => [created, ...current.filter(event => event.id !== created.id)]);
+    // Host mutations also return private drafts and archived records. Upsert the
+    // host list, but remove those records immediately from public discovery.
+    setEvents(current => isAvailableEvent(created)
+      ? [created, ...current.filter(event => event.id !== created.id)]
+      : current.filter(event => event.id !== created.id));
     setMyEvents(current => [created, ...current.filter(event => event.id !== created.id)]);
   }, []);
 

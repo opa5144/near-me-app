@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { usePreventRemove } from '@react-navigation/native';
 import { AppButton } from '../../components/AppButton';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { FieldError } from '../../components/FieldError';
 import { BusinessHoursEditor, businessDays } from '../../components/BusinessHoursEditor';
+import { CategoryPickerField } from '../../components/CategoryPickerField';
 import type { BusinessHoursData } from '../../components/BusinessHoursEditor';
 import { LocationComponent } from '../../components/LocationInputField';
 import { PhotoPickerField } from '../../components/PhotoPickerField';
@@ -115,22 +116,9 @@ export function CreateStoreScreen({ onBack, onCreated }: Props) {
             accessibilityLabel="Business name" placeholderTextColor={colors.muted} style={inputStyle} />
           <FieldError message={errors.name} />
 
-          <Text style={[styles.label, { color: colors.text }]}>Vendor Categories</Text>
-          <Text style={[styles.hint, { color: colors.muted }]}>Choose all that apply.</Text>
-          <View style={styles.categories}>
-            {storeCategories.map(category => {
-              const selected = selectedCategories.includes(category);
-              return <TouchableOpacity key={category} accessibilityRole="checkbox" accessibilityState={{ checked: selected }}
-                onPress={() => {
-                  const next = selected ? selectedCategories.filter(value => value !== category) : [...selectedCategories, category];
-                  setSelectedCategories(next); validateFields(['categories', 'category'], { categories: next });
-                }} disabled={isSaving}
-                style={[styles.category, { borderColor: selected ? colors.primary : colors.border, backgroundColor: selected ? colors.primary : colors.surface }]}>
-                <Text style={{ color: selected ? '#FFFFFF' : colors.text }}>{selected ? '✓ ' : ''}{category}</Text>
-              </TouchableOpacity>;
-            })}
-          </View>
-          <FieldError message={errors.categories || errors.category} />
+          <CategoryPickerField label="Vendor Categories" categories={storeCategories} selectedCategories={selectedCategories}
+            onChange={setSelectedCategories} onBlur={values => validateFields(['categories', 'category'], { categories: values })}
+            error={errors.categories || errors.category} disabled={isSaving} />
 
           <Text style={[styles.label, { color: colors.text }]}>Store Description</Text>
           <TextInput value={description} onChangeText={setDescription} onBlur={() => validateFields(['description'])} editable={!isSaving} maxLength={5000} multiline numberOfLines={5}

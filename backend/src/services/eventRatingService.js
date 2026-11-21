@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const Event = require('../models/Event');
+const { findEventById } = require('../models/eventStore');
 const User = require('../models/User');
 const EventSelection = require('../models/EventSelection');
 const EventRating = require('../models/EventRating');
@@ -20,7 +20,7 @@ function ratingEligibility(event, selection, userId, now = new Date()) {
   if (String(event.hostId) === String(userId)) {
     return { canRate: false, reason: 'You cannot rate your own event.' };
   }
-  if (event.status === 'cancelled') return { canRate: false, reason: 'Cancelled events cannot be rated.' };
+  if (['cancelled', 'archived', 'draft'].includes(event.status)) return { canRate: false, reason: 'This event is unavailable for rating.' };
   if (!selection?.attending) return { canRate: false, reason: 'You must be registered for this event to rate it.' };
   const start = event.startsAt instanceof Date ? event.startsAt.getTime() : NaN;
   const end = event.endsAt instanceof Date ? event.endsAt.getTime() : NaN;
@@ -45,7 +45,8 @@ function ratingResponse(event, rating, eligibility) {
 async function readEvent(auth, eventId) {
   requireEventId(eventId);
   if (!(await User.exists({ _id: auth.userId, deletedAt: null }))) throw new ServiceError(401, 'Please log in again.');
-  const event = await Event.findById(eventId).select(EVENT_FIELDS).lean();
+  const event = await findEventById(eventId, { select: EVENT_FIELDS });
+  if (event?.status === 'draft' && String(event.hostId) !== String(auth.userId)) throw new ServiceError(404, 'Event not found.');
   if (!event || !(await User.exists({ _id: event.hostId, deletedAt: null }))) {
     throw new ServiceError(404, 'Event not found.');
   }
@@ -72,13 +73,13 @@ function parseScore(body) {
 async function putRating(auth, eventId, body) {
   requireEventId(eventId);
   const score = parseScore(body);
-  const original = await Event.findById(eventId).select('_id hostId').lean();
+  const original = await findEventById(eventId, { select: '_id hostId' });
   if (!original?.hostId) throw new ServiceError(404, 'Event not found.');
   // Provision the unique index before the retryable transaction, never within it.
   await EventRating.init();
   try {
     return await withActiveAccountWrite(auth, [original.hostId], async session => {
-      const event = await Event.findOne({ _id: eventId, hostId: original.hostId }).select(EVENT_FIELDS).session(session).lean();
+      const event = await findEventById(eventId, { session, select: EVENT_FIELDS });
       if (!event) throw new ServiceError(404, 'Event not found.');
       const selection = await EventSelection.findOne({ userId: auth.userId, eventId: event._id })
         .select('attending').session(session).lean();

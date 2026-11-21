@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, View, KeyboardAvoidingView, Platform, Alert, TouchableOpacity } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, View, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { usePreventRemove } from '@react-navigation/native';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { AppButton } from '../../components/AppButton';
 import { FieldError } from '../../components/FieldError';
@@ -8,13 +9,14 @@ import { toPhotoInput, toEditablePhotos } from '../../api/photos';
 import type { EditablePhoto } from '../../api/photos';
 import { DatePickerField } from '../../components/DatePickerField';
 import { TimePickerField } from '../../components/TimePickerField';
+import { CategoryPickerField } from '../../components/CategoryPickerField';
 import { PriceInputField } from '../../components/PriceInputField';
 import { LocationComponent } from '../../components/LocationInputField';
-import { fetchEvent, updateEvent } from '../../api/events';
-import type { EventItem, UpdateEventRequest } from '../../api/events';
+import { eventPhotoHeaders, fetchEvent, publishEventDraft, rescheduleEvent, saveEventDraft, updateEvent } from '../../api/events';
+import type { CreateEventRequest, EventItem, UpdateEventRequest } from '../../api/events';
 import { eventCategories } from '../../data/events';
 import { useTheme } from '../../context/ThemeContext';
-import { formatHostDate, hasHostErrors, hostRequestError, mergeHostFieldErrors, validateEventDraft } from './hostFormUtils';
+import { formatHostDate, hasHostErrors, hostRequestError, mergeHostFieldErrors, priceToAmount, validateEventDraft, validateSavedEventDraft } from './hostFormUtils';
 import type { EventDraft, HostFieldErrors, HostVenue } from './hostFormUtils';
 import { formatCalendarDate } from '../../utils/dateFormat';
 
@@ -22,13 +24,15 @@ const MINUTE_INTERVAL: 15 | 30 = 15;
 // Keep the date picker value in local YYYY-MM-DD form, without converting it to UTC.
 const formatDateString = formatHostDate;
 
-type Props = { eventId: string; onBack: () => void; onUpdated: (event: EventItem) => void };
+type Props = { eventId: string; onBack: () => void; onUpdated: (event: EventItem) => void; mode?: 'edit' | 'reschedule' };
 
-export function EditEventScreen({ eventId, onBack, onUpdated }: Props) {
+export function EditEventScreen({ eventId, onBack, onUpdated, mode = 'edit' }: Props) {
   const { colors } = useTheme();
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
+  const [sourceEvent, setSourceEvent] = useState<EventItem | null>(null);
+  const [scheduleChosen, setScheduleChosen] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -44,6 +48,7 @@ export function EditEventScreen({ eventId, onBack, onUpdated }: Props) {
   
   const [isSaving, setIsSaving] = useState(false);
   const [imageBusy, setImageBusy] = useState(false);
+  usePreventRemove(isSaving || imageBusy, () => {});
   const savingRef = useRef(false);
   const imageBusyRef = useRef(false);
   const completedRef = useRef(false);
@@ -60,19 +65,29 @@ export function EditEventScreen({ eventId, onBack, onUpdated }: Props) {
     fetchEvent(eventId, controller.signal)
       .then(event => {
         if (!current) return;
+        const ended = Number.isFinite(Date.parse(event.endsAt)) && Date.parse(event.endsAt) <= Date.now();
+        if (mode === 'reschedule' ? !ended || event.status !== 'published' : event.status !== 'draft' && (ended || event.status === 'archived' || event.status === 'cancelled')) {
+          throw new Error(mode === 'reschedule' ? 'Only a completed event can be rescheduled.' : 'This event is read-only. Reschedule a completed event to create a new one.');
+        }
+        setSourceEvent(event);
+        setScheduleChosen(mode === 'reschedule' || Number.isFinite(Date.parse(event.startsAt)) && Number.isFinite(Date.parse(event.endsAt)));
         originalSchedule.current = { startsAt: event.startsAt, endsAt: event.endsAt, timeZone: event.timeZone };
         setTitle(event.title);
         setDescription(event.description || '');
         
         setSelectedCategories(event.categories);
 
-        if (event.startsAt) {
+        if (mode === 'reschedule' || !event.startsAt || !Number.isFinite(Date.parse(event.startsAt))) {
+          const nextStart = new Date(Date.now() + 60 * 60 * 1000);
+          nextStart.setMinutes(Math.ceil(nextStart.getMinutes() / MINUTE_INTERVAL) * MINUTE_INTERVAL, 0, 0);
+          const originalDuration = Date.parse(event.endsAt) - Date.parse(event.startsAt);
+          setDate(formatDateString(nextStart)); setStartTime(nextStart);
+          setEndTime(new Date(nextStart.getTime() + (originalDuration >= 30 * 60 * 1000 && originalDuration < 24 * 60 * 60 * 1000 ? originalDuration : 60 * 60 * 1000)));
+        } else {
           const startDate = new Date(event.startsAt);
           setDate(formatDateString(startDate));
           setStartTime(startDate);
-        }
-        if (event.endsAt) {
-          setEndTime(new Date(event.endsAt));
+          if (event.endsAt && Number.isFinite(Date.parse(event.endsAt))) setEndTime(new Date(event.endsAt));
         }
         // Canonical priceAmount is independent of the currency label. Keep a
         // readable fallback for older responses rather than silently making it free.
@@ -93,19 +108,21 @@ export function EditEventScreen({ eventId, onBack, onUpdated }: Props) {
         setPhotosChanged(false);
         setErrors({}); setFormError(null);
       })
-      .catch(() => {
-        if (current) setLoadError('Could not load event details for editing. Check your connection and try again.');
+      .catch((reason: unknown) => {
+        if (current) setLoadError(reason instanceof Error && !('isAxiosError' in reason) ? reason.message : 'Could not load event details for editing. Check your connection and try again.');
       })
       .finally(() => {
         if (current) setIsLoading(false);
       });
 
     return () => { current = false; controller.abort(); mountedRef.current = false; };
-  }, [eventId, loadAttempt]);
+  }, [eventId, loadAttempt, mode]);
 
-  const draft: EventDraft = { title, description, categories: selectedCategories, date, startTime, endTime, price, venue: selectedVenue, timeZone, photos };
+  const draft: EventDraft = { title, description, categories: selectedCategories, date: scheduleChosen ? date : '', startTime, endTime, price, venue: selectedVenue, timeZone, photos };
+  const isDraft = sourceEvent?.status === 'draft';
+  const validationOptions = { existingStartsAt: mode === 'edit' && !isDraft ? originalSchedule.current?.startsAt : undefined };
   const validateFields = (fields: string[], changes: Partial<EventDraft> = {}) => {
-    const next = validateEventDraft({ ...draft, ...changes }).errors;
+    const next = validateEventDraft({ ...draft, ...changes }, validationOptions).errors;
     setErrors(current => mergeHostFieldErrors(current, next, fields));
   };
   const validateSchedule = (changes: Partial<EventDraft> = {}) => validateFields(['date', 'startTime', 'endTime', 'timeZone'], changes);
@@ -113,9 +130,9 @@ export function EditEventScreen({ eventId, onBack, onUpdated }: Props) {
   const nextDay = new Date(`${date}T00:00:00`);
   nextDay.setDate(nextDay.getDate() + 1);
 
-  const handleDateChange = (newDate: string) => setDate(newDate);
-  const handleStartTimeChange = (value: Date) => setStartTime(value);
-  const handleEndTimeChange = (value: Date) => setEndTime(value);
+  const handleDateChange = (newDate: string) => { setDate(newDate); setScheduleChosen(true); };
+  const handleStartTimeChange = (value: Date) => { setStartTime(value); };
+  const handleEndTimeChange = (value: Date) => { setEndTime(value); };
   const handleBack = () => { if (!savingRef.current && !imageBusyRef.current) onBack(); };
 
   const handlePhotoBusyChange = (busy: boolean) => {
@@ -123,9 +140,38 @@ export function EditEventScreen({ eventId, onBack, onUpdated }: Props) {
     if (mountedRef.current) setImageBusy(busy);
   };
 
+  const handleSaveDraft = async () => {
+    if (!isDraft || isLoading || loadError || savingRef.current || imageBusyRef.current || completedRef.current) return;
+    const nextErrors = validateSavedEventDraft(draft);
+    setErrors(nextErrors); setFormError(null);
+    if (hasHostErrors(nextErrors)) return;
+    const { start, end } = validateEventDraft(draft);
+    const payload: UpdateEventRequest = {
+      title: title.trim(), description: description.trim(), categories: selectedCategories,
+      price: priceToAmount(price) ?? 0, timeZone,
+      ...(start && Number.isFinite(start.getTime()) ? { startsAt: start.toISOString() } : {}),
+      ...(end && Number.isFinite(end.getTime()) ? { endsAt: end.toISOString() } : {}),
+      place: selectedVenue?.name ?? '', address: selectedVenue?.address ?? '',
+      placeId: selectedVenue?.placeId, latitude: selectedVenue?.latitude, longitude: selectedVenue?.longitude,
+      ...(photosChanged ? { photos: toPhotoInput(photos) } : {}),
+    };
+    savingRef.current = true; setIsSaving(true);
+    try {
+      const saved = await saveEventDraft(eventId, payload);
+      completedRef.current = true;
+      onUpdated(saved);
+      if (mountedRef.current) Alert.alert('Draft saved', 'Your changes are saved privately.', [{ text: 'OK', onPress: onBack }]);
+    } catch (reason) {
+      if (mountedRef.current) {
+        const feedback = hostRequestError(reason, 'Unable to save your draft. Please try again.');
+        setErrors(feedback.errors); setFormError(feedback.message);
+      }
+    } finally { savingRef.current = false; if (mountedRef.current) setIsSaving(false); }
+  };
+
   const handleSubmit = async () => {
     if (isLoading || loadError || savingRef.current || imageBusyRef.current || completedRef.current) return;
-    const { errors: nextErrors, start, end, priceAmount } = validateEventDraft(draft);
+    const { errors: nextErrors, start, end, priceAmount } = validateEventDraft(draft, validationOptions);
     setErrors(nextErrors); setFormError(null);
     if (hasHostErrors(nextErrors) || !start || !end || priceAmount === null || !selectedVenue) return;
 
@@ -133,9 +179,9 @@ export function EditEventScreen({ eventId, onBack, onUpdated }: Props) {
     // changes either instant, the device-local pickers use the device zone.
     const original = originalSchedule.current;
     const unchangedSchedule = original && start.getTime() === Date.parse(original.startsAt) && end.getTime() === Date.parse(original.endsAt);
-    const savedTimeZone = original && unchangedSchedule && original.timeZone ? original.timeZone : timeZone;
+    const savedTimeZone = mode === 'edit' && original && unchangedSchedule && original.timeZone ? original.timeZone : timeZone;
 
-    const payload: UpdateEventRequest = {
+    const payload: CreateEventRequest = {
       title: title.trim(),
       categories: selectedCategories,
       description: description.trim(),
@@ -153,13 +199,13 @@ export function EditEventScreen({ eventId, onBack, onUpdated }: Props) {
     savingRef.current = true;
     setIsSaving(true);
     try {
-      const updated = await updateEvent(eventId, { ...payload,
-        ...(photosChanged ? { photos: toPhotoInput(photos) } : {}),
-      });
+      const input = { ...payload, ...(photosChanged ? { photos: toPhotoInput(photos) } : {}) };
+      const updated = mode === 'reschedule' ? await rescheduleEvent(eventId, input)
+        : isDraft ? await publishEventDraft(eventId, input) : await updateEvent(eventId, input);
       completedRef.current = true;
       if (!mountedRef.current) return;
       onUpdated(updated);
-      Alert.alert('Success', 'Event Updated!', [{ text: 'OK', onPress: onBack }]);
+      Alert.alert('Success', mode === 'reschedule' ? 'New event created. The completed event and its history are unchanged.' : isDraft ? 'Event published!' : 'Event updated!', [{ text: 'OK', onPress: onBack }]);
     } catch (error) {
       if (mountedRef.current) {
         const feedback = hostRequestError(error, 'Unable to update your event. Please try again.');
@@ -190,7 +236,8 @@ export function EditEventScreen({ eventId, onBack, onUpdated }: Props) {
     <KeyboardAvoidingView style={[styles.container, { backgroundColor: colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <Text onPress={handleBack} style={[styles.backLink, { color: colors.primary }]}>‹ Back</Text>
-        <ScreenHeader eyebrow="Event Management" title="Edit Event" subtitle="Update your event information and schedule." />
+        <ScreenHeader eyebrow="Event Management" title={mode === 'reschedule' ? 'Reschedule as New Event' : isDraft ? 'Edit Draft' : 'Edit Event'}
+          subtitle={mode === 'reschedule' ? 'Choose a new schedule. This creates a separate event with fresh attendance and ratings.' : isDraft ? 'Save your progress privately or finish all required fields to publish.' : 'Update your event information and schedule.'} />
         
         <View style={styles.formGroup}>
           <Text style={[styles.fieldLabel, { color: colors.text }]}>Event Title*</Text>
@@ -213,33 +260,13 @@ export function EditEventScreen({ eventId, onBack, onUpdated }: Props) {
           <FieldError message={errors.description} />
         </View>
 
-        <View style={styles.formGroup}>
-          <Text style={[styles.fieldLabel, { color: colors.text }]}>Categories*</Text>
-          <Text style={{ color: colors.muted, fontSize: 11, marginBottom: 6 }}>Choose all that apply.</Text>
-          <View style={styles.chipsContainer}>
-            {eventCategories.map(cat => (
-              <TouchableOpacity
-                key={cat}
-                onPress={() => {
-                  const next = selectedCategories.includes(cat) ? selectedCategories.filter(value => value !== cat) : [...selectedCategories, cat];
-                  setSelectedCategories(next); validateFields(['categories'], { categories: next });
-                }}
-                disabled={isSaving}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: selectedCategories.includes(cat), disabled: isSaving }}
-                activeOpacity={0.7}
-                style={[styles.chip, { backgroundColor: colors.surface, borderColor: colors.border }, selectedCategories.includes(cat) && { backgroundColor: colors.primary, borderColor: colors.primary }]}
-              >
-                <Text style={[styles.chipText, { color: colors.text }, selectedCategories.includes(cat) && styles.activeChipText]}>{cat}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <FieldError message={errors.categories} />
-        </View>
+        <CategoryPickerField label="Categories*" categories={eventCategories} selectedCategories={selectedCategories}
+          onChange={setSelectedCategories} onBlur={values => validateFields(['categories'], { categories: values })}
+          error={errors.categories} disabled={isSaving} />
 
         <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 10 }}>Times use your device time zone: {timeZone || 'Unavailable'}</Text>
         <FieldError message={errors.timeZone} />
-        <DatePickerField label="Event Date*" date={date} onDateChange={handleDateChange} minimumDate={formatDateString(new Date())}
+        <DatePickerField label="Event Date*" date={scheduleChosen ? date : ''} onDateChange={handleDateChange} minimumDate={mode === 'edit' && sourceEvent?.startsAt ? [formatDateString(new Date(sourceEvent.startsAt)), formatDateString(new Date())].sort()[0] : formatDateString(new Date())}
           error={errors.date} onBlur={value => validateSchedule({ date: value })} disabled={isSaving} />
 
         <View style={styles.timeSection}>
@@ -249,7 +276,7 @@ export function EditEventScreen({ eventId, onBack, onUpdated }: Props) {
             <TimePickerField label="End Time*" time={endTime} onTimeChange={handleEndTimeChange} minuteInterval={MINUTE_INTERVAL}
               error={errors.endTime} onBlur={value => validateSchedule({ endTime: value })} disabled={isSaving} />
           </View>
-          {isOvernight && <Text style={{ color: colors.primary, fontSize: 11, marginTop: 6 }}>
+          {scheduleChosen && isOvernight && <Text style={{ color: colors.primary, fontSize: 11, marginTop: 6 }}>
             Ends the following day ({formatCalendarDate(formatDateString(nextDay))})
           </Text>}
         </View>
@@ -263,11 +290,13 @@ export function EditEventScreen({ eventId, onBack, onUpdated }: Props) {
           error={errors.location} disabled={isSaving} />
 
         <PhotoPickerField photos={photos} onChange={next => { setPhotos(next); setPhotosChanged(true); }}
+          getImageHeaders={uri => eventPhotoHeaders(uri, isDraft)}
           label="Event photos" disabled={isLoading || isSaving || completedRef.current} onBusyChange={handlePhotoBusyChange}
           error={errors.photos} onBlur={value => validateFields(['photos'], { photos: value })} />
 
         <FieldError message={formError} />
-        <AppButton title={isSaving ? "Saving Changes..." : "Save Changes"} onPress={handleSubmit} disabled={isSaving || imageBusy || completedRef.current} style={styles.submitButton} />
+        {isDraft && <AppButton title={isSaving ? 'Saving...' : 'Save Draft'} variant="secondary" onPress={handleSaveDraft} disabled={isSaving || imageBusy || completedRef.current} style={styles.submitButton} />}
+        <AppButton title={isSaving ? 'Saving...' : mode === 'reschedule' ? 'Create New Event' : isDraft ? 'Publish Event' : 'Save Changes'} onPress={handleSubmit} disabled={isSaving || imageBusy || completedRef.current} style={styles.submitButton} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -283,9 +312,5 @@ const styles = StyleSheet.create({
   fieldLabel: { fontSize: 11, fontWeight: '800', marginBottom: 6 },
   fieldInput: { height: 44, borderRadius: 14, borderWidth: 1, paddingHorizontal: 10, fontSize: 14 },
   textArea: { height: 88, paddingTop: 10, textAlignVertical: 'top' },
-  chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 2 },
-  chip: { borderWidth: 1, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20 },
-  chipText: { fontSize: 11, fontWeight: '700' },
-  activeChipText: { color: '#FFFFFF' },
   submitButton: { marginTop: 10 }
 });

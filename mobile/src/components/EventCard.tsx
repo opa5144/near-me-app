@@ -25,13 +25,13 @@ export function EventCard({ event, onPress, horizontal = false, interestedCount,
   const attendingTotal = attendingCount ?? event.attendingCount;
   const audience = [interestedTotal !== undefined ? `${interestedTotal} interested` : '',
     attendingTotal !== undefined ? `${attendingTotal} attending` : ''].filter(Boolean).join(' · ');
-  const cancelled = event.status === 'cancelled';
-  const shownCategories = horizontal ? event.categories.slice(0, cancelled ? 1 : 2) : event.categories;
+  const statusLabel = event.status === 'cancelled' ? 'Cancelled' : event.status === 'archived' ? 'Archived' : event.status === 'draft' ? 'Draft' : '';
+  const shownCategories = horizontal ? event.categories.slice(0, statusLabel ? 1 : 2) : event.categories;
   const hiddenCategoryCount = event.categories.length - shownCategories.length;
   // Cards share a compact height at the device's font scale; their full text
   // stays in the accessible summary and on the event's details page.
   const cardHeight = Math.ceil(128 + (Math.max(1, fontScale) - 1) * 108);
-  const summary = [event.title, isOwnEvent ? 'Mine' : '', cancelled ? 'Cancelled' : '', event.categories.join(', '),
+  const summary = [event.title || 'Untitled draft', isOwnEvent ? 'Mine' : '', statusLabel, event.categories.join(', '),
     event.date, event.time, formatEventPrice(event), event.venue, audience,
     goingFriends.length ? `${goingFriends.length} friends attending` : ''].filter(Boolean).join('. ');
 
@@ -39,7 +39,7 @@ export function EventCard({ event, onPress, horizontal = false, interestedCount,
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={summary}
       style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, horizontal && [styles.horizontal, { height: cardHeight }]]}>
       <View style={[styles.art, { backgroundColor: event.accent }, horizontal && [styles.horizontalArt, { height: cardHeight - 16 }]]}>
-        {event.bannerImage && !imageFailed ? (
+        {event.status !== 'draft' && event.bannerImage && !imageFailed ? (
           <Image source={{ uri: event.bannerImage }} style={styles.bannerImage}
             accessibilityLabel={event.title} onError={() => setImageFailed(true)} />
         ) : (
@@ -48,8 +48,8 @@ export function EventCard({ event, onPress, horizontal = false, interestedCount,
       </View>
       <View style={[styles.details, horizontal && styles.horizontalDetails]}>
         <View style={[styles.categories, horizontal && styles.horizontalCategories]}>
-          {cancelled && <View style={[styles.categoryBadge, { borderColor: colors.border }]}>
-            <Text style={[styles.categoryText, { color: colors.muted }]} numberOfLines={1}>Cancelled</Text>
+          {Boolean(statusLabel) && <View style={[styles.categoryBadge, { borderColor: colors.border }]}>
+            <Text style={[styles.categoryText, { color: colors.muted }]} numberOfLines={1}>{statusLabel}</Text>
           </View>}
           {shownCategories.map(category => <View key={category} style={[styles.categoryBadge, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.categoryText, { color: colors.text }]} numberOfLines={1}>{category}</Text>
@@ -57,7 +57,7 @@ export function EventCard({ event, onPress, horizontal = false, interestedCount,
           {hiddenCategoryCount > 0 && <Text style={[styles.categoryText, { color: colors.muted }]}>+{hiddenCategoryCount}</Text>}
         </View>
         <View style={styles.titleRow}>
-          <Text style={[styles.title, { color: colors.text }]} numberOfLines={horizontal ? 1 : 2}>{event.title}</Text>
+          <Text style={[styles.title, { color: colors.text }]} numberOfLines={horizontal ? 1 : 2}>{event.title || 'Untitled draft'}</Text>
         </View>
         <Text style={[styles.meta, { color: colors.primary }]} numberOfLines={2}>{event.date} · {event.time}</Text>
         <Text style={[styles.price, { color: colors.primary }]} numberOfLines={1}>{formatEventPrice(event)}</Text>

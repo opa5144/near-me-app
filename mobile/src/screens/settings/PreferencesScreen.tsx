@@ -3,6 +3,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Switch, Text, TextInput, Tou
 import { useFocusEffect } from '@react-navigation/native';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { AppButton } from '../../components/AppButton';
+import { CategoryPickerField } from '../../components/CategoryPickerField';
 import { useTheme } from '../../context/ThemeContext';
 import { fetchPreferences, searchSettingsCities, settingsErrorMessage, updatePreferences } from '../../api/settings';
 import type { CitySuggestion, PreferencesResponse, SubscribedCity } from '../../api/settings';
@@ -97,9 +98,10 @@ export function PreferencesScreen({ navigation }: any) {
       : [...current, { ...city, subscribed: true }]);
     editQuery(''); setSaveError(null); setSaved(false);
   }
-  function toggleCategory(category: string) {
+  function selectCategories(selected: string[]) {
     if (pendingSave.current) return;
-    setCategories(current => ({ ...current, [category]: !current[category] })); setSaveError(null); setSaved(false);
+    setCategories(Object.fromEntries(availableCategories.map(category => [category, selected.includes(category)])));
+    setSaveError(null); setSaved(false);
   }
   function toggleCity(placeId: string, subscribed: boolean) {
     if (pendingSave.current) return;
@@ -132,14 +134,9 @@ export function PreferencesScreen({ navigation }: any) {
         <View style={styles.status}><Text accessibilityRole="alert" style={[styles.note, { color: errorColor }]}>{loadError}</Text><AppButton title="Retry" onPress={() => setLoadAttempt(current => current + 1)} /></View>
       ) : (
         <>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Preferred Categories</Text>
-          <View style={styles.chipContainer}>
-            {availableCategories.map(category => (
-              <TouchableOpacity key={category} accessibilityRole="checkbox" accessibilityState={{ checked: categories[category] === true, disabled: isSaving }} disabled={isSaving} onPress={() => toggleCategory(category)} style={[styles.chip, { backgroundColor: categories[category] ? colors.primary : colors.surface, borderColor: categories[category] ? colors.primary : colors.border }, isSaving && styles.disabled]}>
-                <Text style={[styles.chipText, { color: categories[category] ? '#fff' : colors.text }, categories[category] && styles.activeChipText]}>{category}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <CategoryPickerField label="Preferred Categories" categories={availableCategories}
+            selectedCategories={availableCategories.filter(category => categories[category] === true)} onChange={selectCategories}
+            disabled={isSaving} emptyLabel="No preferred categories" />
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Subscribed Cities</Text>
           <Text style={[styles.note, { color: colors.muted }]}>Search for any city to add it. Turning a city off keeps it in your list.</Text>
           <Text style={[styles.searchLabel, { color: colors.text }]}>Find a city</Text>
@@ -183,10 +180,6 @@ const styles = StyleSheet.create({
   content: { padding: 16, flexGrow: 1 },
   backButton: { marginLeft: -8, paddingHorizontal: 8, marginBottom: 8 },
   sectionTitle: { fontSize: 13, fontWeight: '700', marginTop: 20, marginBottom: 10 },
-  chipContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { borderWidth: 1, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20 },
-  chipText: { fontSize: 12 },
-  activeChipText: { fontWeight: '700' },
   note: { fontSize: 12, lineHeight: 19 },
   disabled: { opacity: 0.5 },
   status: { gap: 16, paddingVertical: 32 },

@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 const Event = require('../models/Event');
+const { findEventById, findEvents } = require('../models/eventStore');
+const { archivePublishedEvent } = require('./eventDraftService');
 const User = require('../models/User');
 const { parseCreateEvent, toEventItem, EventInputError } = require('./eventData');
 const { withActiveAccountWrite } = require('./activeAccountWrite');
@@ -7,7 +9,7 @@ const { ServiceError } = require('./serviceError');
 const { loadPhotoMetadata, getResourcePhotoImage, replaceResourcePhotos } = require('./photoCollectionService');
 const { loadEventAudienceCounts } = require('./eventAudienceService');
 const { getFriendsAttendingByEvents } = require('./friendAttendance');
-const { recordEventCreated, recordEventChanged, recordEventCancelled } = require('./notifications/triggerService');
+const { recordEventCreated, recordEventChanged } = require('./notifications/triggerService');
 
 function requireEventId(id) {
   if (typeof id !== 'string' || !/^[a-f0-9]{24}$/i.test(id) || !mongoose.isObjectIdOrHexString(id)) {
@@ -36,7 +38,7 @@ async function eventItems(events, baseUrl, session, viewerId) {
 async function listPublicEvents(baseUrl, viewerId) {
   // Compare full BSON instants: an ongoing event remains visible until its end time.
   const events = await Event.find({
-    status: { $ne: 'cancelled' },
+    status: { $nin: ['cancelled', 'archived', 'draft'] },
     startsAt: { $type: 'date' },
     endsAt: { $type: 'date', $gt: new Date() },
     $expr: { $lt: ['$startsAt', '$endsAt'] },
@@ -48,33 +50,35 @@ async function listPublicEvents(baseUrl, viewerId) {
 
 async function listHostedEvents(auth, baseUrl) {
   // Hosts retain access to past events for management and history.
-  const events = await Event.find({ hostId: auth.userId }).populate({
+  const events = await findEvents({ hostId: auth.userId }, { populate: {
     path: 'hostId', select: 'firstName lastName username', match: { deletedAt: null },
-  })
-    .sort({ createdAt: -1, _id: -1 }).lean();
+  } });
+  events.sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt) || String(right._id).localeCompare(String(left._id)));
   return eventItems(events.filter(event => event.hostId), baseUrl, undefined, auth.userId);
 }
 
-async function getEventImage(id) {
-  return getEventPhoto(id);
+async function getEventImage(id, viewerId) {
+  return getEventPhoto(id, undefined, viewerId);
 }
 
-async function getEventPhoto(id, photoId) {
+async function getEventPhoto(id, photoId, viewerId) {
   requireEventId(id);
   if (photoId !== undefined && (typeof photoId !== 'string' || !/^[a-f0-9]{24}$/i.test(photoId))) {
     throw new ServiceError(400, 'Invalid photo ID.');
   }
-  const event = await Event.findById(id).select('_id hostId').lean();
+  const event = await findEventById(id, { select: '_id hostId status' });
   if (!event || !(await User.exists({ _id: event.hostId, deletedAt: null }))) return null;
+  if (event.status === 'draft' && String(event.hostId) !== String(viewerId)) return null;
   return getResourcePhotoImage('event', event._id, photoId);
 }
 
 async function getEvent(id, baseUrl, viewerId) {
   requireEventId(id);
-  const event = await Event.findById(id).populate({
+  const event = await findEventById(id, { populate: {
     path: 'hostId', select: 'firstName lastName username', match: { deletedAt: null },
-  }).lean();
+  } });
   if (!event || !event.hostId) throw new ServiceError(404, 'Event not found.');
+  if (event.status === 'draft' && String(event.hostId._id) !== String(viewerId)) throw new ServiceError(404, 'Event not found.');
   return (await eventItems([event], baseUrl, undefined, viewerId))[0];
 }
 
@@ -111,9 +115,13 @@ async function updateEvent(auth, id, body, baseUrl) {
     return await withActiveAccountWrite(auth, [], async session => {
       // Compare the actual transactional preimage, not an earlier HTTP read.
       const before = await Event.findById(id).session(session).lean();
-      if (!before) throw new ServiceError(404, 'Event not found.');
+      if (!before) {
+        const historical = await findEventById(id, { session });
+        if (historical && String(historical.hostId) === String(auth.userId)) throw new ServiceError(409, 'This event is read-only. Reschedule a completed event to create a new occurrence.');
+        throw new ServiceError(404, 'Event not found.');
+      }
       if (String(before.hostId) !== String(auth.userId)) throw new ServiceError(403, 'Unauthorized to edit this event.');
-      if (before.status === 'cancelled') throw new ServiceError(409, 'Cancelled events are read-only.');
+      if (['cancelled', 'archived', 'draft'].includes(before.status) || new Date(before.endsAt).getTime() <= Date.now()) throw new ServiceError(409, 'This event is read-only. Reschedule a completed event to create a new occurrence.');
       const fields = parseCreateEvent(body, { existingEvent: before });
       const photoInput = eventPhotoInput(body);
       const occurredAt = new Date();
@@ -154,40 +162,14 @@ function eventChanges(before, after) {
   const beforeLocation = location(before);
   const afterLocation = location(after);
   if (JSON.stringify(beforeLocation) !== JSON.stringify(afterLocation)) changes.location = { before: beforeLocation, after: afterLocation };
-  const beforeDeadline = iso(before.registrationClosesAt || before.startsAt);
-  const afterDeadline = iso(after.registrationClosesAt || after.startsAt);
+  const beforeDeadline = iso(before.registrationClosesAt || before.endsAt);
+  const afterDeadline = iso(after.registrationClosesAt || after.endsAt);
   if (beforeDeadline !== afterDeadline) changes.registrationDeadline = { before: { registrationClosesAt: beforeDeadline }, after: { registrationClosesAt: afterDeadline } };
   return changes;
 }
 
 async function cancelEvent(auth, id, body, baseUrl) {
-  requireEventId(id);
-  const input = body ?? {};
-  if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key => key !== 'reason') ||
-      (input.reason !== undefined && (typeof input.reason !== 'string' || input.reason.trim().length > 500))) {
-    throw new ServiceError(400, 'Provide an optional cancellation reason of 500 characters or fewer.', { errors: { reason: 'Use 500 characters or fewer.' } });
-  }
-  return withActiveAccountWrite(auth, [], async session => {
-    const before = await Event.findById(id).session(session).lean();
-    if (!before) throw new ServiceError(404, 'Event not found.');
-    if (String(before.hostId) !== String(auth.userId)) throw new ServiceError(403, 'Unauthorized to cancel this event.');
-    if (before.status === 'cancelled') {
-      await Event.populate(before, { path: 'hostId', select: 'firstName lastName username', options: { session } });
-      return (await eventItems([before], baseUrl, session))[0];
-    }
-    const occurredAt = new Date();
-    if (!Number.isFinite(new Date(before.endsAt).getTime()) || new Date(before.endsAt) <= occurredAt) {
-      throw new ServiceError(409, 'Ended events cannot be cancelled.');
-    }
-    const after = await Event.findOneAndUpdate({ _id: id, hostId: auth.userId }, { $set: {
-      status: 'cancelled', cancelledAt: occurredAt, cancellationReason: input.reason?.trim() || '',
-      notificationVersion: versionOf(before) + 1,
-    } }, { new: true, runValidators: true, session }).lean();
-    if (!after) throw new ServiceError(404, 'Event not found.');
-    await recordEventCancelled({ before, after, occurredAt }, session);
-    await Event.populate(after, { path: 'hostId', select: 'firstName lastName username', options: { session } });
-    return (await eventItems([after], baseUrl, session))[0];
-  });
+  return archivePublishedEvent(auth, id, body, baseUrl, 'cancelled');
 }
 
 module.exports = { listPublicEvents, listHostedEvents, getEventImage, getEventPhoto, getEvent, createEvent, updateEvent, cancelEvent };

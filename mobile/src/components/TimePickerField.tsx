@@ -1,204 +1,122 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, View, TouchableOpacity, Keyboard, ScrollView, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, ScrollView, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { AppText } from './AppText';
 import { FieldError } from './FieldError';
+import { SelectionOverlay } from './SelectionOverlay';
 
 interface TimePickerFieldProps {
   label: string;
   time: Date;
   onTimeChange: (time: Date) => void;
-  minuteInterval?: 15 | 30; // <--- Optional, defaults to 15
-  open?: boolean; // <--- Optional controlled state so the parent can keep one picker open at a time
+  minuteInterval?: 15 | 30;
+  open?: boolean;
   onOpenChange?: (open: boolean) => void;
   error?: string | null;
   onBlur?: (time: Date) => void;
   disabled?: boolean;
 }
 
-const ITEM_HEIGHT = 40;
-const VISIBLE_ROWS = 5;
-const WHEEL_HEIGHT = ITEM_HEIGHT * VISIBLE_ROWS;
-const SIDE_PADDING = ITEM_HEIGHT * Math.floor(VISIBLE_ROWS / 2);
+const ITEM_HEIGHT = 44;
+const WHEEL_HEIGHT = ITEM_HEIGHT * 5;
+const SIDE_PADDING = ITEM_HEIGHT * 2;
 
-function Wheel({ data, initialIndex, onChange, textColor, activeColor }: { data: string[]; initialIndex: number; onChange: (index: number) => void; textColor: string; activeColor: string }) {
-  const scrollRef = useRef<any>(null);
+export const formatPickerTime = (time: Date) => time.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+
+function Wheel({ data, initialIndex, onChange, label }: { data: string[]; initialIndex: number; onChange: (index: number) => void; label: string }) {
+  const { colors } = useTheme();
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const lastCommitted = useRef(initialIndex);
   const interacted = useRef(false);
   const [activeIndex, setActiveIndex] = useState(initialIndex);
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      if (!interacted.current) scrollRef.current?.scrollTo({ y: initialIndex * ITEM_HEIGHT, animated: false });
-    }, 0);
-    return () => {
-      clearTimeout(t);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const indexFromOffset = (y: number) => Math.min(data.length - 1, Math.max(0, Math.round(y / ITEM_HEIGHT)));
-
-  const commit = (idx: number) => {
-    if (idx === lastCommitted.current) return;
-    lastCommitted.current = idx;
-    onChange(idx);
+  const position = () => { if (!interacted.current) scrollRef.current?.scrollTo({ y: initialIndex * ITEM_HEIGHT, animated: false }); };
+  const commit = (index: number) => {
+    setActiveIndex(index);
+    if (lastCommitted.current !== index) { lastCommitted.current = index; onChange(index); }
+  };
+  const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (interacted.current) commit(Math.max(0, Math.min(data.length - 1, Math.round(event.nativeEvent.contentOffset.y / ITEM_HEIGHT))));
   };
 
-  // Keep the selected value current so closing immediately cannot discard a wheel edit.
-  const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    // Initial positioning is display setup, not a user edit to the clock.
-    if (!interacted.current) return;
-    const idx = indexFromOffset(e.nativeEvent.contentOffset.y);
-    setActiveIndex(idx);
-    commit(idx);
-  };
+  return <View style={styles.wheel}>
+    <AppText style={[styles.wheelLabel, { color: colors.muted }]}>{label}</AppText>
+    <ScrollView ref={scrollRef} nestedScrollEnabled showsVerticalScrollIndicator={false} snapToInterval={ITEM_HEIGHT} decelerationRate="fast"
+      onLayout={position} onContentSizeChange={position} onScrollBeginDrag={() => { interacted.current = true; }} onScroll={onScroll}
+      contentContainerStyle={{ paddingVertical: SIDE_PADDING }} style={{ height: WHEEL_HEIGHT }} scrollEventThrottle={16} bounces={false} overScrollMode="never">
+      {data.map((item, index) => <TouchableOpacity key={`${item}-${index}`} accessibilityRole="button" accessibilityLabel={`${label}: ${item}`}
+        accessibilityState={{ selected: activeIndex === index }} style={styles.wheelItem}
+        onPress={() => { interacted.current = true; commit(index); scrollRef.current?.scrollTo({ y: index * ITEM_HEIGHT, animated: false }); }}>
+        <AppText style={[styles.wheelText, { color: activeIndex === index ? colors.primary : colors.text, opacity: activeIndex === index ? 1 : 0.5, fontWeight: activeIndex === index ? '800' : '500' }]}>{item}</AppText>
+      </TouchableOpacity>)}
+    </ScrollView>
+  </View>;
+}
 
-  return (
-    <View style={styles.wheel}>
-      <ScrollView
-        ref={scrollRef}
-        nestedScrollEnabled
-        showsVerticalScrollIndicator={false}
-        snapToInterval={ITEM_HEIGHT}
-        decelerationRate="fast"
-        scrollEventThrottle={16}
-        overScrollMode="never" // <--- Removes the Android edge glow
-        bounces={false}
-        onScroll={handleScroll}
-        onScrollBeginDrag={() => { interacted.current = true; }}
-        contentContainerStyle={{ paddingVertical: SIDE_PADDING }}
-      >
-        {data.map((item, idx) => (
-          <TouchableOpacity
-            key={`${item}-${idx}`}
-            activeOpacity={0.6}
-            style={styles.wheelItem}
-            onPress={() => {
-              interacted.current = true;
-              setActiveIndex(idx); commit(idx);
-              scrollRef.current?.scrollTo({ y: idx * ITEM_HEIGHT, animated: false });
-            }}
-          >
-            <AppText style={[styles.wheelText, { color: textColor }, idx === activeIndex ? [styles.wheelTextActive, { color: activeColor }] : styles.wheelTextDim]}>{item}</AppText>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    </View>
-  );
+// Reused inside the hours overlay without opening another native Modal. Only the
+// edited clock part changes; opening/confirming never rounds a saved date/time.
+export function TimePickerContent({ time, onTimeChange, minuteInterval = 15 }: { time: Date; onTimeChange: (time: Date) => void; minuteInterval?: 15 | 30 }) {
+  const { colors } = useTheme();
+  const latest = useRef(time);
+  latest.current = time;
+  const [initial] = useState(() => new Date(time));
+  const [minuteValues] = useState(() => [...new Set([...Array.from({ length: 60 / minuteInterval }, (_, index) => index * minuteInterval), initial.getMinutes()])].sort((a, b) => a - b));
+  const hours = Array.from({ length: 12 }, (_, index) => String(index + 1));
+  const update = (part: 'hour' | 'minute' | 'period', index: number) => {
+    const next = new Date(latest.current);
+    if (part === 'hour') next.setHours(((index + 1) % 12) + (next.getHours() >= 12 ? 12 : 0));
+    if (part === 'minute') next.setMinutes(minuteValues[index]);
+    if (part === 'period') next.setHours(next.getHours() % 12 + (index === 1 ? 12 : 0));
+    next.setSeconds(0, 0);
+    latest.current = next;
+    onTimeChange(next);
+  };
+  return <View style={styles.wheelsRow}>
+    <View pointerEvents="none" style={[styles.selectionBand, { backgroundColor: colors.primary }]} />
+    <Wheel label="Hour" data={hours} initialIndex={(initial.getHours() % 12 || 12) - 1} onChange={index => update('hour', index)} />
+    <Wheel label="Minute" data={minuteValues.map(value => String(value).padStart(2, '0'))} initialIndex={minuteValues.indexOf(initial.getMinutes())} onChange={index => update('minute', index)} />
+    <Wheel label="Period" data={['AM', 'PM']} initialIndex={initial.getHours() >= 12 ? 1 : 0} onChange={index => update('period', index)} />
+  </View>;
 }
 
 export function TimePickerField({ label, time, onTimeChange, minuteInterval = 15, open, onOpenChange, error, onBlur, disabled = false }: TimePickerFieldProps) {
   const { colors } = useTheme();
   const [internalOpen, setInternalOpen] = useState(false);
-  const isPickerVisible = open ?? internalOpen;
-  const latestTime = useRef(time);
-  latestTime.current = time;
-  const wasOpen = useRef(isPickerVisible);
-  useEffect(() => {
-    if (wasOpen.current && !isPickerVisible) onBlur?.(time);
-    wasOpen.current = isPickerVisible;
-  }, [isPickerVisible, time, onBlur]);
+  const visible = open ?? internalOpen;
+  const [draft, setDraft] = useState(() => new Date(time));
+  const wasOpen = useRef(false);
+  useEffect(() => { if (visible && !wasOpen.current) setDraft(new Date(time)); wasOpen.current = visible; }, [visible, time]);
+  const setVisible = (value: boolean) => { setInternalOpen(value); onOpenChange?.(value); };
+  const cancel = () => { setVisible(false); onBlur?.(time); };
+  const done = () => { const next = new Date(draft); onTimeChange(next); setVisible(false); onBlur?.(next); };
 
-  const setIsPickerVisible = (value: boolean) => {
-    setInternalOpen(value);
-    onOpenChange?.(value);
-  };
-
-  const hours = Array.from({ length: 12 }, (_, i) => String(i + 1));
-  const minutes = Array.from({ length: 60 / minuteInterval }, (_, i) => String(i * minuteInterval).padStart(2, '0'));
-  const periods = ['AM', 'PM'];
-
-  // Round minutes to clean 15-minute intervals
-  const snapToInterval = (selectedDate: Date, intervalMinutes: number) => {
-    const roundedDate = new Date(selectedDate);
-    const roundedMinutes = Math.round(roundedDate.getMinutes() / intervalMinutes) * intervalMinutes;
-
-    roundedDate.setMinutes(roundedMinutes);
-    roundedDate.setSeconds(0);
-    roundedDate.setMilliseconds(0);
-    return roundedDate;
-  };
-
-  const formatTime = (selectedTime: Date) => {
-    return selectedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const snapped = snapToInterval(time, minuteInterval);
-  const h24 = snapped.getHours();
-  const hourIndex = (h24 % 12 || 12) - 1;
-  const minuteIndex = (snapped.getMinutes() / minuteInterval) % minutes.length;
-  const periodIndex = h24 >= 12 ? 1 : 0;
-
-  const updateTime = (part: 'hour' | 'minute' | 'period', index: number) => {
-    if (disabled) return;
-    // Separate wheels may report before a render. Change only that wheel's part
-    // against the latest clock, so one edit cannot overwrite another's value.
-    const result = snapToInterval(latestTime.current, minuteInterval);
-    if (part === 'hour') result.setHours(((index + 1) % 12) + (result.getHours() >= 12 ? 12 : 0));
-    else if (part === 'minute') result.setMinutes(index * minuteInterval);
-    else result.setHours((result.getHours() % 12) + (index === 1 ? 12 : 0));
-    result.setSeconds(0, 0);
-    latestTime.current = result;
-    onTimeChange(result);
-  };
-
-  return (
-    <View style={styles.splitInput}>
-      <AppText style={[styles.fieldLabel, { color: colors.text }]}>{label}</AppText>
-      <TouchableOpacity
-        style={[styles.fieldInputButton, styles.rowButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
-        onPress={() => {
-          Keyboard.dismiss(); // Force-closes any software keyboard
-          setIsPickerVisible(!isPickerVisible);
-        }}
-        activeOpacity={0.8}
-        disabled={disabled}
-      >
-        <View style={styles.leftContent}>
-          <Ionicons name="time-outline" size={16} color={colors.text} style={styles.iconStyle} />
-          <AppText style={[styles.fieldInputText, { color: colors.text }]}>{formatTime(snapped)}</AppText>
-        </View>
-        <Ionicons name={isPickerVisible ? "chevron-up" : "chevron-down"} size={14} color={colors.muted} />
-      </TouchableOpacity>
+  return <View style={styles.fieldGroup}>
+    <AppText style={[styles.fieldLabel, { color: colors.text }]}>{label}</AppText>
+    <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${label}: ${formatPickerTime(time)}`} accessibilityState={{ expanded: visible, disabled }} disabled={disabled}
+      onPress={() => { setDraft(new Date(time)); setVisible(true); }} activeOpacity={0.8}
+      style={[styles.fieldInputButton, { borderColor: colors.border, backgroundColor: colors.surface }, disabled && styles.disabled]}>
+      <Ionicons name="time-outline" size={17} color={colors.primary} />
+      <AppText style={[styles.fieldInputText, { color: colors.text }]}>{formatPickerTime(time)}</AppText>
+      <Ionicons name="chevron-down" size={15} color={colors.muted} />
+    </TouchableOpacity>
+    <FieldError message={error} />
+    <SelectionOverlay visible={visible && !disabled} title={label.replace(/\*$/, '')} onCancel={cancel} onDone={done}>
+      {visible && <TimePickerContent time={draft} onTimeChange={setDraft} minuteInterval={minuteInterval} />}
       <FieldError message={error} />
-      {isPickerVisible && (
-        <View style={[styles.timeDropdownContainer, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-          <View style={styles.wheelsRow}>
-            <View pointerEvents="none" style={[styles.selectionBand, { backgroundColor: colors.primary }]} />
-            <Wheel data={hours} initialIndex={hourIndex} onChange={(i) => updateTime('hour', i)} textColor={colors.text} activeColor={colors.primary} />
-            <View style={styles.colonWrap} pointerEvents="none">
-              <AppText style={[styles.colon, { color: colors.primary }]}>:</AppText>
-            </View>
-            <Wheel data={minutes} initialIndex={minuteIndex} onChange={(i) => updateTime('minute', i)} textColor={colors.text} activeColor={colors.primary} />
-            <Wheel data={periods} initialIndex={periodIndex} onChange={(i) => updateTime('period', i)} textColor={colors.text} activeColor={colors.primary} />
-          </View>
-          <TouchableOpacity onPress={() => setIsPickerVisible(false)} accessibilityRole="button" style={{ padding: 12, alignItems: 'center' }}>
-            <AppText style={{ color: colors.primary, fontWeight: '700' }}>Done</AppText>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
-  );
+    </SelectionOverlay>
+  </View>;
 }
 
 const styles = StyleSheet.create({
-  splitInput: { flex: 1 },
+  fieldGroup: { flex: 1 },
   fieldLabel: { fontSize: 11, fontWeight: '800', marginBottom: 6 },
-  fieldInputButton: { height: 44, borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, justifyContent: 'center' },
-  rowButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  leftContent: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  iconStyle: { marginRight: 2 },
-  fieldInputText: { fontSize: 12, fontWeight: '600' },
-  timeDropdownContainer: { marginTop: 6, borderRadius: 14, overflow: 'hidden', borderWidth: 1 },
-  wheelsRow: { flexDirection: 'row', alignItems: 'center', height: WHEEL_HEIGHT, paddingHorizontal: 8 },
-  selectionBand: { position: 'absolute', left: 8, right: 8, top: SIDE_PADDING, height: ITEM_HEIGHT, borderRadius: 10, opacity: 0.12 },
-  wheel: { flex: 1, height: WHEEL_HEIGHT },
+  fieldInputButton: { minHeight: 46, borderRadius: 14, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  fieldInputText: { flex: 1, fontSize: 12, fontWeight: '600' },
+  disabled: { opacity: 0.5 },
+  wheelsRow: { flexDirection: 'row', position: 'relative' },
+  selectionBand: { position: 'absolute', left: 0, right: 0, top: SIDE_PADDING + 24, height: ITEM_HEIGHT, opacity: 0.12, borderRadius: 10 },
+  wheel: { flex: 1 },
+  wheelLabel: { height: 24, fontSize: 12, textAlign: 'center', fontWeight: '600' },
   wheelItem: { height: ITEM_HEIGHT, justifyContent: 'center', alignItems: 'center' },
-  wheelText: { fontSize: 15 }, // <--- Add fontFamily here to match your app font
-  wheelTextActive: { fontWeight: '800' },
-  wheelTextDim: { opacity: 0.35, fontWeight: '500' },
-  colonWrap: { width: 8, alignItems: 'center', justifyContent: 'center' },
-  colon: { fontSize: 15, fontWeight: '800' },
+  wheelText: { fontSize: 18 },
 });

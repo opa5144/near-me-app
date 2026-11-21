@@ -62,7 +62,7 @@ export interface EventDraft {
 
 // Call only on field exit/picker completion or submit. Clock edits themselves do
 // not show errors. Earlier end times mean the next day, including across DST.
-export function validateEventDraft(draft: EventDraft) {
+export function validateEventDraft(draft: EventDraft, { existingStartsAt }: { existingStartsAt?: string } = {}) {
   const errors: HostFieldErrors = {
     title: requiredText(draft.title, 'an event title', 150),
     description: requiredText(draft.description, 'an event description', 10000),
@@ -97,12 +97,29 @@ export function validateEventDraft(draft: EventDraft) {
     if (formatHostDate(end) !== expectedEndDate || end.getHours() !== draft.endTime.getHours() || end.getMinutes() !== draft.endTime.getMinutes()) {
       errors.endTime = 'That end time does not exist on this date in your device time zone.';
     }
-    if (!errors.startTime && start.getTime() <= Date.now()) errors.startTime = 'The event must start in the future.';
+    // An ongoing published event may keep its original start during an edit.
+    // Creating, publishing, or repeating an event still requires a future start.
+    if (!errors.startTime && start.getTime() <= Date.now() && start.getTime() !== Date.parse(existingStartsAt ?? '')) {
+      errors.startTime = 'The event must start in the future.';
+    }
+    if (!errors.endTime && existingStartsAt && end.getTime() <= Date.now()) errors.endTime = 'Completed events are read-only. Create a new event to reschedule.';
     if (!errors.startTime && !errors.endTime && end.getTime() - start.getTime() < 30 * 60 * 1000) {
       errors.endTime = 'The event must last at least 30 minutes.';
     }
   }
   return { errors, priceAmount, start, end };
+}
+
+// Saving a private draft keeps entered values without requiring every field.
+// Malformed entered prices/photos still need correction; required-field checks
+// are reserved for publishing so an unfinished draft can always be retained.
+export function validateSavedEventDraft(draft: EventDraft) {
+  const errors: HostFieldErrors = {};
+  if (draft.title.trim().length > 150) errors.title = 'Use 150 characters or fewer.';
+  if (draft.description.trim().length > 10000) errors.description = 'Use 10000 characters or fewer.';
+  if (priceToAmount(draft.price) === null) errors.price = 'Enter a price with up to two decimal places, or leave blank for free.';
+  errors.photos = photoError(draft.photos);
+  return errors;
 }
 
 export interface StoreDraft {

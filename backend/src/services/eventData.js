@@ -68,7 +68,7 @@ function parseCreateEvent(body, { existingEvent } = {}) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     throw new EventInputError('Please submit an event object.');
   }
-  if (['status', 'cancelledAt', 'cancellationReason', 'notificationVersion'].some(field => Object.prototype.hasOwnProperty.call(body, field))) {
+  if (['status', 'cancelledAt', 'cancellationReason', 'notificationVersion', 'archivedAt', 'archiveReason', 'storage', 'sourceEventId'].some(field => Object.prototype.hasOwnProperty.call(body, field))) {
     throw new EventInputError('Use the event cancellation action to cancel an event.');
   }
   const title = requiredText(body.title, 'Title', 150);
@@ -85,7 +85,9 @@ function parseCreateEvent(body, { existingEvent } = {}) {
   // Validate real, fully specified instants before checking future starts and minimum duration.
   const startsAt = parseEventTimestamp(body.startsAt, 'Start time');
   const endsAt = parseEventTimestamp(body.endsAt, 'End time');
-  if (startsAt.getTime() <= Date.now()) throw new EventInputError('The event must start in the future.');
+  const unchangedOngoingStart = existingEvent && existingEvent.status !== 'draft' &&
+    startsAt.getTime() === new Date(existingEvent.startsAt).getTime() && endsAt.getTime() > Date.now();
+  if (startsAt.getTime() <= Date.now() && !unchangedOngoingStart) throw new EventInputError('The event must start in the future.');
   if (endsAt.getTime() - startsAt.getTime() < 30 * 60 * 1000) {
     throw new EventInputError('The event must last at least 30 minutes.');
   }
@@ -96,8 +98,8 @@ function parseCreateEvent(body, { existingEvent } = {}) {
   } else {
     registrationClosesAt = existingEvent?.registrationClosesAt ? new Date(existingEvent.registrationClosesAt) : null;
   }
-  if (registrationClosesAt && (!Number.isFinite(registrationClosesAt.getTime()) || registrationClosesAt > startsAt)) {
-    throw new EventInputError('Registration closing time cannot be after the event starts. Choose an earlier deadline.');
+  if (registrationClosesAt && (!Number.isFinite(registrationClosesAt.getTime()) || registrationClosesAt > endsAt)) {
+    throw new EventInputError('Registration closing time cannot be after the event ends.');
   }
   // Confirm the stored display timezone is recognized independently of the server's zone.
   if (typeof body.timeZone !== 'string') throw new EventInputError('A timezone is required.');
@@ -140,9 +142,51 @@ function parseCreateEvent(body, { existingEvent } = {}) {
   };
 }
 
+// Saving a private draft permits missing fields, but supplied values must remain
+// bounded and well typed. Publication always goes through parseCreateEvent.
+function parseDraftEvent(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new EventInputError('Please submit an event object.');
+  const result = {};
+  for (const [field, maximum] of Object.entries({ title: 150, description: 10000, address: 500, place: 300 })) {
+    if (!Object.prototype.hasOwnProperty.call(body, field)) continue;
+    if (typeof body[field] !== 'string' || body[field].trim().length > maximum) throw new EventInputError(field + ' must be at most ' + maximum + ' characters.');
+    result[field] = body[field].trim();
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'categories')) {
+    result.categories = Array.isArray(body.categories) && body.categories.length === 0 ? [] : parseEventCategories(body);
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'price')) {
+    if (typeof body.price !== 'number' || !Number.isFinite(body.price) || body.price < 0 ||
+        Math.abs(body.price * 100 - Math.round(body.price * 100)) > 0.000001) throw new EventInputError('Price must be a non-negative amount with at most two decimal places.');
+    result.price = body.price;
+  }
+  for (const field of ['startsAt', 'endsAt', 'registrationClosesAt']) {
+    if (Object.prototype.hasOwnProperty.call(body, field)) result[field] = body[field] == null || body[field] === '' ? null : parseEventTimestamp(body[field], field);
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'timeZone')) {
+    if (typeof body.timeZone !== 'string' || body.timeZone.length > 100) throw new EventInputError('Please supply a valid IANA timezone.');
+    if (body.timeZone) {
+      try { new Intl.DateTimeFormat('en-US', { timeZone: body.timeZone }).format(); }
+      catch { throw new EventInputError('Please supply a valid IANA timezone.'); }
+    }
+    result.timeZone = body.timeZone;
+  }
+  for (const [field, min, max] of [['latitude', -90, 90], ['longitude', -180, 180]]) {
+    if (!Object.prototype.hasOwnProperty.call(body, field)) continue;
+    if (body[field] !== null && (typeof body[field] !== 'number' || !Number.isFinite(body[field]) || body[field] < min || body[field] > max)) throw new EventInputError('Please supply valid coordinates.');
+    result[field] = body[field];
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'placeId')) {
+    if (body.placeId !== null && (typeof body.placeId !== 'string' || body.placeId.length > 500)) throw new EventInputError('Invalid place reference.');
+    result.placeId = body.placeId;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'photos')) validatePhotoInput(body.photos);
+  return result;
+}
+
 // Translate a database record into the shared mobile shape with no embedded image bytes.
 function toEventItem(event, apiBaseUrl, photoDocuments = [], audience) {
-  const timeZone = event.timeZone;
+  const timeZone = event.timeZone || 'UTC';
   // Format display labels in the event's zone, keeping output consistent across devices.
   const dateFormat = new Intl.DateTimeFormat('en-US', {
     month: '2-digit', day: '2-digit', year: 'numeric', timeZone,
@@ -153,12 +197,13 @@ function toEventItem(event, apiBaseUrl, photoDocuments = [], audience) {
   const calendarFormat = new Intl.DateTimeFormat('en-US', {
     year: 'numeric', month: 'numeric', day: 'numeric', timeZone,
   });
-  const start = new Date(event.startsAt);
-  const end = new Date(event.endsAt);
+  const start = new Date(event.startsAt || NaN);
+  const end = new Date(event.endsAt || NaN);
+  const hasSchedule = Number.isFinite(start.getTime()) && Number.isFinite(end.getTime());
   // Overnight events show the ending day instead of appearing to end before they start.
-  const crossesDay = calendarFormat.format(start) !== calendarFormat.format(end);
+  const crossesDay = hasSchedule && calendarFormat.format(start) !== calendarFormat.format(end);
   // Keep a numeric price for app logic alongside the formatted Free/currency label.
-  const priceAmount = Number(event.price);
+  const priceAmount = Number.isFinite(Number(event.price)) ? Number(event.price) : 0;
   const photos = photoItems(event, apiBaseUrl, 'events', photoDocuments);
   const categories = categoriesForEvent(event);
   return {
@@ -178,9 +223,9 @@ function toEventItem(event, apiBaseUrl, photoDocuments = [], audience) {
     ...(categories[0] ? { category: categories[0] } : {}),
     // Optional for history serializers; event list/detail responses supply live totals.
     ...(audience ? { interestedCount: audience.interestedCount, attendingCount: audience.attendingCount } : {}),
-    date: dateFormat.format(start),
-    time: timeFormat.format(start) + ' – ' + timeFormat.format(end) +
-      (crossesDay ? ' (ends ' + dateFormat.format(end) + ')' : ''),
+    date: hasSchedule ? dateFormat.format(start) : '',
+    time: hasSchedule ? timeFormat.format(start) + ' – ' + timeFormat.format(end) +
+      (crossesDay ? ' (ends ' + dateFormat.format(end) + ')' : '') : '',
     venue: event.place,
     price: priceAmount === 0 ? 'Free' : new Intl.NumberFormat('en-US', {
       style: 'currency', currency: 'USD',
@@ -192,12 +237,16 @@ function toEventItem(event, apiBaseUrl, photoDocuments = [], audience) {
     photos,
     ...(photos[0] ? { bannerImage: photos[0].url } : {}),
     priceAmount,
-    startsAt: start.toISOString(),
-    endsAt: end.toISOString(),
-    status: event.status === 'cancelled' ? 'cancelled' : 'published',
+    startsAt: Number.isFinite(start.getTime()) ? start.toISOString() : '',
+    endsAt: Number.isFinite(end.getTime()) ? end.toISOString() : '',
+    status: event.status || 'published',
+    storage: event.storage || (event.status === 'draft' || event.status === 'cancelled' || event.status === 'archived' ? 'archived' : hasSchedule && end <= new Date() ? 'past' : 'current'),
+    archivedAt: event.archivedAt ? new Date(event.archivedAt).toISOString() : null,
+    archiveReason: event.archiveReason || '',
+    sourceEventId: event.sourceEventId ? String(event.sourceEventId) : null,
     cancelledAt: event.cancelledAt ? new Date(event.cancelledAt).toISOString() : null,
     cancellationReason: event.cancellationReason || '',
-    registrationClosesAt: new Date(event.registrationClosesAt || event.startsAt).toISOString(),
+    registrationClosesAt: (event.registrationClosesAt || hasSchedule) ? new Date(event.registrationClosesAt || event.endsAt).toISOString() : '',
     timeZone,
     address: event.address,
     place: event.place,
@@ -206,4 +255,4 @@ function toEventItem(event, apiBaseUrl, photoDocuments = [], audience) {
   };
 }
 
-module.exports = { parseCreateEvent, parseEventTimestamp, toEventItem, EventInputError, MAX_IMAGE_BYTES };
+module.exports = { parseCreateEvent, parseDraftEvent, parseEventTimestamp, toEventItem, EventInputError, MAX_IMAGE_BYTES };

@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const { randomUUID } = require('node:crypto');
 const User = require('../../models/User');
-const Event = require('../../models/Event');
+const { collections, findEventById, withEventSnapshot } = require('../../models/eventStore');
 const EventSelection = require('../../models/EventSelection');
 const Notification = require('../../models/Notification');
 const NotificationJob = require('../../models/NotificationJob');
@@ -145,7 +145,7 @@ async function expandFanout(job, workerId) {
   const payload = object(job.payload);
   const recipients = [...new Set((Array.isArray(payload.recipientIds) ? payload.recipientIds : [])
     .filter(validId).map(String))];
-  const event = await Event.findById(job.eventId).select('_id hostId').lean();
+  const event = await findEventById(job.eventId, { select: '_id hostId' });
   if (!event?.hostId || !recipients.length) return finish(job, workerId, 'skipped', 'EMPTY_AUDIENCE');
   try {
     return await withActiveAccounts([event.hostId], async session => {
@@ -294,20 +294,22 @@ async function reconcileScheduledJobs({ shouldStop } = {}) {
   const limit = Math.min(500, config.batchSize * 5);
   // Exclude old history before applying the batch limit, so thousands of past
   // choices cannot delay newly edited events beyond their reminder grace window.
-  const rows = await EventSelection.aggregate([
+  const sources = collections.filter(entry => entry.storage !== 'archived');
+  const rows = await withEventSnapshot(undefined, session => EventSelection.aggregate([
     { $match: {
       ...(reconciliationAfter ? { _id: { $gt: reconciliationAfter } } : {}),
       $or: [{ attending: true }, { interested: true }],
     } },
-    { $lookup: {
-      from: Event.collection.name, localField: 'eventId', foreignField: '_id',
+    ...sources.map(({ model }, index) => ({ $lookup: {
+      from: model.collection.name, localField: 'eventId', foreignField: '_id',
       pipeline: [
-        { $match: { endsAt: { $type: 'date', $gte: new Date(Date.now() - HOUR) }, status: { $ne: 'cancelled' } } },
+        { $match: { endsAt: { $type: 'date', $gte: new Date(Date.now() - HOUR) }, status: { $nin: ['cancelled', 'archived', 'draft'] } } },
         { $project: { _id: 1, hostId: 1, endsAt: 1 } },
-      ], as: 'scheduledEvent',
-    } },
+      ], as: 'eventSource' + index,
+    } })),
+    { $set: { scheduledEvent: { $concatArrays: sources.map((entry, index) => '$eventSource' + index) } } },
     { $unwind: '$scheduledEvent' }, { $sort: { _id: 1 } }, { $limit: limit },
-  ]);
+  ]).session(session));
   for (const selection of rows) {
     if (shouldStop?.()) break;
     summary.scanned++;
@@ -318,7 +320,7 @@ async function reconcileScheduledJobs({ shouldStop } = {}) {
     }
     try {
       const scheduled = await withActiveAccounts([selection.userId, event.hostId], async session => {
-        const currentEvent = await Event.findById(event._id).session(session).lean();
+        const currentEvent = await findEventById(event._id, { session });
         const currentSelection = await EventSelection.findOne({ _id: selection._id, userId: selection.userId, eventId: event._id })
           .session(session).lean();
         if (!currentEvent || !currentSelection || (!currentSelection.attending && !currentSelection.interested)) {

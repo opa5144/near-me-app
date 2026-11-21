@@ -12,18 +12,19 @@ export interface PhotoCollectionProps {
   emoji?: string;
   accent?: string;
   mode?: 'hero' | 'gallery' | 'both';
+  getImageHeaders?: (uri: string) => Record<string, string> | undefined;
 }
 
-function PhotoImage({ uri, label, full = false }: { uri: string; label: string; full?: boolean }) {
+function PhotoImage({ uri, label, full = false, headers }: { uri: string; label: string; full?: boolean; headers?: Record<string, string> }) {
   const { colors } = useTheme();
   const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [uri]);
+  useEffect(() => setFailed(false), [uri, headers?.Authorization]);
   return failed ? <View style={styles.unavailable}><Text style={{ color: colors.muted }}>Photo unavailable</Text></View>
-    : <Image source={{ uri }} accessibilityLabel={label} onError={() => setFailed(true)} style={styles.image} resizeMode={full ? 'contain' : 'cover'} />;
+    : <Image source={{ uri, headers }} accessibilityLabel={label} onError={() => setFailed(true)} style={styles.image} resizeMode={full ? 'contain' : 'cover'} />;
 }
 
 // One display serves event/store details and read-only history without navigation params.
-export function PhotoCollection({ photos, fallbackUri, title = 'Photos', emoji, accent, mode = 'both' }: PhotoCollectionProps) {
+export function PhotoCollection({ photos, fallbackUri, title = 'Photos', emoji, accent, mode = 'both', getImageHeaders }: PhotoCollectionProps) {
   const { colors } = useTheme();
   const { width: screenWidth } = useWindowDimensions();
   const items = useMemo(() => photos.length ? photos : fallbackUri ? [{ id: 'legacy', url: fallbackUri }] : [], [photos, fallbackUri]);
@@ -61,7 +62,7 @@ export function PhotoCollection({ photos, fallbackUri, title = 'Photos', emoji, 
           onMomentumScrollEnd={event => setHeroIndex(clampIndex(Math.round(event.nativeEvent.contentOffset.x / heroWidth)))}
           renderItem={({ item, index }) => <Pressable accessibilityRole="button" accessibilityLabel={title + ', photo ' + (index + 1) + ' of ' + items.length + '. Open full screen'}
             onPress={() => setViewerIndex(index)} style={{ width: heroWidth, height: 220 }}>
-            <PhotoImage uri={item.url} label={title + ', photo ' + (index + 1)} />
+            <PhotoImage uri={item.url} headers={getImageHeaders?.(item.url)} label={title + ', photo ' + (index + 1)} />
           </Pressable>} /> : !items.length ? <Text style={[styles.emoji, { color: colors.text }]}>{emoji || 'No photos'}</Text> : null}
         {items.length > 0 && <View pointerEvents="none" style={styles.count}><Text style={styles.countText}>{heroIndex + 1} / {items.length}</Text></View>}
       </View>
@@ -71,7 +72,7 @@ export function PhotoCollection({ photos, fallbackUri, title = 'Photos', emoji, 
       <Text style={[styles.heading, { color: colors.text }]}>Photo gallery</Text>
       <View style={styles.thumbnails}>{items.map((photo, index) => <Pressable key={photo.id} onPress={() => setViewerIndex(index)}
         accessibilityRole="button" accessibilityLabel={'Open photo ' + (index + 1) + ' of ' + items.length} style={styles.thumbnail}>
-        <PhotoImage uri={photo.url} label={title + ', photo ' + (index + 1)} />
+        <PhotoImage uri={photo.url} headers={getImageHeaders?.(photo.url)} label={title + ', photo ' + (index + 1)} />
       </Pressable>)}</View>
     </>}
     <Modal visible={viewerIndex !== null && items.length > 0} animationType="fade" presentationStyle="fullScreen" onRequestClose={() => setViewerIndex(null)}>
@@ -86,7 +87,7 @@ export function PhotoCollection({ photos, fallbackUri, title = 'Photos', emoji, 
           keyExtractor={photo => photo.id} style={{ width: screenWidth, height: viewerHeight }}
           getItemLayout={(_, index) => ({ index, length: screenWidth, offset: screenWidth * index })}
           onMomentumScrollEnd={event => setViewerIndex(clampIndex(Math.round(event.nativeEvent.contentOffset.x / screenWidth)))}
-          renderItem={({ item, index }) => <View style={{ width: screenWidth, height: viewerHeight }}><PhotoImage full uri={item.url} label={title + ', photo ' + (index + 1)} /></View>} />}
+          renderItem={({ item, index }) => <View style={{ width: screenWidth, height: viewerHeight }}><PhotoImage full uri={item.url} headers={getImageHeaders?.(item.url)} label={title + ', photo ' + (index + 1)} /></View>} />}
         </View>
         <View style={styles.viewerFooter}>
           <AppButton title="Previous" variant="quiet" disabled={viewerIndex === null || viewerIndex === 0} onPress={() => moveViewer((viewerIndex ?? 0) - 1)} />

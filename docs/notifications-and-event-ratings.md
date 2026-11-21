@@ -20,7 +20,7 @@ The five options are **😞 Terrible**, **🙁 Poor**, **😐 Okay**, **🙂 Goo
 
 `EventRating` stores `userId`, `eventId`, `score` (integer 1–5), and timestamps in `eventRatings`. A unique `{userId, eventId}` index ensures one editable vote per user/event. Changing a vote updates the same record; totals are calculated from stored ratings, not incremented counters.
 
-The backend requires an active user and host, an ended event that has not been cancelled, and the user's existing `attending` flag. Interested alone does not qualify, and hosts cannot rate their own events. This uses registration as eligibility; there is no physical attendance/check-in verification. If an ended event is moved into the future, the saved rating is retained and editing is disabled until the event ends again.
+The backend requires an active user and host, an ended event that has not been cancelled or archived, and the user's existing `attending` flag. Interested alone does not qualify, and hosts cannot rate their own events. This uses registration as eligibility; there is no physical attendance/check-in verification. Since the [event lifecycle update](event-lifecycle-and-picker-overlays.md), completed events remain unchanged in `PastEventsList`. Rescheduling creates a new event with a new ID and fresh attendance, invitations, and ratings. Existing ratings continue to belong to the completed occurrence.
 
 The host summary is owner-only and includes every option, even when its count is zero. Closed accounts' rating records are retained, while active accounts contribute to the displayed counts, consistently with existing audience totals.
 

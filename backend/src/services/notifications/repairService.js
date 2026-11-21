@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const User = require('../../models/User');
-const Event = require('../../models/Event');
+const { findEvents } = require('../../models/eventStore');
 const EventSelection = require('../../models/EventSelection');
 const EventRating = require('../../models/EventRating');
 const EventInvite = require('../../models/EventInvite');
@@ -33,7 +33,7 @@ const jobPayload = job => ({ ...object(job?.payload?.context), ...object(job?.pa
 
 function eventSnapshot(event) {
   return { id: id(event), hostId: id(event.hostId), title: event.title, place: event.place, address: event.address,
-    startsAt: event.startsAt, endsAt: event.endsAt, registrationClosesAt: event.registrationClosesAt || event.startsAt,
+    startsAt: event.startsAt, endsAt: event.endsAt, registrationClosesAt: event.registrationClosesAt || event.endsAt,
     timeZone: event.timeZone, status: event.status || 'published', cancelledAt: event.cancelledAt,
     cancellationReason: event.cancellationReason || '' };
 }
@@ -43,7 +43,7 @@ function eventSnapshot(event) {
 async function readState(session) {
   const read = query => query.session(session || null).lean();
   const users = await read(User.find().select('_id username email deletedAt'));
-  const events = await read(Event.find());
+  const events = await findEvents({ status: { $ne: 'draft' } }, { session });
   const selections = await read(EventSelection.find());
   const ratings = await read(EventRating.find().select('userId eventId'));
   const notifications = await read(Notification.find());
@@ -126,7 +126,7 @@ function assess(row, state, now) {
       valid = valid && ratingEligibility(event, selection, user._id, now).canRate;
     } else if (row.type === 'SAVED_EVENT_REGISTRATION_CLOSING') {
       valid = valid && Boolean(factJob || (selection?.interested && !selection.attending &&
-        time(selection.savedAt) <= occurred && sameTime(payload.expectedClosesAt, event.registrationClosesAt || event.startsAt)));
+        time(selection.savedAt) <= occurred && sameTime(payload.expectedClosesAt, event.registrationClosesAt || event.endsAt)));
     } else {
       valid = valid && Boolean(factJob || (selection?.attending && time(selection.registeredAt) <= occurred &&
         sameTime(payload.expectedStartsAt, event.startsAt)));
@@ -141,8 +141,8 @@ function assess(row, state, now) {
   } else if (row.type === 'REGISTRATION_CANCELLED') {
     valid = Boolean(factJob || (selection && !selection.attending && sameTime(selection.cancelledAt, row.occurredAt)));
   } else if (row.type === 'EVENT_CANCELLED') {
-    valid = Boolean((event.status === 'cancelled' && time(event.cancelledAt) <= occurred) ||
-      (factJob && hasSnapshot && snapshot.status === 'cancelled'));
+    valid = Boolean((['cancelled', 'archived'].includes(event.status) && time(event.cancelledAt) <= occurred) ||
+      (factJob && hasSnapshot && ['cancelled', 'archived'].includes(snapshot.status)));
   } else if (row.type === 'EVENT_DATETIME_CHANGED' || row.type === 'EVENT_LOCATION_CHANGED') {
     valid = Boolean(factJob && hasSnapshot && payload.changes?.[row.type === 'EVENT_DATETIME_CHANGED' ? 'dateTime' : 'location']);
   } else if (row.type === 'FOLLOWED_ORGANIZER_NEW_EVENT') {
@@ -169,7 +169,7 @@ function replacement(row, event, user, type, occurredAt, now, wasFixtureRecipien
   const payload = { eventVersion: generation(event.notificationVersion), registrationVersion: generation(row.registrationVersion),
     selectionVersion: generation(row.selectionVersion), occurredAt: occurredAt.toISOString(),
     expectedStartsAt: event.startsAt.toISOString(), expectedEndsAt: event.endsAt.toISOString(),
-    expectedClosesAt: new Date(event.registrationClosesAt || event.startsAt).toISOString(), eventSnapshot: eventSnapshot(event) };
+    expectedClosesAt: new Date(event.registrationClosesAt || event.endsAt).toISOString(), eventSnapshot: eventSnapshot(event) };
   const dedupeKey = type === 'REGISTRATION_CONFIRMED'
     ? notificationKey('registration', type, row.userId, row.eventId, generation(row.registrationVersion))
     : notificationKey(REPAIR, type, row.userId, row.eventId, generation(row.registrationVersion));
@@ -191,13 +191,13 @@ function staleTimedJob(job, state, now) {
   const user = state.users.get(id(job.userId));
   const host = event && state.users.get(id(event.hostId));
   if (!user || !host || user.deletedAt != null || host.deletedAt != null || !event || !validSchedule(event) ||
-      !selection || event.status === 'cancelled' || !Number.isFinite(due) ||
+      !selection || ['cancelled', 'archived', 'draft'].includes(event.status) || !Number.isFinite(due) ||
       due + getNotificationConfig().graceMs < now.getTime() ||
       generation(event.notificationVersion) !== payload.eventVersion ||
       generation(selection.registrationVersion) !== payload.registrationVersion) return true;
   if (job.type === 'SAVED_EVENT_REGISTRATION_CLOSING') return !selection.interested || selection.attending ||
     generation(selection.selectionVersion) !== payload.selectionVersion ||
-    !sameTime(payload.expectedClosesAt, event.registrationClosesAt || event.startsAt);
+    !sameTime(payload.expectedClosesAt, event.registrationClosesAt || event.endsAt);
   if (job.type === 'RATE_ATTENDED_EVENT') return !selection.attending ||
     state.rated.has(pair(job.userId, job.eventId)) || !sameTime(payload.expectedEndsAt, event.endsAt);
   return !selection.attending || !sameTime(payload.expectedStartsAt, event.startsAt);
@@ -270,10 +270,10 @@ async function makePlan(now, session) {
     const event = state.events.get(id(selection.eventId));
     const host = event && state.users.get(id(event.hostId));
     if (!user || !host || user.deletedAt != null || host.deletedAt != null || !validSchedule(event) ||
-        event.status === 'cancelled' || id(event.hostId) === id(user)) continue;
+        ['cancelled', 'archived', 'draft'].includes(event.status) || id(event.hostId) === id(user)) continue;
     const candidates = [];
     const registered = time(selection.registeredAt);
-    if (Number.isFinite(registered) && registered <= now.getTime() && registered < time(event.registrationClosesAt || event.startsAt)) {
+    if (Number.isFinite(registered) && registered <= now.getTime() && registered < time(event.registrationClosesAt || event.endsAt)) {
       candidates.push(['REGISTRATION_CONFIRMED', new Date(registered), 'confirmations']);
     }
     const ratingDue = time(event.endsAt) + HOUR;

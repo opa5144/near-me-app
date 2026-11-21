@@ -7,6 +7,7 @@ import { isAxiosError } from 'axios';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { AppButton } from '../../components/AppButton';
 import { FieldError } from '../../components/FieldError';
+import { DatePickerField } from '../../components/DatePickerField';
 import { useTheme } from '../../context/ThemeContext';
 import { useUserData } from '../../context/UserDataContext';
 import { fetchUserProfile, updateUserProfile } from '../../api/client';
@@ -94,11 +95,16 @@ function validateField(field: AccountFieldName, value: string): string | undefin
   } else if (field === 'dob' && trimmed) {
     const canonical = parseDisplayDate(trimmed);
     if (!canonical) return 'Enter a real date in MM/DD/YYYY format.';
-    if (canonical > new Date().toISOString().slice(0, 10)) return 'Date of birth cannot be in the future.';
+    if (canonical > localToday()) return 'Date of birth cannot be in the future.';
   } else if (field === 'bio' && value.length > 2000) {
     return 'Use 2,000 characters or fewer.';
   }
   return undefined;
+}
+
+function localToday(): string {
+  const today = new Date();
+  return [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-');
 }
 
 function validateForm(form: UpdateUserProfileRequest): AccountFieldErrors {
@@ -316,18 +322,16 @@ export function AccountScreen({ navigation }: any) {
             keyboardType="phone-pad"
             editable={!isSaving}
           />
-          <AccountField
+          <DatePickerField
             label="Date of Birth"
             error={fieldErrors.dob}
-            mask="dob"
-            value={form.dob}
-            onChangeText={value => editField('dob', value)}
-            onBlur={() => showFieldError('dob', form.dob)}
-            placeholder="MM/DD/YYYY"
-            keyboardType="number-pad"
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!isSaving}
+            date={parseDisplayDate(form.dob) || ''}
+            onDateChange={value => editField('dob', formatCalendarDate(value))}
+            onBlur={value => showFieldError('dob', formatCalendarDate(value))}
+            maximumDate={localToday()}
+            clearable
+            emptyLabel="Select date of birth"
+            disabled={isSaving}
           />
           <AccountField
             label="Bio"

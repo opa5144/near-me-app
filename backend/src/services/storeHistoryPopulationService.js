@@ -5,7 +5,7 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 const Store = require('../models/Store');
 const StorePhoto = require('../models/StorePhoto');
-const Event = require('../models/Event');
+const { findEvents, findEventById } = require('../models/eventStore');
 const EventSelection = require('../models/EventSelection');
 const { STORE_CATEGORIES } = require('../constants/storeCategories');
 const storeFixture = require('../../scripts/fixtures/store-population/stores.json');
@@ -130,18 +130,19 @@ async function existingStores(planned, session) {
 }
 
 function validPast(event, now) {
-  const closes = time(event.registrationClosesAt || event.startsAt);
+  const closes = time(event.registrationClosesAt || event.endsAt);
   // Retain old preview fixtures, but use normal app events for these histories.
   const previewLabel = /^\[(?:history\s+)?(?:demo|test)\]/i.test(event.title || '');
-  return !previewLabel && event.status !== 'cancelled' && Number.isFinite(time(event.startsAt)) && time(event.startsAt) < time(event.endsAt) &&
-    time(event.endsAt) <= now.getTime() && Number.isFinite(closes) && closes <= time(event.startsAt);
+  return !previewLabel && (!event.status || event.status === 'published') && Number.isFinite(time(event.startsAt)) && time(event.startsAt) < time(event.endsAt) &&
+    time(event.endsAt) <= now.getTime() && Number.isFinite(closes) && closes <= time(event.endsAt);
 }
 
 async function historyPlan(owners, now, session) {
   const activeHosts = await User.find({ deletedAt: null }).select('_id').session(session ?? null).lean();
-  const events = (await Event.find({ hostId: { $in: activeHosts.map(host => host._id) }, endsAt: { $lte: now }, status: { $ne: 'cancelled' } })
-    .select('_id hostId title startsAt endsAt registrationClosesAt createdAt status')
-    .sort({ endsAt: -1, _id: 1 }).session(session ?? null).lean()).filter(event => validPast(event, now));
+  const events = (await findEvents({ hostId: { $in: activeHosts.map(host => host._id) }, endsAt: { $lte: now }, status: { $nin: ['cancelled', 'archived', 'draft'] } }, {
+    select: '_id hostId title startsAt endsAt registrationClosesAt createdAt status',
+    sort: { endsAt: -1, _id: 1 }, session,
+  })).filter(event => validPast(event, now));
   const choices = await EventSelection.find({ userId: { $in: owners.map(owner => owner._id) }, eventId: { $in: events.map(event => event._id) } })
     .session(session ?? null).lean();
   return owners.map(account => {
@@ -232,8 +233,8 @@ async function populateHistory(owners, now) {
     const added = await withAccounts([planned.account._id, ...planned.events.map(event => event.hostId)], async session => {
       let count = 0;
       for (const expected of planned.events) {
-        const event = await Event.findOne({ _id: expected._id, hostId: expected.hostId }).session(session).lean();
-        if (!event || !validPast(event, now)) throw new StoreHistoryPopulationError('A selected historical event changed. Preview again.');
+        const event = await findEventById(expected._id, { session });
+        if (!event || id(event.hostId) !== id(expected.hostId) || !validPast(event, now)) throw new StoreHistoryPopulationError('A selected historical event changed. Preview again.');
         const before = await EventSelection.findOne({ userId: planned.account._id, eventId: event._id }).session(session).lean();
         if (before?.attending) continue;
         // This explicit historical import records attendance only. It does not

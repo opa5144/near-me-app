@@ -12,9 +12,13 @@ export type EventItem = {
   startsAt: string;
   endsAt: string;
   // State/deadlines are authoritative backend values, including retained past events.
-  status?: 'published' | 'cancelled';
+  status?: 'published' | 'cancelled' | 'archived' | 'draft';
+  storage?: 'current' | 'past' | 'archived';
   cancelledAt?: string | null;
   cancellationReason?: string;
+  archivedAt?: string | null;
+  archiveReason?: string;
+  sourceEventId?: string | null;
   registrationClosesAt?: string;
   timeZone?: string;
   priceAmount?: number;

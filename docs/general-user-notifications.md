@@ -47,7 +47,7 @@ Reading the inbox does not pass through delivery adapters. A background reminder
 
 Attending is the existing registration flag; interested is the existing saved flag. A follow is a directed organizer subscription, separate from friendship. Following now does not backfill previous event announcements.
 
-Registration closes at `registrationClosesAt` if the host supplied an earlier deadline, otherwise at `startsAt`. Deadlines cannot exceed start time. New registrations are blocked at the cutoff. An existing registration can still be cancelled before the event ends. Past and host-cancelled selections are read-only.
+Registration closes at `registrationClosesAt` if the host supplied an earlier deadline, otherwise at `endsAt`. Deadlines cannot exceed end time. Ongoing events remain open to new registrations until that cutoff. An existing registration can still be cancelled before the event ends. Past, archived, draft, and host-cancelled selections are read-only. See the [event lifecycle update](event-lifecycle-and-picker-overlays.md) for the three event collections and host actions.
 
 `POST /api/events/:id/cancel` is owner-only, accepts an optional reason up to 500 characters, and retains event/selection history. Cancelled events leave discovery, remain accessible by their retained details, and cannot be edited or reactivated. Ended events cannot be cancelled. Account closure is not treated as an event cancellation; closed recipients/hosts are suppressed by eligibility checks.
 
@@ -64,7 +64,7 @@ Dates remain BSON/ISO instants with an event timezone. Human-readable notificati
 | `organizerFollows` | `OrganizerFollow` | Unique user/organizer pair, active state, followed time. |
 | `NotificationSettings` (existing) | `NotificationSettings` | Existing 19 choices plus global channels and optional per-type channel choices. |
 
-Existing event/selection models gain cancellation/deadline/version fields and registration/save transition timestamps. Older records are interpreted with published status, zero generations, and registration closing at start. No historical registration confirmations are invented.
+Existing event/selection models gain cancellation/deadline/version fields and registration/save transition timestamps. Older records are interpreted with published status and zero generations. Since the event lifecycle update, missing/null registration deadlines follow the event end; explicit earlier deadlines remain intact. No historical registration confirmations are invented.
 
 The invitation merge adds `EventInvite` in the existing `eventinvites` collection. It stores `eventId`, `senderId`, `recipientId`, pending/accepted/declined status, read state, response time, and timestamps, with a unique event/sender/recipient index. An invitation and its notification outbox job commit together. Accepting a pending invitation and setting the recipient's existing attending selection also commit together, using the normal registration rules and notification triggers. Declining leaves attendance unchanged. Repeating a successful request does not create another invitation or registration transition.
 
@@ -94,7 +94,7 @@ The logged-in session determines the user. Clients cannot submit another recipie
 | `GET /api/events/invites/:inviteId` | Recipient-only `{invite}`. |
 | `PATCH /api/events/invites/:inviteId` | `{ "status": "accepted" }`, `{ "status": "declined" }`, or `{ "read": true }`; returns `{invite}`. |
 
-Existing create/update event endpoints accept optional `registrationClosesAt` as an offset-bearing ISO timestamp or `null`. Omitting it on edit preserves an explicit stored deadline. Moving start before that deadline is rejected until the host changes the deadline. `status`, cancellation fields, and notification generations cannot be set through ordinary event payloads.
+Existing create/update event endpoints accept optional `registrationClosesAt` as an offset-bearing ISO timestamp or `null`. Omitting it on edit preserves an explicit stored deadline. Moving the end before that deadline is rejected until the host changes the deadline. `status`, cancellation/archive fields, and notification generations cannot be set through ordinary event payloads.
 
 Example preference update:
 

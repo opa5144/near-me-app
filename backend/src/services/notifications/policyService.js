@@ -1,5 +1,5 @@
 const User = require('../../models/User');
-const Event = require('../../models/Event');
+const { findEventById } = require('../../models/eventStore');
 const EventSelection = require('../../models/EventSelection');
 const EventRating = require('../../models/EventRating');
 const EventInvite = require('../../models/EventInvite');
@@ -62,14 +62,14 @@ async function loadNotificationContext(job, now = new Date(), { session } = {}) 
     return { job, payload, user, sender, request, event: null, host: null, eventSnapshot: null };
   }
   if (!job.eventId) return null;
-  const event = await read(Event.findById(job.eventId), session);
-  if (!event?.hostId) return null;
+  const event = await findEventById(job.eventId, { session });
+  if (!event?.hostId || event.status === 'draft') return null;
   const host = await read(User.findOne({ _id: event.hostId, deletedAt: null })
     .select('_id firstName lastName username'), session);
   if (!host) return null;
   const selection = await read(EventSelection.findOne({ userId: user._id, eventId: event._id }), session);
   const selected = Boolean(selection?.interested || selection?.attending);
-  const cancelled = event.status === 'cancelled';
+  const cancelled = ['cancelled', 'archived'].includes(event.status);
   let follow = null;
   let sender = null;
 
@@ -78,9 +78,10 @@ async function loadNotificationContext(job, now = new Date(), { session } = {}) 
     const expiry = job.expiresAt == null ? due + getNotificationConfig().graceMs : instant(job.expiresAt);
     if (!Number.isFinite(due) || !Number.isFinite(expiry) || currentTime < due || currentTime > expiry || cancelled) return null;
     if (!sameVersion(payload.eventVersion, event.notificationVersion) ||
-        !sameVersion(payload.registrationVersion, selection?.registrationVersion)) return null;
+        !sameVersion(payload.registrationVersion, selection?.registrationVersion) ||
+        !sameInstant(payload.expectedClosesAt, event.registrationClosesAt || event.endsAt)) return null;
     if (job.type === 'SAVED_EVENT_REGISTRATION_CLOSING') {
-      const closesAt = event.registrationClosesAt ?? event.startsAt;
+      const closesAt = event.registrationClosesAt ?? event.endsAt;
       if (!selection?.interested || selection.attending || currentTime >= instant(closesAt) ||
           !sameInstant(payload.expectedClosesAt, closesAt) ||
           !sameVersion(payload.selectionVersion, selection.selectionVersion)) return null;
@@ -93,7 +94,7 @@ async function loadNotificationContext(job, now = new Date(), { session } = {}) 
       return null;
     }
   } else if (job.type === 'EVENT_INVITE') {
-    if (cancelled || currentTime >= instant(event.registrationClosesAt || event.startsAt) ||
+    if (cancelled || currentTime >= instant(event.registrationClosesAt || event.endsAt) ||
         typeof payload.inviteId !== 'string' || !/^[a-f0-9]{24}$/i.test(payload.inviteId)) return null;
     const invite = await read(EventInvite.findOne({ _id: payload.inviteId, eventId: event._id,
       recipientId: user._id, senderId: job.actorId, status: 'pending', read: { $ne: true } }), session);

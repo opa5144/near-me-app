@@ -85,7 +85,7 @@ function renderNotification(type, context) {
       heading = 'Event location changed'; message = `The location for ${title} was updated to ${venue}${event.address && event.address !== venue ? ', ' + text(event.address, 500) : ''}.`; break;
     case 'SAVED_EVENT_REGISTRATION_CLOSING': {
       heading = '24-hour registration reminder';
-      const closes = event.registrationClosesAt ?? event.startsAt;
+      const closes = event.registrationClosesAt ?? event.endsAt;
       message = `Registration for your saved event ${title} closes ${dateLabel(closes, zone)} at ${clockLabel(closes, zone)} (${zone}).`; break;
     }
     case 'FOLLOWED_ORGANIZER_NEW_EVENT': {

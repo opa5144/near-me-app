@@ -16,9 +16,10 @@ export interface PhotoPickerFieldProps {
   error?: string | null;
   onBlur?: (photos: EditablePhoto[]) => void;
   maxPhotos?: number;
+  getImageHeaders?: (uri: string) => Record<string, string> | undefined;
 }
 
-export function PhotoPickerField({ photos, onChange, disabled = false, label = 'Photos', onBusyChange, error, onBlur, maxPhotos = MAX_PHOTOS }: PhotoPickerFieldProps) {
+export function PhotoPickerField({ photos, onChange, disabled = false, label = 'Photos', onBusyChange, error, onBlur, maxPhotos = MAX_PHOTOS, getImageHeaders }: PhotoPickerFieldProps) {
   const { colors } = useTheme();
   // Existing event/store forms keep five photos; single-image callers can opt into one.
   const photoLimit = Number.isInteger(maxPhotos) ? Math.max(1, Math.min(MAX_PHOTOS, maxPhotos)) : MAX_PHOTOS;
@@ -80,7 +81,7 @@ export function PhotoPickerField({ photos, onChange, disabled = false, label = '
     <Text style={[styles.label, { color: colors.text }]}>{label} ({photos.length}/{photoLimit})</Text>
     <Text style={[styles.help, { color: colors.muted }]}>{photoLimit === 1 ? 'Choose one photo to preview. Remove it to choose another.' : `Optional. The first photo is the cover. Add up to ${photoLimit} photos.`}</Text>
     {photos.map((photo, index) => <View key={photo.id || photo.uri} style={[styles.card, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-      <Image source={{ uri: photo.uri }} style={styles.preview} accessibilityLabel={index === 0 ? 'Cover photo' : 'Photo ' + (index + 1)} />
+      <Image source={{ uri: photo.uri, headers: getImageHeaders?.(photo.uri) }} style={styles.preview} accessibilityLabel={index === 0 ? 'Cover photo' : 'Photo ' + (index + 1)} />
       <View style={styles.controls}>
         <Text style={[styles.photoLabel, { color: colors.text }]}>{index === 0 ? 'Cover photo' : 'Photo ' + (index + 1)}</Text>
         <View style={styles.actions}>

@@ -1,56 +1,23 @@
-
-import { ScrollView, Pressable, StyleSheet, Text } from 'react-native';
-import { useTheme } from '../context/ThemeContext';
+import React from 'react';
+import { CategoryPickerField } from './CategoryPickerField';
 
 type CategoryFilterProps = {
   categories: string[];
   selectedCategory: string | string[];
-  onSelectCategory: (category: string) => void;
+  onSelectCategory?: (category: string) => void;
+  onChangeCategories?: (categories: string[]) => void;
 };
 
-export function CategoryFilter({ categories, selectedCategory, onSelectCategory }: CategoryFilterProps) {
-  const { colors } = useTheme();
-
-  return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.container}
-      style={styles.scroll}
-      keyboardShouldPersistTaps="handled"
-    >
-      {categories.map(category => {
-        const selected = Array.isArray(selectedCategory)
-          ? (category === 'All' ? selectedCategory.length === 0 : selectedCategory.includes(category))
-          : selectedCategory === category;
-
-        return (
-          <Pressable
-            key={category}
-            onPress={() => onSelectCategory(category)}
-            accessibilityRole="button"
-            accessibilityState={{ selected }}
-            style={[
-              styles.chip,
-              {
-                backgroundColor: selected ? colors.primary : colors.surface,
-                borderColor: selected ? colors.primary : colors.border,
-              },
-            ]}
-          >
-            <Text style={[styles.chipText, { color: selected ? '#FFFFFF' : colors.text }]}>
-              {category}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </ScrollView>
-  );
+export function CategoryFilter({ categories, selectedCategory, onSelectCategory, onChangeCategories }: CategoryFilterProps) {
+  const multiple = Array.isArray(selectedCategory);
+  const selected = multiple ? selectedCategory : selectedCategory === 'All' ? [] : [selectedCategory];
+  return <CategoryPickerField label="Categories" categories={categories} selectedCategories={selected} allowAll multiple={multiple}
+    onChange={next => {
+      if (onChangeCategories) { onChangeCategories(next); return; }
+      if (!multiple) { onSelectCategory?.(next[0] || 'All'); return; }
+      // Keep compatibility with older toggle-based callers; new callers commit
+      // the entire array once instead of changing filters during selection.
+      if (!next.length) { onSelectCategory?.('All'); return; }
+      [...selected.filter(category => !next.includes(category)), ...next.filter(category => !selected.includes(category))].forEach(category => onSelectCategory?.(category));
+    }} />;
 }
-
-const styles = StyleSheet.create({
-  scroll: { flexGrow: 0, flexShrink: 0 },
-  container: { gap: 8, paddingBottom: 20 },
-  chip: { alignSelf: 'flex-start', flexGrow: 0, flexShrink: 0, overflow: 'hidden', borderWidth: 1, borderRadius: 20, paddingHorizontal: 13, paddingVertical: 9 },
-  chipText: { fontSize: 11, fontWeight: '700' },
-});

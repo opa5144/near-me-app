@@ -2,6 +2,7 @@
 const path = require('node:path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env'), quiet: true });
 const mongoose = require('mongoose');
+const EVENT_COLLECTIONS = ['eventList', 'PastEventsList', 'ArchivedEvents'];
 const LEGACY = {
   AccountList: ['phone', 'dob', 'bio', 'password', 'passwordHash', 'authVersion', 'mfaEnabled', 'mfaSecretEncrypted', 'mfaRecoveryCodeHashes', 'avatarData', 'avatarMimeType', 'avatarUrl', 'avatar', 'profilePicture'],
   eventList: ['category', 'date', 'time', 'venue', 'bannerImage', 'imageData', 'imageBase64', 'imageMimeType', 'photos'],
@@ -46,9 +47,25 @@ async function main() {
       if (!(await db.collection('UserProfiles').findOne({ userId: user._id }, { projection: { _id: 1 } }))) missingProfiles.push(user.username);
       if (!(await db.collection('AccountSecurity').findOne({ userId: user._id }, { projection: { _id: 1 } }))) missingSecurity.push(user.username);
     }
-    const orphanEventHosts = await db.collection('eventList').countDocuments({ hostId: { $nin: identityIds } });
+    const orphanEventHosts = {};
+    const eventStates = {};
+    for (const name of EVENT_COLLECTIONS) {
+      orphanEventHosts[name] = await db.collection(name).countDocuments({ hostId: { $nin: identityIds } });
+      eventStates[name] = await db.collection(name).aggregate([
+        { $group: { _id: { $ifNull: ['$status', 'published'] }, count: { $sum: 1 } } },
+      ]).toArray();
+    }
+    // An event ID must have exactly one home even though each collection has
+    // its own independent unique _id index. Report collisions, never repair.
+    const crossCollectionEvents = await db.collection('eventList').aggregate([
+      { $project: { _id: 1 } },
+      ...EVENT_COLLECTIONS.slice(1).map(name => ({ $unionWith: { coll: name, pipeline: [{ $project: { _id: 1 } }] } })),
+      { $group: { _id: '$_id', copies: { $sum: 1 } } },
+      { $match: { copies: { $gt: 1 } } }, { $count: 'count' },
+    ]).toArray();
     console.log(JSON.stringify({ collections, legacyFields, duplicates, duplicateFriendPairs: reverseFriendships[0]?.groups || 0,
-      missingProfiles, missingSecurity, orphanEventHosts }, null, 2));
+      missingProfiles, missingSecurity, orphanEventHosts, eventStates,
+      duplicateEventIdsAcrossCollections: crossCollectionEvents[0]?.count || 0 }, null, 2));
   } catch (error) { console.error('Data audit failed:', error.name); process.exitCode = 1; }
   finally { await mongoose.disconnect(); clearTimeout(deadline); }
 }

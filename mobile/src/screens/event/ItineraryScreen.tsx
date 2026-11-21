@@ -7,15 +7,26 @@ import { ScreenHeader } from '../../components/ScreenHeader';
 import { AppText } from '../../components/AppText';
 import { useTheme } from '../../context/ThemeContext';
 import { useEvents } from '../../context/EventsContext';
+import { isAvailableEvent } from '../../utils/eventAvailability';
 
 export function ItineraryScreen({ events: plannedEvents, onOpenEvent }: { events: EventItem[]; onOpenEvent: (event: EventItem) => void }) {
   const { colors, theme } = useTheme();
-  const { events: globalEvents } = useEvents();
+  const { events: globalEvents, isLoading, error } = useEvents();
   const [isSmartLoading, setIsSmartLoading] = useState(false);
   const [isSurpriseLoading, setIsSurpriseLoading] = useState(false);
   const [activePlan, setActivePlan] = useState<EventItem[]>(plannedEvents);
   const [planGenerated, setPlanGenerated] = useState(false);
   const [planTitle, setPlanTitle] = useState('Saved Outings');
+
+  // Generated plans retain their event IDs, while the refreshed discovery
+  // records supply current details and remove completed/cancelled outings.
+  const currentById = new Map(globalEvents.map(event => [event.id, event]));
+  const availablePlan = (items: EventItem[]) => items.flatMap(event => {
+    const current = currentById.get(event.id);
+    const candidate = current ?? ((isLoading || error) ? event : undefined);
+    return candidate && isAvailableEvent(candidate) ? [candidate] : [];
+  });
+  const savedOutings = availablePlan(plannedEvents);
 
   // Strict chronological sort by full date and time
   const sortChronologically = (list: EventItem[]) => {
@@ -30,7 +41,7 @@ export function ItineraryScreen({ events: plannedEvents, onOpenEvent }: { events
   const handleGenerateSmartPlan = () => {
     setIsSmartLoading(true);
     setTimeout(() => {
-      const sorted = sortChronologically(plannedEvents);
+      const sorted = sortChronologically(availablePlan(plannedEvents));
       setActivePlan(sorted);
       setPlanTitle('Chronological Master Itinerary');
       setPlanGenerated(true);
@@ -42,7 +53,7 @@ export function ItineraryScreen({ events: plannedEvents, onOpenEvent }: { events
   const handleSurprisePlan = () => {
     setIsSurpriseLoading(true);
     setTimeout(() => {
-      const sourcePool = globalEvents.length > 0 ? globalEvents : plannedEvents;
+      const sourcePool = globalEvents.length > 0 ? globalEvents : availablePlan(plannedEvents);
       const shuffled = [...sourcePool].sort(() => 0.5 - Math.random());
       const surpriseSelection = shuffled.slice(0, Math.min(sourcePool.length, 5));
       const sortedSurprise = sortChronologically(surpriseSelection);
@@ -55,7 +66,7 @@ export function ItineraryScreen({ events: plannedEvents, onOpenEvent }: { events
   };
 
   const isDark = theme === 'dark';
-  const currentDisplayList = planGenerated ? activePlan : sortChronologically(plannedEvents);
+  const currentDisplayList = sortChronologically(planGenerated ? availablePlan(activePlan) : savedOutings);
 
   // Group events by date string
   const groupedByDate = currentDisplayList.reduce((acc: { [key: string]: EventItem[] }, event) => {
@@ -72,12 +83,12 @@ export function ItineraryScreen({ events: plannedEvents, onOpenEvent }: { events
         subtitle={
           planGenerated
             ? 'Your custom multi-day itinerary, fully optimized.'
-            : `${plannedEvents.length} saved ${plannedEvents.length === 1 ? 'event' : 'events'} ready to plan around.`
+            : `${savedOutings.length} saved ${savedOutings.length === 1 ? 'event' : 'events'} ready to plan around.`
         }
       />
 
       {/* Interactive AI Gimmick Card */}
-      {(plannedEvents.length > 0 || globalEvents.length > 0) && (
+      {(savedOutings.length > 0 || globalEvents.length > 0) && (
         <View style={[styles.assistantCard, { backgroundColor: colors.surface, borderColor: colors.primary }]}>
           <View style={styles.assistantHeader}>
             <Ionicons name="sparkles" size={16} color={colors.primary} />

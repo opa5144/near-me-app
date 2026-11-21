@@ -1,5 +1,5 @@
 const EventInvite = require('../models/EventInvite');
-const Event = require('../models/Event');
+const { findEvents, findEventById } = require('../models/eventStore');
 const EventSelection = require('../models/EventSelection');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
@@ -18,8 +18,8 @@ function requireId(value, label) {
 }
 function invitationOpen(event, now = new Date()) {
   const end = new Date(event.endsAt).getTime();
-  const closes = new Date(event.registrationClosesAt || event.startsAt).getTime();
-  return event.status !== 'cancelled' && Number.isFinite(end) && Number.isFinite(closes) && end > now.getTime() && closes > now.getTime();
+  const closes = new Date(event.registrationClosesAt || event.endsAt).getTime();
+  return !['cancelled', 'archived', 'draft'].includes(event.status) && Number.isFinite(end) && Number.isFinite(closes) && end > now.getTime() && closes > now.getTime();
 }
 async function requireReader(auth) {
   if (!(await User.exists({ _id: auth.userId, deletedAt: null }))) throw new ServiceError(401, 'Please log in again.');
@@ -27,7 +27,7 @@ async function requireReader(auth) {
 
 // Read canonical dates, split media and active identities rather than old inline fields.
 async function inviteItems(rows, baseUrl) {
-  const events = await Event.find({ _id: { $in: rows.map(row => row.eventId) } }).lean();
+  const events = await findEvents({ _id: { $in: rows.map(row => row.eventId) }, status: { $ne: 'draft' } });
   const ids = [...new Set([...rows.map(row => String(row.senderId)), ...events.map(event => String(event.hostId))])];
   const users = await User.find({ _id: { $in: ids }, deletedAt: null }).select('_id firstName lastName username').lean();
   const accounts = new Map(users.map(user => [String(user._id), user]));
@@ -64,12 +64,12 @@ async function sendInvite(auth, eventId, body, baseUrl) {
   if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(key => key !== 'recipientId')) throw new ServiceError(400, 'Provide the friend you want to invite.');
   requireId(body.recipientId, 'recipient');
   if (String(auth.userId).toLowerCase() === body.recipientId.toLowerCase()) throw new ServiceError(400, 'You cannot invite yourself.');
-  const initial = await Event.findById(eventId).select('_id hostId').lean();
+  const initial = await findEventById(eventId, { select: '_id hostId' });
   if (!initial) throw new ServiceError(404, 'Event not found.');
   await EventInvite.init();
   try {
     const row = await withActiveAccountWrite(auth, [body.recipientId, initial.hostId], async session => {
-      const event = await Event.findOne({ _id: eventId, hostId: initial.hostId }).session(session).lean();
+      const event = await findEventById(eventId, { session });
       const now = new Date();
       if (!event) throw new ServiceError(404, 'Event not found.');
       if (!invitationOpen(event, now)) throw new ServiceError(409, 'Invitations are closed for this event.');
@@ -97,12 +97,12 @@ async function updateInvite(auth, inviteId, body, baseUrl) {
       (body.status !== undefined && !['accepted', 'declined'].includes(body.status)) || (body.read !== undefined && body.read !== true)) throw new ServiceError(400, 'Accept, decline, or mark this invitation read.');
   const initial = await EventInvite.findOne({ _id: inviteId, recipientId: auth.userId }).lean();
   if (!initial) throw new ServiceError(404, 'Invitation not found.');
-  const initialEvent = await Event.findById(initial.eventId).select('_id hostId').lean();
+  const initialEvent = await findEventById(initial.eventId, { select: '_id hostId' });
   if (!initialEvent) throw new ServiceError(404, 'Event not found.');
   await EventSelection.init();
   await withActiveAccountWrite(auth, [initial.senderId, initialEvent.hostId], async session => {
     const invite = await EventInvite.findOne({ _id: inviteId, recipientId: auth.userId }).session(session).lean();
-    const event = await Event.findOne({ _id: initial.eventId, hostId: initialEvent.hostId }).session(session).lean();
+    const event = await findEventById(initial.eventId, { session });
     if (!invite || !event) throw new ServiceError(404, 'Invitation not found.');
     const now = new Date();
     if (body.status && invite.status !== 'pending' && invite.status !== body.status) throw new ServiceError(409, 'You already responded to this invitation.');

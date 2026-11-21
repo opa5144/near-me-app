@@ -54,12 +54,12 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
     const end = Date.parse(event.endsAt);
     return !Number.isFinite(end) || end <= Date.now();
   });
-  const [registrationClosed, setRegistrationClosed] = useState(() => Date.parse(event.registrationClosesAt || event.startsAt) <= Date.now());
+  const [registrationClosed, setRegistrationClosed] = useState(() => Date.parse(event.registrationClosesAt || event.endsAt) <= Date.now());
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const checkEnd = () => {
       const remaining = Date.parse(event.endsAt) - Date.now();
-      const untilClosing = Date.parse(event.registrationClosesAt || event.startsAt) - Date.now();
+      const untilClosing = Date.parse(event.registrationClosesAt || event.endsAt) - Date.now();
       setHasEnded(!Number.isFinite(remaining) || remaining <= 0);
       setRegistrationClosed(!Number.isFinite(untilClosing) || untilClosing <= 0);
       if (remaining > 0) timer = setTimeout(checkEnd, Math.min(remaining, untilClosing > 0 ? untilClosing : 60000, 60000));
@@ -68,8 +68,10 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
     return () => { if (timer) clearTimeout(timer); };
   }, [event.endsAt, event.startsAt, event.registrationClosesAt]);
   const cancelled = event.status === 'cancelled';
-  const selectionDisabled = cancelled || hasEnded || !selectionsReady || selectionsLoading || selectionSaving;
-  const invitationsDisabled = cancelled || hasEnded || registrationClosed;
+  const archived = event.status === 'archived';
+  const unavailable = cancelled || archived || event.status === 'draft';
+  const selectionDisabled = unavailable || hasEnded || !selectionsReady || selectionsLoading || selectionSaving;
+  const invitationsDisabled = unavailable || hasEnded || registrationClosed;
 
   // Reuse the authenticated cache; explicit retries bypass its freshness window.
   const loadFriendNetwork = useCallback(() => {
@@ -253,7 +255,7 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
         </View>
         <Pressable 
           onPress={handleAddToCalendar}
-          disabled={openingCalendar || cancelled}
+          disabled={openingCalendar || unavailable}
           style={[styles.mapButton, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Ionicons name="calendar" size={14} color={colors.primary} />
           <AppText style={[styles.mapButtonText, { color: colors.primary }]}>{openingCalendar ? 'Opening...' : 'Add to Calendar'}</AppText>
@@ -283,9 +285,12 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
       </View>}
       {selectionsLoading && <AppText style={[styles.selectionNotice, { color: colors.muted }]}>Loading your saved choices...</AppText>}
       {hasEnded && <AppText style={[styles.selectionNotice, { color: colors.muted }]}>This event has ended. Your saved choices are read-only.</AppText>}
-      {!hasEnded && !cancelled && registrationClosed && <AppText style={[styles.selectionNotice, { color: colors.muted }]}>Registration for this event has closed.</AppText>}
+      {!hasEnded && !unavailable && registrationClosed && <AppText style={[styles.selectionNotice, { color: colors.muted }]}>Registration for this event has closed.</AppText>}
       {cancelled && <AppText accessibilityRole="alert" style={[styles.selectionNotice, { color: errorColor }]}>
         This event has been cancelled.{event.cancellationReason ? ' ' + event.cancellationReason : ''}
+      </AppText>}
+      {archived && <AppText accessibilityRole="alert" style={[styles.selectionNotice, { color: errorColor }]}>
+        This event has been archived. Registration is closed.{event.archiveReason ? ' ' + event.archiveReason : ''}
       </AppText>}
       <View style={styles.selectionRow}>
         <AppButton title={interested ? 'Interested' : "I'm Interested"} onPress={onToggleInterested}
@@ -296,7 +301,7 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
           style={styles.selectionButton} textStyle={styles.selectionButtonText} />
       </View>
       {selectionSaving && <AppText accessibilityLiveRegion="polite" style={{ color: colors.muted, marginBottom: 12 }}>Saving choices...</AppText>}
-      {hasEnded && attending && !cancelled && currentUserId && currentUserId !== hostUserId && <EventRatingForm eventId={event.id} />}
+      {hasEnded && attending && !unavailable && currentUserId && currentUserId !== hostUserId && <EventRatingForm eventId={event.id} />}
       
       <AppText style={[styles.section, { color: colors.text }]}>About Event</AppText>
       <AppText style={[styles.description, { color: colors.muted }]}>{event.description}</AppText>

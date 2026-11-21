@@ -79,19 +79,6 @@ export function SearchScreen({
     };
   }, [attempt]));
 
-  const toggleCategory = (category: string) => {
-    if (category === 'All') {
-      setSelectedCategories([]);
-      return;
-    }
-
-    setSelectedCategories(prev =>
-      prev.includes(category)
-        ? prev.filter(item => item !== category)
-        : [...prev, category]
-    );
-  };
-
   const handleSelectType = (type: ContentType) => {
     setSelectedType(type);
     setSelectedCategories([]);
@@ -153,7 +140,7 @@ export function SearchScreen({
         <CategoryFilter
           categories={categories}
           selectedCategory={selectedCategories}
-          onSelectCategory={toggleCategory}
+          onChangeCategories={setSelectedCategories}
         />
 
         {selectedType !== 'Stores' && <View>

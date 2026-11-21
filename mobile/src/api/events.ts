@@ -14,6 +14,7 @@ export interface CreateEventRequest {
   price: number;
   startsAt: string; // ISO timestamp, including its UTC offset (normally toISOString()).
   endsAt: string;
+  registrationClosesAt?: string | null;
   timeZone: string;
   address: string;
   place: string;
@@ -30,7 +31,7 @@ type ApiEventItem = Omit<EventItem, 'categories'> & { categories?: unknown; cate
 
 function normalizeEvent(event: ApiEventItem): EventItem {
   const { category, ...fields } = event;
-  return { ...fields, categories: normalizeEventCategories(event.categories, category), date: formatEventDate(event.startsAt, event.timeZone) };
+  return { ...fields, categories: normalizeEventCategories(event.categories, category), date: event.startsAt ? formatEventDate(event.startsAt, event.timeZone) : '' };
 }
 
 // Home/Search share this public list; the backend formats each EventItem response.
@@ -60,6 +61,51 @@ export async function updateEvent(id: string, input: UpdateEventRequest): Promis
   const response = await api.patch<{ event?: ApiEventItem } | ApiEventItem>('/events/' + encodeURIComponent(id), input, { timeout: 30000 });
   const data = response.data;
   return normalizeEvent(('event' in data && data.event) ? data.event : (data as ApiEventItem));
+}
+
+// Private drafts accept incomplete details. Only publishing applies the full
+// event rules; the backend always derives the owner from the signed-in session.
+export async function createEventDraft(input: UpdateEventRequest): Promise<EventItem> {
+  const response = await api.post<{ event: ApiEventItem }>('/events/drafts', input, { timeout: 30000 });
+  return normalizeEvent(response.data.event);
+}
+
+export async function saveEventDraft(id: string, input: UpdateEventRequest): Promise<EventItem> {
+  const response = await api.patch<{ event: ApiEventItem }>('/events/' + encodeURIComponent(id) + '/draft', input, { timeout: 30000 });
+  return normalizeEvent(response.data.event);
+}
+
+export async function publishEventDraft(id: string, input: CreateEventRequest): Promise<EventItem> {
+  const response = await api.post<{ event: ApiEventItem }>('/events/' + encodeURIComponent(id) + '/publish', input, { timeout: 30000 });
+  return normalizeEvent(response.data.event);
+}
+
+export async function archiveEvent(id: string, reason = ''): Promise<EventItem> {
+  const response = await api.post<{ event: ApiEventItem }>('/events/' + encodeURIComponent(id) + '/archive', { reason });
+  return normalizeEvent(response.data.event);
+}
+
+export async function cancelEvent(id: string, reason = ''): Promise<EventItem> {
+  const response = await api.post<{ event: ApiEventItem }>('/events/' + encodeURIComponent(id) + '/cancel', { reason });
+  return normalizeEvent(response.data.event);
+}
+
+// Repeating a completed event creates a new ID; none of its old participation
+// or ratings is transferred. Source photo IDs are resolved and copied server-side.
+export async function rescheduleEvent(id: string, input: CreateEventRequest): Promise<EventItem> {
+  const response = await api.post<{ event: ApiEventItem }>('/events/' + encodeURIComponent(id) + '/reschedule', input, { timeout: 30000 });
+  return normalizeEvent(response.data.event);
+}
+
+// Draft images require the same authenticated session as draft details. Attach
+// credentials only to this API origin; external image URLs never receive them.
+export function eventPhotoHeaders(uri: string, privatePhoto = false): Record<string, string> | undefined {
+  const authorization = api.defaults.headers.common.Authorization;
+  if (!privatePhoto || typeof authorization !== 'string' || !api.defaults.baseURL) return undefined;
+  try {
+    if (new URL(uri).origin !== new URL(api.defaults.baseURL).origin) return undefined;
+    return { Authorization: authorization };
+  } catch { return undefined; }
 }
 // Independent saved choices belong to the authenticated account, never a client-supplied user ID.
 export interface EventSelection {

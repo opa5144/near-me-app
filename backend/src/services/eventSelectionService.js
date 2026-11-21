@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const Event = require('../models/Event');
+const { findEvents, findEventById, withEventSnapshot } = require('../models/eventStore');
 const EventSelection = require('../models/EventSelection');
 const { toEventItem } = require('./eventData');
 const { withActiveAccountWrite } = require('./activeAccountWrite');
@@ -27,38 +27,41 @@ function bookingItem(selection, baseUrl, photos = []) {
   return { id: String(selection._id), ...selectionItem(selection), event: toEventItem(selection.eventId, baseUrl, photos) };
 }
 
-function pastEventPopulation(now) {
-  return {
-    path: 'eventId', match: { endsAt: { $lte: now } },
-    populate: { path: 'hostId', select: 'firstName lastName username', match: { deletedAt: null } },
-  };
+async function hydrateSelections(selections, session, pastOnly = false) {
+  const events = await findEvents({ _id: { $in: selections.map(row => row.eventId) }, status: { $ne: 'draft' },
+    ...(pastOnly ? { endsAt: { $type: 'date', $lte: new Date() } } : {}),
+  }, { session, populate: { path: 'hostId', select: 'firstName lastName username', match: { deletedAt: null }, options: { session } } });
+  const byId = new Map(events.filter(event => event.hostId).map(event => [String(event._id), event]));
+  return selections.filter(row => byId.has(String(row.eventId))).map(row => ({ ...row, eventId: byId.get(String(row.eventId)) }));
 }
 
 async function listSelections(auth) {
-  const selections = await EventSelection.find(selectedBy(auth.userId)).populate({
-    path: 'eventId', select: '_id hostId',
-    populate: { path: 'hostId', select: '_id', match: { deletedAt: null } },
-  }).lean();
-  return selections.filter(selection => selection.eventId?.hostId).map(selectionItem);
+  return withEventSnapshot(undefined, async session => {
+    const selections = await EventSelection.find(selectedBy(auth.userId)).session(session).lean();
+    return (await hydrateSelections(selections, session)).map(selectionItem);
+  });
 }
 
 async function getBookingHistory(auth, baseUrl) {
-  const selections = await EventSelection.find(selectedBy(auth.userId))
-    .populate(pastEventPopulation(new Date())).lean();
-  const visible = selections.filter(selection => selection.eventId?.hostId);
-  visible.sort((a, b) => new Date(b.eventId.endsAt).getTime() - new Date(a.eventId.endsAt).getTime() ||
-    String(b._id).localeCompare(String(a._id)));
-  const photos = await loadPhotoMetadata('event', visible.map(selection => selection.eventId._id));
-  return visible.map(selection => bookingItem(selection, baseUrl, photos.get(String(selection.eventId._id)) ?? []));
+  return withEventSnapshot(undefined, async session => {
+    const selections = await EventSelection.find(selectedBy(auth.userId)).session(session).lean();
+    const visible = await hydrateSelections(selections, session, true);
+    visible.sort((a, b) => new Date(b.eventId.endsAt).getTime() - new Date(a.eventId.endsAt).getTime() ||
+      String(b._id).localeCompare(String(a._id)));
+    const photos = await loadPhotoMetadata('event', visible.map(selection => selection.eventId._id), session);
+    return visible.map(selection => bookingItem(selection, baseUrl, photos.get(String(selection.eventId._id)) ?? []));
+  });
 }
 
 async function getBooking(auth, id, baseUrl) {
   requireId(id, 'booking');
-  const selection = await EventSelection.findOne({ _id: id, ...selectedBy(auth.userId) })
-    .populate(pastEventPopulation(new Date())).lean();
-  if (!selection?.eventId?.hostId) throw new ServiceError(404, 'Booking not found.');
-  const photos = await loadPhotoMetadata('event', [selection.eventId._id]);
-  return bookingItem(selection, baseUrl, photos.get(String(selection.eventId._id)) ?? []);
+  return withEventSnapshot(undefined, async session => {
+    const stored = await EventSelection.findOne({ _id: id, ...selectedBy(auth.userId) }).session(session).lean();
+    const selection = stored ? (await hydrateSelections([stored], session, true))[0] : null;
+    if (!selection?.eventId?.hostId) throw new ServiceError(404, 'Booking not found.');
+    const photos = await loadPhotoMetadata('event', [selection.eventId._id], session);
+    return bookingItem(selection, baseUrl, photos.get(String(selection.eventId._id)) ?? []);
+  });
 }
 
 function selectionChanges(body) {
@@ -84,7 +87,7 @@ async function writeEventSelection(userId, current, input, session, { now = new 
   if (!session?.inTransaction()) throw new Error('Event selections require an active transaction.');
   const changes = selectionChanges(input);
   if (!current?._id) throw new ServiceError(404, 'Event not found.');
-  if (current.status === 'cancelled') throw new ServiceError(409, 'This event has been cancelled. Its selections are read-only.');
+  if (['cancelled', 'archived', 'draft'].includes(current.status)) throw new ServiceError(409, 'This event is unavailable. Its selections are read-only.');
   const occurredAt = new Date(now);
   if (!Number.isFinite(occurredAt.getTime())) throw new Error('Invalid event selection time.');
   const endsAt = new Date(current.endsAt).getTime();
@@ -96,7 +99,7 @@ async function writeEventSelection(userId, current, input, session, { now = new 
   const attending = changes.attending ?? Boolean(before?.attending);
   const registrationChanged = attending !== Boolean(before?.attending);
   const interestChanged = interested !== Boolean(before?.interested);
-  const closingTime = new Date(current.registrationClosesAt || current.startsAt).getTime();
+  const closingTime = new Date(current.registrationClosesAt || current.endsAt).getTime();
   if (registrationChanged && attending && (!Number.isFinite(closingTime) || closingTime <= occurredAt.getTime())) {
     throw new ServiceError(409, 'Registration for this event has closed.');
   }
@@ -122,11 +125,10 @@ async function updateSelection(auth, eventId, body) {
   try {
     // Index creation happens before the first upsert, outside the retryable transaction.
     await EventSelection.init();
-    const event = await Event.findById(eventId).select('_id hostId');
+    const event = await findEventById(eventId, { select: '_id hostId' });
     if (!event?.hostId) throw new ServiceError(404, 'Event not found.');
     const selection = await withActiveAccountWrite(auth, [event.hostId], async session => {
-      const current = await Event.findOne({ _id: event._id, hostId: event.hostId })
-        .session(session).lean();
+      const current = await findEventById(event._id, { session });
       if (!current) throw new ServiceError(404, 'Event not found.');
       return writeEventSelection(auth.userId, current, changes, session);
     });

@@ -18,6 +18,8 @@ const notificationRoutes = require('./routes/notifications');
 const notificationDeviceRoutes = require('./routes/notificationDevices');
 const organizerFollowRoutes = require('./routes/organizerFollows');
 const { initializeNotificationModels, startNotificationWorker } = require('./workers/notificationWorker');
+const { initializeEventLifecycleModels } = require('./services/eventLifecycleService');
+const { startEventLifecycleWorker } = require('./workers/eventLifecycleWorker');
 
 const app = express();
 app.use(cors());
@@ -58,11 +60,14 @@ async function startServer() {
     return;
   }
   let worker;
+  let eventWorker;
   try {
     await mongoose.connect(process.env.MONGO_URI);
+    await initializeEventLifecycleModels();
     await initializeNotificationModels();
     console.log('MongoDB Connected');
     worker = startNotificationWorker();
+    eventWorker = startEventLifecycleWorker();
     const port = process.env.PORT || 5000;
     const server = app.listen(port, () => console.log('Server running on port ' + port));
     let closing = false;
@@ -72,6 +77,7 @@ async function startServer() {
       // Stop accepting requests; finish leased work before closing Atlas.
       const httpClosed = new Promise(resolve => server.close(resolve));
       await worker.stop();
+      await eventWorker.stop();
       await httpClosed;
       await mongoose.disconnect();
     };
@@ -88,6 +94,7 @@ async function startServer() {
     });
   } catch (err) {
     if (worker) await worker.stop();
+    if (eventWorker) await eventWorker.stop();
     await mongoose.disconnect();
     console.error('Backend startup failed:', err.name);
     process.exitCode = 1;

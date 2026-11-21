@@ -5,6 +5,8 @@ const User = require('../models/User');
 const UserProfile = require('../models/UserProfile');
 const AccountSecurity = require('../models/AccountSecurity');
 const Event = require('../models/Event');
+const PastEvent = require('../models/PastEvent');
+const { findEvents, findEventById } = require('../models/eventStore');
 const EventPhoto = require('../models/EventPhoto');
 const EventSelection = require('../models/EventSelection');
 const EventRating = require('../models/EventRating');
@@ -54,11 +56,11 @@ function validNow(value) {
 function validSchedule(event) {
   return Number.isFinite(instant(event.startsAt)) && Number.isFinite(instant(event.endsAt)) &&
     instant(event.startsAt) < instant(event.endsAt) &&
-    Number.isFinite(instant(event.registrationClosesAt || event.startsAt)) &&
-    instant(event.registrationClosesAt || event.startsAt) <= instant(event.startsAt);
+    Number.isFinite(instant(event.registrationClosesAt || event.endsAt)) &&
+    instant(event.registrationClosesAt || event.endsAt) <= instant(event.endsAt);
 }
 function completed(event, now) {
-  return event.status !== 'cancelled' && validSchedule(event) && instant(event.endsAt) <= now.getTime();
+  return (!event.status || event.status === 'published') && validSchedule(event) && instant(event.endsAt) <= now.getTime();
 }
 function supportedCategories(event) {
   const values = Array.isArray(event.categories) && event.categories.length ? event.categories : [event.category];
@@ -106,7 +108,7 @@ async function readDemoAccounts(session) {
 async function sourceData(now) {
   const [accounts, events, existingDemos, photoRows] = await Promise.all([
     User.find({ deletedAt: null }).select('_id username createdAt').lean(),
-    Event.find({}).sort({ _id: 1 }).lean(), readDemoAccounts(),
+    findEvents({ status: { $nin: ['cancelled', 'archived', 'draft'] } }, { sort: { _id: 1 } }), readDemoAccounts(),
     EventPhoto.find({}).select('eventId displayOrder').lean(),
   ]);
   const activeIds = new Set(accounts.map(account => id(account)));
@@ -160,7 +162,7 @@ function historicalEvent(host, source, slot, hostIndex, now, seedKey) {
 }
 
 function selectionTime(event, demo, now) {
-  const closes = instant(event.registrationClosesAt || event.startsAt);
+  const closes = instant(event.registrationClosesAt || event.endsAt);
   const latest = Math.min(now.getTime() - 1, closes - 1);
   const desired = Math.min(now.getTime() - (demo.index % 30 + 1) * 60000, closes - (2 + demo.index % 12) * DAY);
   const created = instant(event.createdAt);
@@ -235,7 +237,7 @@ async function planCommunity(now) {
     }
   }
   const earliest = Math.min(now.getTime() - 90 * DAY, ...events.filter(event => desired.has(id(event)))
-    .map(event => instant(event.registrationClosesAt || event.startsAt) - 30 * DAY));
+    .map(event => instant(event.registrationClosesAt || event.endsAt) - 30 * DAY));
   const summary = {
     seed: PREFIX, demoAccountsTotal: DEMO_COUNT, existingDemoAccounts: data.existingDemos.size,
     accountsToAdd: DEMO_COUNT - data.existingDemos.size, profilesToAdd: DEMO_COUNT - data.existingDemos.size,
@@ -316,10 +318,10 @@ async function createHistoricalEvents(plan) {
     if (!planned.length) continue;
     const sourceId = planned[0].sourceId;
     const result = await withAccounts([host._id, planned[0].sourceHostId], async session => {
-      const existing = await Event.find({ hostId: host._id }).session(session).lean();
+      const existing = await findEvents({ hostId: host._id }, { session });
       const needed = Math.max(0, COMPLETED_MINIMUM - existing.filter(event => completed(event, plan.now)).length);
       if (!needed) return { events: 0, photos: 0 };
-      const source = await Event.findById(sourceId).session(session).lean();
+      const source = await findEventById(sourceId, { session });
       if (!usableTemplate(source) || id(source.hostId) !== id(planned[0].sourceHostId)) throw new DemoCommunityError('A source venue changed. Preview the community import again.');
       if (Number.isFinite(instant(planned[0].sourceUpdatedAt)) && instant(source.updatedAt) !== instant(planned[0].sourceUpdatedAt)) {
         throw new DemoCommunityError('A source event changed after planning. Preview the community import again.');
@@ -328,7 +330,7 @@ async function createHistoricalEvents(plan) {
       if (!photos.length) throw new DemoCommunityError('A source event has no reusable real photos. No placeholder images were created.');
       const rows = planned.filter(addition => !existing.some(event => event.seedKey === addition.row.seedKey)).slice(0, needed).map(addition => addition.row);
       if (rows.length !== needed) throw new DemoCommunityError('Completed-event counts changed after planning. Preview again.');
-      await Event.insertMany(rows, { session, timestamps: false });
+      await PastEvent.insertMany(rows, { session, timestamps: false });
       const copies = rows.flatMap(event => photos.map((photo, displayOrder) => ({ eventId: event._id, displayOrder,
         imageData: photo.imageData, imageMimeType: photo.imageMimeType, createdAt: event.createdAt, updatedAt: event.updatedAt })));
       await EventPhoto.insertMany(copies, { session, timestamps: false });
@@ -341,14 +343,14 @@ async function createHistoricalEvents(plan) {
 
 async function populateSelections(now) {
   const activeHosts = await User.find({ deletedAt: null }).select('_id').lean();
-  const events = await Event.find({ hostId: { $in: activeHosts.map(account => account._id) } }).sort({ _id: 1 }).lean();
+  const events = await findEvents({ hostId: { $in: activeHosts.map(account => account._id) }, status: { $nin: ['cancelled', 'archived', 'draft'] } }, { sort: { _id: 1 } });
   const desired = desiredSelections(events, now);
   const totals = { selections: 0, ratings: 0, reminderJobsScheduled: 0 };
   for (const original of events.filter(event => desired.has(id(event)))) {
     const choices = desired.get(id(original));
     const result = await withAccounts([original.hostId, ...demos.map(demo => demo._id)], async session => {
-      const event = await Event.findOne({ _id: original._id, hostId: original.hostId }).session(session).lean();
-      if (!event || event.status === 'cancelled' || !validSchedule(event)) return { selections: 0, ratings: 0, reminderJobsScheduled: 0 };
+      const event = await findEventById(original._id, { session });
+      if (!event || id(event.hostId) !== id(original.hostId) || (event.status && event.status !== 'published') || !validSchedule(event)) return { selections: 0, ratings: 0, reminderJobsScheduled: 0 };
       const existing = await EventSelection.find({ eventId: event._id, userId: { $in: demos.map(demo => demo._id) } }).session(session).lean();
       const byUser = new Map(existing.map(row => [id(row.userId), row]));
       const missing = demos.filter(demo => choices.has(id(demo)) && !byUser.has(id(demo)) && id(demo) !== id(event.hostId))
@@ -387,7 +389,7 @@ async function coverage(now) {
   const [selections, ratings, events] = await Promise.all([
     EventSelection.find({ userId: { $in: userIds } }).select('userId eventId interested attending').lean(),
     EventRating.find({ userId: { $in: userIds } }).select('userId eventId').lean(),
-    Event.find({}).select('_id hostId startsAt endsAt registrationClosesAt status').lean(),
+    findEvents({}, { select: '_id hostId startsAt endsAt registrationClosesAt status' }),
   ]);
   const byEvent = new Map(events.map(event => [id(event), event]));
   const rated = new Set(ratings.map(row => `${id(row.userId)}:${id(row.eventId)}`));
@@ -431,7 +433,7 @@ async function populateDemoCommunity({ now = new Date() } = {}) {
 async function notificationRecipientPlan(now) {
   const recipients = await User.find({ _id: { $in: RECIPIENT_IDS }, deletedAt: null }).select('_id username').lean();
   if (recipients.length !== RECIPIENT_IDS.length) throw new DemoCommunityError('A notification recipient is unavailable. No replacement account will be chosen.');
-  const candidates = await Event.find({ status: { $ne: 'cancelled' }, startsAt: { $gt: now }, endsAt: { $gt: now },
+  const candidates = await Event.find({ status: { $nin: ['cancelled', 'archived', 'draft'] }, endsAt: { $gt: now },
     $or: [{ registrationClosesAt: null }, { registrationClosesAt: { $gt: now } }],
   }).sort({ startsAt: 1, _id: 1 }).lean();
   const hosts = await User.find({ _id: { $in: candidates.map(event => event.hostId) }, deletedAt: null }).select('_id').lean();
@@ -440,11 +442,11 @@ async function notificationRecipientPlan(now) {
   return RECIPIENT_IDS.map(recipientId => {
     const account = recipients.find(recipient => id(recipient) === recipientId);
     const available = candidates.filter(event => activeHosts.has(id(event.hostId)) && id(event.hostId) !== recipientId &&
-      validSchedule(event) && instant(event.registrationClosesAt || event.startsAt) > now.getTime());
+      validSchedule(event) && instant(event.registrationClosesAt || event.endsAt) > now.getTime());
     const byEvent = new Map(selections.filter(row => id(row.userId) === recipientId).map(row => [id(row.eventId), row]));
     const dated = available.filter(event => {
       const row = byEvent.get(id(event));
-      return row?.attending && Number.isFinite(instant(row.registeredAt)) && instant(row.registeredAt) <= now.getTime() && instant(row.registeredAt) < instant(event.startsAt);
+      return row?.attending && Number.isFinite(instant(row.registeredAt)) && instant(row.registeredAt) <= now.getTime() && instant(row.registeredAt) < instant(event.registrationClosesAt || event.endsAt);
     });
     const unregistered = available.filter(event => !byEvent.get(id(event))?.attending)
       .sort((left, right) => Number(Boolean(byEvent.get(id(right))?.interested)) - Number(Boolean(byEvent.get(id(left))?.interested)) || instant(left.startsAt) - instant(right.startsAt) || id(left).localeCompare(id(right)));
@@ -480,8 +482,8 @@ async function registerNotificationRecipients({ now = new Date() } = {}) {
       let created = 0;
       for (const planned of row.events) {
         const event = await Event.findOne({ _id: planned._id, hostId: planned.hostId }).session(session).lean();
-        if (!event || event.status === 'cancelled' || !validSchedule(event) || id(event.hostId) === id(row.account) ||
-            instant(event.startsAt) <= current.getTime() || instant(event.registrationClosesAt || event.startsAt) <= current.getTime()) {
+        if (!event || (event.status && event.status !== 'published') || !validSchedule(event) || id(event.hostId) === id(row.account) ||
+            instant(event.endsAt) <= current.getTime() || instant(event.registrationClosesAt || event.endsAt) <= current.getTime()) {
           throw new DemoCommunityError('A selected registration event changed or closed. Preview the registration links again.');
         }
         const before = await EventSelection.findOne({ userId: row.account._id, eventId: event._id }).session(session).lean();

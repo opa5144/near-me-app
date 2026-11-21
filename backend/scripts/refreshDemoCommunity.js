@@ -15,7 +15,7 @@ const { previewDemoCommunity, populateDemoCommunity, previewNotificationRecipien
 const { previewNotificationRepair, repairNotifications } = require('../src/services/notifications/repairService');
 
 const SNAPSHOT_COLLECTIONS = ['notifications', 'notificationJobs', 'notificationDeliveries', 'EventSelections'];
-const ALL_COLLECTIONS = [...new Set(['AccountList', 'UserProfiles', 'AccountSecurity', 'eventList', 'EventPhotos',
+const ALL_COLLECTIONS = [...new Set(['AccountList', 'UserProfiles', 'AccountSecurity', 'eventList', 'PastEventsList', 'ArchivedEvents', 'EventPhotos',
   'EventSelections', 'eventRatings', ...SNAPSHOT_COLLECTIONS])];
 
 async function saveSnapshot(db, runId) {

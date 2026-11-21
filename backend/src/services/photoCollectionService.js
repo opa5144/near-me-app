@@ -59,4 +59,18 @@ async function replaceResourcePhotos(kind, parentId, input, session) {
   return rows;
 }
 
-module.exports = { loadPhotoMetadata, getResourcePhotoImage, replaceResourcePhotos };
+// A repeated occurrence owns new photo records, even when its JPEG bytes match
+// the completed source. Supplied retained IDs are resolved only against source.
+async function copyResourcePhotos(kind, sourceId, targetId, session, input) {
+  if (!session?.inTransaction()) throw new Error('Photo copies require an active transaction.');
+  const { model, parentField } = configuration(kind);
+  const existing = await model.find({ [parentField]: sourceId }).select('+imageData')
+    .sort({ displayOrder: 1, _id: 1 }).session(session).lean();
+  const desired = resolvePhotos(input === undefined ? existing.map(photo => ({ id: String(photo._id) })) : input, existing);
+  const rows = desired.map((photo, displayOrder) => ({
+    [parentField]: targetId, imageData: photo.imageData, imageMimeType: photo.imageMimeType, displayOrder,
+  }));
+  return rows.length ? model.insertMany(rows, { session, ordered: true }) : [];
+}
+
+module.exports = { loadPhotoMetadata, getResourcePhotoImage, replaceResourcePhotos, copyResourcePhotos };

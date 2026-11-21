@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, View, KeyboardAvoidingView, Platform, Alert, TouchableOpacity } from 'react-native';
+import { ScrollView, StyleSheet, TextInput, View, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { usePreventRemove } from '@react-navigation/native';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { AppButton } from '../../components/AppButton';
 import { PhotoPickerField } from '../../components/PhotoPickerField';
@@ -9,15 +10,16 @@ import { AppText } from '../../components/AppText';
 import { FieldError } from '../../components/FieldError';
 import { DatePickerField } from '../../components/DatePickerField';
 import { TimePickerField } from '../../components/TimePickerField';
+import { CategoryPickerField } from '../../components/CategoryPickerField';
 import { PriceInputField } from '../../components/PriceInputField';
 import { LocationComponent } from '../../components/LocationInputField';
 import type { EventPlace } from '../../api/maps';
-import { createEvent } from '../../api/events';
+import { createEvent, createEventDraft } from '../../api/events';
 import type { CreateEventRequest } from '../../api/events';
 import { eventCategories } from '../../data/events';
 import type { EventItem } from '../../data/events';
 import { useTheme } from '../../context/ThemeContext';
-import { formatHostDate, hasHostErrors, hostRequestError, mergeHostFieldErrors, validateEventDraft } from './hostFormUtils';
+import { formatHostDate, hasHostErrors, hostRequestError, mergeHostFieldErrors, priceToAmount, validateEventDraft, validateSavedEventDraft } from './hostFormUtils';
 import type { EventDraft, HostFieldErrors } from './hostFormUtils';
 import { formatCalendarDate } from '../../utils/dateFormat';
 
@@ -55,6 +57,7 @@ export function CreateEventScreen({ onBack, onCreated }: Props) {
   // before React has rendered the updated disabled state.
   const [isSaving, setIsSaving] = useState(false);
   const [imageBusy, setImageBusy] = useState(false);
+  usePreventRemove(isSaving || imageBusy, () => {});
   const savingRef = useRef(false);
   const imageBusyRef = useRef(false);
   // A successful save stays locked while its success alert is open.
@@ -90,6 +93,34 @@ export function CreateEventScreen({ onBack, onCreated }: Props) {
   const handlePhotoBusyChange = (busy: boolean) => {
     imageBusyRef.current = busy;
     if (mountedRef.current) setImageBusy(busy);
+  };
+
+  const handleSaveDraft = async () => {
+    if (savingRef.current || imageBusyRef.current || completedRef.current) return;
+    const nextErrors = validateSavedEventDraft(draft);
+    setErrors(nextErrors); setFormError(null);
+    if (hasHostErrors(nextErrors)) return;
+    const { start, end } = validateEventDraft(draft);
+    savingRef.current = true; setIsSaving(true);
+    try {
+      const saved = await createEventDraft({
+        title: title.trim(), description: description.trim(), categories: selectedCategories,
+        price: priceToAmount(price) ?? 0, timeZone,
+        ...(start && Number.isFinite(start.getTime()) ? { startsAt: start.toISOString() } : {}),
+        ...(end && Number.isFinite(end.getTime()) ? { endsAt: end.toISOString() } : {}),
+        ...(selectedVenue ? { place: selectedVenue.name, address: selectedVenue.address,
+          placeId: selectedVenue.placeId, latitude: selectedVenue.latitude, longitude: selectedVenue.longitude } : {}),
+        photos: toPhotoInput(photos),
+      });
+      completedRef.current = true;
+      onCreated(saved);
+      if (mountedRef.current) Alert.alert('Draft saved', 'Your draft is private. You can finish and publish it from Drafts.', [{ text: 'OK', onPress: onBack }]);
+    } catch (reason) {
+      if (mountedRef.current) {
+        const feedback = hostRequestError(reason, 'Unable to save your draft. Please try again.');
+        setErrors(feedback.errors); setFormError(feedback.message);
+      }
+    } finally { savingRef.current = false; if (mountedRef.current) setIsSaving(false); }
   };
 
   // Validate the complete draft before making a request. The ref guards also prevent
@@ -161,30 +192,9 @@ export function CreateEventScreen({ onBack, onCreated }: Props) {
           <FieldError message={errors.description} />
         </View>
 
-        {/* Category Selection (Wrapped) */}
-        <View style={styles.formGroup}>
-          <AppText style={[styles.fieldLabel, { color: colors.text }]}>Categories*</AppText>
-          <AppText style={{ color: colors.muted, fontSize: 11, marginBottom: 6 }}>Choose all that apply.</AppText>
-          <View style={styles.chipsContainer}>
-            {eventCategories.map(cat => (
-              <TouchableOpacity
-                key={cat}
-                onPress={() => {
-                  const next = selectedCategories.includes(cat) ? selectedCategories.filter(value => value !== cat) : [...selectedCategories, cat];
-                  setSelectedCategories(next); validateFields(['categories'], { categories: next });
-                }}
-                disabled={isSaving}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: selectedCategories.includes(cat), disabled: isSaving }}
-                activeOpacity={0.7}
-                style={[styles.chip, { backgroundColor: colors.surface, borderColor: colors.border }, selectedCategories.includes(cat) && { backgroundColor: colors.primary, borderColor: colors.primary }]}
-              >
-                <AppText style={[styles.chipText, { color: colors.text }, selectedCategories.includes(cat) && styles.activeChipText]}>{cat}</AppText>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <FieldError message={errors.categories} />
-        </View>
+        <CategoryPickerField label="Categories*" categories={eventCategories} selectedCategories={selectedCategories}
+          onChange={setSelectedCategories} onBlur={values => validateFields(['categories'], { categories: values })}
+          error={errors.categories} disabled={isSaving} />
 
         {/* Modular Date Picker Component with Validation */}
         <AppText style={{ color: colors.muted, fontSize: 12, marginBottom: 10 }}>Times use your device time zone: {timeZone || "Unavailable"}</AppText>
@@ -225,6 +235,8 @@ export function CreateEventScreen({ onBack, onCreated }: Props) {
           error={errors.photos} onBlur={value => validateFields(['photos'], { photos: value })} />
 
         <FieldError message={formError} />
+        <AppButton title={isSaving ? 'Saving...' : 'Save Draft'} variant="secondary" onPress={handleSaveDraft}
+          disabled={isSaving || imageBusy || completedRef.current} style={styles.submitButton} />
         <AppButton title={isSaving ? "Creating Event..." : "Create Event"} onPress={handleSubmit} disabled={isSaving || imageBusy || completedRef.current} style={styles.submitButton} />
       </ScrollView>
     </KeyboardAvoidingView>
@@ -243,9 +255,5 @@ const styles = StyleSheet.create({
   fieldLabel: { fontSize: 11, fontWeight: '800', marginBottom: 6 },
   fieldInput: { height: 44, borderRadius: 14, borderWidth: 1, paddingHorizontal: 10, fontSize: 14 },
   textArea: { height: 88, paddingTop: 10, textAlignVertical: 'top' },
-  chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 2 },
-  chip: { borderWidth: 1, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20 },
-  chipText: { fontSize: 11, fontWeight: '700' },
-  activeChipText: { color: '#FFFFFF' },
   submitButton: { marginTop: 10 }
 });
