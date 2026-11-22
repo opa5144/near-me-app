@@ -58,7 +58,7 @@ export function BookingHistoryScreen({ navigation }: any) {
 
   return (
     <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]}>
-      <AppButton title="Back to Settings" variant="quiet" alignment="left" onPress={() => navigation.goBack()} />
+      <AppButton title="‹ Back to Settings" variant="quiet" alignment="left" onPress={() => navigation.goBack()} />
       <ScreenHeader title="Booking History" subtitle="Past events you marked Interested or Attending." />
       {isLoading ? <ActivityIndicator size="large" color={colors.primary} style={styles.loading} /> : error ? (
         <View style={styles.notice}>

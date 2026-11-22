@@ -82,7 +82,7 @@ export function PhotoCollection({ photos, fallbackUri, title = 'Photos', emoji, 
       <SafeAreaView edges={['top', 'bottom']} style={[styles.viewer, { backgroundColor: colors.background }]}>
         <View style={styles.viewerHeader}>
           <Text numberOfLines={1} style={[styles.viewerTitle, { color: colors.text }]}>{title}</Text>
-          <AppButton title="Close" variant="quiet" onPress={() => setViewerIndex(null)} />
+          <AppButton title="Close" variant="quiet" minHeight={44} onPress={() => setViewerIndex(null)} />
         </View>
         <View style={styles.viewerPages} onLayout={event => setViewerHeight(event.nativeEvent.layout.height)}>
         {viewerIndex !== null && items.length > 0 && viewerHeight > 0 && <FlatList key={'viewer-' + screenWidth + '-' + viewerHeight} ref={viewerList} data={items}
@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
   thumbnails: { flexDirection: 'row', gap: 6 },
   thumbnail: { width: 64, height: 64, borderRadius: 8, overflow: 'hidden' },
   viewer: { flex: 1 },
-  viewerHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 },
+  viewerHeader: { flexDirection: 'row', alignItems: 'center', minHeight: 64, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12 },
   viewerTitle: { flex: 1, fontSize: 16, fontWeight: '700' },
   viewerPages: { flex: 1 },
   viewerFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 8 },

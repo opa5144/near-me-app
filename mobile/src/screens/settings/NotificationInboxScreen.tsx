@@ -8,7 +8,7 @@ import { useTheme } from '../../context/ThemeContext';
 export function NotificationInboxScreen({ onBack, onOpenAction }: { onBack: () => void; onOpenAction: (action: NotificationAction) => void }) {
   const { colors } = useTheme();
   return <View style={[styles.content, { backgroundColor: colors.background }]}>
-    <AppButton title="Back" variant="quiet" alignment="left" onPress={onBack} />
+    <AppButton title="‹ Back" variant="quiet" alignment="left" onPress={onBack} />
     <ScreenHeader title="Notifications" subtitle="Your events, invitations, and friend requests." />
     <NotificationInbox onOpenAction={onOpenAction} />
   </View>;

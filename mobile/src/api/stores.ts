@@ -1,3 +1,4 @@
+
 import { api } from './client';
 import type { PersistedPhoto, PhotoInput } from './photos';
 
@@ -17,6 +18,9 @@ export interface StoreItem {
   name: string;
   categories: string[];
   description: string;
+  phone?: string;
+  email?: string;
+  website?: string;
   address: string;
   place: string;
   placeId?: string;
@@ -34,6 +38,9 @@ export interface CreateStoreRequest {
   name: string;
   categories: string[];
   description: string;
+  phone?: string;
+  email?: string;
+  website?: string;
   address: string;
   place: string;
   placeId?: string;

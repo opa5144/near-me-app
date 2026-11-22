@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, TextInput, View, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { usePreventRemove } from '@react-navigation/native';
@@ -164,7 +165,7 @@ export function CreateEventScreen({ onBack, onCreated }: Props) {
   return (
     <KeyboardAvoidingView style={[styles.container, { backgroundColor: colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <AppText onPress={handleBack} style={[styles.backLink, { color: colors.primary }]}>‹  Back</AppText>
+        <AppButton title="‹  Back" variant="quiet" alignment="left" minHeight={44} onPress={handleBack} disabled={isSaving || imageBusy} style={styles.backButton} textStyle={styles.backText} />
         <ScreenHeader eyebrow="Event Blueprint" title="Create Event" subtitle="Tell us about your event details and entry rules." />
         
         {/* Title Field (Mandatory) */}
@@ -246,7 +247,8 @@ export function CreateEventScreen({ onBack, onCreated }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 16, paddingBottom: 32 },
-  backLink: { fontWeight: '800', fontSize: 13, marginBottom: 12 },
+  backButton: { paddingHorizontal: 8, marginLeft: -8, marginBottom: 8 },
+  backText: { fontWeight: '800', fontSize: 14 },
   formGroup: { marginBottom: 14 },
   timeSection: { marginBottom: 14 },
   splitRow: { flexDirection: 'row', gap: 12 },
