@@ -227,7 +227,7 @@ function HostNavigator() {
 }
 
 function TabNavigator() {
-  const { events, interestedEventIds, attendingEventIds } = useEvents();
+  const { events, myEvents, interestedEventIds, attendingEventIds } = useEvents();
   const plannedEvents = events.filter(event => interestedEventIds.includes(event.id) || attendingEventIds.includes(event.id));
 
   return (
@@ -247,6 +247,7 @@ function TabNavigator() {
               <HomeScreen
                 events={events}
                 interestedEvents={plannedEvents}
+                hostedEvents={myEvents}
                 onOpenEvent={event => props.navigation.navigate('EventDetails', { eventId: event.id })}
                 onSeeAll={() => props.navigation.navigate('Search')}
                 onOpenNotifications={() => props.navigation.navigate('NotificationInbox')}
