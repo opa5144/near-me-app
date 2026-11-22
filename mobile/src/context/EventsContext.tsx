@@ -1,11 +1,23 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Alert, AppState } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isAxiosError } from 'axios';
 import { fetchEvents, fetchMyEvents, fetchEventSelections, saveEventSelection } from '../api/events';
 import type { EventSelection } from '../api/events';
 import type { EventItem } from '../data/events';
-import { isAvailableEvent } from '../utils/eventAvailability';
+
+// Storage key for persisting saved itineraries across app sessions.
+const SAVED_ITINERARIES_KEY = '@nearme/saved_itineraries';
+
+// Saved itinerary record stored in context and AsyncStorage.
+export interface SavedItinerary {
+  id: string;
+  title: string;
+  createdAt: string;
+  eventIds: string[];
+  eventsSnapshot?: EventItem[];
+}
 
 // Event lists and private choices share one provider for the signed-in account.
 interface EventsContextValue {
@@ -19,6 +31,10 @@ interface EventsContextValue {
   attendingEventIds: string[];
   toggleInterested: (id: string) => void;
   toggleAttending: (id: string) => void;
+  setBulkRsvp: (eventIds: string[], attending: boolean) => Promise<boolean>; // Bulk RSVP helper for itineraries.
+  savedItineraries: SavedItinerary[]; // Persisted user itineraries.
+  saveItinerary: (title: string, itineraryEvents: EventItem[]) => Promise<SavedItinerary | null>; // Saves an itinerary to storage.
+  deleteItinerary: (id: string) => Promise<void>; // Removes a saved itinerary from state and storage.
   selectionsLoading: boolean;
   selectionsReady: boolean;
   selectionsSavingEventIds: string[];
@@ -57,6 +73,7 @@ export function EventsProvider({ children }: { children: ReactNode }) {
   const [selectionsReady, setSelectionsReady] = useState(false);
   const [selectionsSavingEventIds, setSelectionsSavingEventIds] = useState<string[]>([]);
   const [selectionsError, setSelectionsError] = useState<string | null>(null);
+  const [savedItineraries, setSavedItineraries] = useState<SavedItinerary[]>([]); // Holds loaded saved itineraries.
   const mounted = useRef(false);
   const requestId = useRef(0);
   const mutationVersion = useRef(0);
@@ -66,6 +83,24 @@ export function EventsProvider({ children }: { children: ReactNode }) {
   const selectionLoadSucceeded = useRef(false);
   const selectionWrites = useRef(new Set<string>());
   const selectionRefreshQueued = useRef(false);
+  const savedItinerariesRef = useRef<SavedItinerary[]>([]); // Keeps latest itineraries for async mutations.
+
+  // Loads previously persisted itineraries from AsyncStorage on startup.
+  const loadSavedItineraries = useCallback(async (): Promise<void> => {
+    try {
+      const raw = await AsyncStorage.getItem(SAVED_ITINERARIES_KEY);
+      if (!mounted.current || !raw) return;
+      const parsed: unknown = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return;
+      const valid = parsed.filter((item): item is SavedItinerary =>
+        Boolean(item && typeof item === 'object' && typeof (item as SavedItinerary).id === 'string' && Array.isArray((item as SavedItinerary).eventIds))
+      );
+      savedItinerariesRef.current = valid;
+      setSavedItineraries(valid);
+    } catch {
+      // Ignore malformed storage data and keep empty list.
+    }
+  }, []);
 
   const refreshEvents = useCallback(async (): Promise<void> => {
     const thisRequest = ++requestId.current;
@@ -130,6 +165,7 @@ export function EventsProvider({ children }: { children: ReactNode }) {
     mounted.current = true;
     void refreshEvents();
     void refreshSelections();
+    void loadSavedItineraries(); // Hydrate saved itineraries when provider mounts.
     const appState = AppState.addEventListener('change', state => {
       if (state !== 'active' || !mounted.current) return;
       // Suspended timers must not leave yesterday's events visible after resuming.
@@ -144,7 +180,7 @@ export function EventsProvider({ children }: { children: ReactNode }) {
       ++selectionRequestId.current;
       selectionLoadSucceeded.current = false;
     };
-  }, [refreshEvents, refreshSelections]);
+  }, [refreshEvents, refreshSelections, loadSavedItineraries]);
 
   // Expire cached discovery records at their actual end instant. Keep the raw
   // records separate from the host dashboard and private booking-history data.
@@ -167,16 +203,16 @@ export function EventsProvider({ children }: { children: ReactNode }) {
   const events = useMemo(() => {
     // A response can arrive after an event ends, before the next timer callback.
     const instant = Math.max(now, Date.now());
-    return loadedEvents.filter(event => isAvailableEvent(event, instant));
+    return loadedEvents.filter(event => {
+      const start = Date.parse(event.startsAt);
+      const end = Date.parse(event.endsAt);
+      return Number.isFinite(start) && Number.isFinite(end) && start < end && end > instant;
+    });
   }, [loadedEvents, now]);
 
   const addCreatedEvent = useCallback((created: EventItem) => {
     ++mutationVersion.current;
-    // Host mutations also return private drafts and archived records. Upsert the
-    // host list, but remove those records immediately from public discovery.
-    setEvents(current => isAvailableEvent(created)
-      ? [created, ...current.filter(event => event.id !== created.id)]
-      : current.filter(event => event.id !== created.id));
+    setEvents(current => [created, ...current.filter(event => event.id !== created.id)]);
     setMyEvents(current => [created, ...current.filter(event => event.id !== created.id)]);
   }, []);
 
@@ -221,6 +257,99 @@ export function EventsProvider({ children }: { children: ReactNode }) {
     }
   }, [refreshSelections, refreshEvents]);
 
+  // Updates attending status for multiple events without clobbering in-flight writes.
+  const setBulkRsvp = useCallback(async (eventIds: string[], attending: boolean): Promise<boolean> => {
+    if (!mounted.current || !selectionLoadSucceeded.current) return false;
+    const ids = [...new Set(eventIds)].filter(id => Boolean(id) && !selectionWrites.current.has(id));
+    if (!ids.length) return true;
+
+    for (const id of ids) selectionWrites.current.add(id); // Lock targeted event IDs during save.
+    ++selectionMutationVersion.current;
+    setSelectionsSavingEventIds([...selectionWrites.current]);
+    setSelectionsError(null);
+
+    try {
+      const results = await Promise.allSettled(
+        ids.map(id => saveEventSelection(id, { attending }))
+      );
+      if (!mounted.current) return false;
+
+      const next = { ...selectionValues.current };
+      let anySaved = false;
+      let firstError: string | null = null;
+
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          anySaved = true;
+          next[result.value.eventId] = result.value; // Commit server state for succeeded items.
+        } else if (!firstError) {
+          firstError = selectionError(result.reason);
+        }
+      }
+
+      if (anySaved) {
+        selectionValues.current = next;
+        setSelections(next);
+        ++mutationVersion.current;
+        void refreshEvents(); // Refresh server audience counts after bulk update.
+      }
+
+      if (firstError) {
+        setSelectionsError(firstError);
+        Alert.alert('RSVP update incomplete', firstError);
+        return false;
+      }
+      return true;
+    } finally {
+      ++selectionMutationVersion.current;
+      for (const id of ids) selectionWrites.current.delete(id); // Release write locks.
+      if (mounted.current) {
+        setSelectionsSavingEventIds([...selectionWrites.current]);
+        if (selectionWrites.current.size === 0 && selectionRefreshQueued.current) {
+          selectionRefreshQueued.current = false;
+          void refreshSelections(false);
+        }
+      }
+    }
+  }, [refreshEvents, refreshSelections]);
+
+  // Persists an itinerary to AsyncStorage and updates context state.
+  const saveItinerary = useCallback(async (title: string, itineraryEvents: EventItem[]): Promise<SavedItinerary | null> => {
+    const eventIds = [...new Set(itineraryEvents.map(event => event.id).filter(Boolean))];
+    if (!eventIds.length) return null; // Skip saving empty itineraries.
+
+    const created: SavedItinerary = {
+      id: `itinerary_${Date.now()}`,
+      title: title.trim() || 'Saved Itinerary',
+      createdAt: new Date().toISOString(),
+      eventIds,
+      eventsSnapshot: itineraryEvents, // Preserve event details even if events expire later.
+    };
+
+    const nextList = [created, ...savedItinerariesRef.current];
+    savedItinerariesRef.current = nextList;
+    if (mounted.current) setSavedItineraries(nextList);
+
+    try {
+      await AsyncStorage.setItem(SAVED_ITINERARIES_KEY, JSON.stringify(nextList));
+    } catch {
+      // Keep in-memory state if AsyncStorage write fails.
+    }
+    return created;
+  }, []);
+
+  // Deletes a saved itinerary by ID and syncs AsyncStorage.
+  const deleteItinerary = useCallback(async (id: string): Promise<void> => {
+    const nextList = savedItinerariesRef.current.filter(item => item.id !== id); // Remove matching itinerary.
+    savedItinerariesRef.current = nextList; // Keep ref in sync for rapid subsequent mutations.
+    if (mounted.current) setSavedItineraries(nextList); // Update UI state.
+    try {
+      await AsyncStorage.setItem(SAVED_ITINERARIES_KEY, JSON.stringify(nextList)); // Persist updated list.
+    } catch {
+      // Keep in-memory state if AsyncStorage write fails.
+    }
+  }, []);
+
   // Void callbacks preserve existing consumers and handle async failures centrally.
   const toggleInterested = useCallback((id: string) => { void toggleSelection(id, 'interested'); }, [toggleSelection]);
   const toggleAttending = useCallback((id: string) => { void toggleSelection(id, 'attending'); }, [toggleSelection]);
@@ -232,10 +361,13 @@ export function EventsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <EventsContext.Provider value={{ events, myEvents, isLoading, error, refreshEvents,
+    <EventsContext.Provider value={{
+      events, myEvents, isLoading, error, refreshEvents,
       addCreatedEvent, interestedEventIds, attendingEventIds, toggleInterested, toggleAttending,
+      setBulkRsvp, savedItineraries, saveItinerary, deleteItinerary,
       selectionsLoading, selectionsReady, selectionsSavingEventIds, selectionsError, refreshSelections,
-      viewedEventIds, recordView }}>
+      viewedEventIds, recordView
+    }}>
       {children}
     </EventsContext.Provider>
   );
