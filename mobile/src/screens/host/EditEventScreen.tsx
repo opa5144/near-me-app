@@ -11,6 +11,7 @@ import { DatePickerField } from '../../components/DatePickerField';
 import { TimePickerField } from '../../components/TimePickerField';
 import { CategoryPickerField } from '../../components/CategoryPickerField';
 import { PriceInputField } from '../../components/PriceInputField';
+import { EventTicketModeField } from '../../components/EventTicketModeField';
 import { LocationComponent } from '../../components/LocationInputField';
 import { eventPhotoHeaders, fetchEvent, publishEventDraft, rescheduleEvent, saveEventDraft, updateEvent } from '../../api/events';
 import type { CreateEventRequest, EventItem, UpdateEventRequest } from '../../api/events';
@@ -40,6 +41,7 @@ export function EditEventScreen({ eventId, onBack, onUpdated, mode = 'edit' }: P
   const [startTime, setStartTime] = useState(new Date());
   const [endTime, setEndTime] = useState(new Date(Date.now() + 3600000));
   const [price, setPrice] = useState('');
+  const [useTickets, setUseTickets] = useState(false);
   const [selectedVenue, setSelectedVenue] = useState<HostVenue | null>(null);
   const [photos, setPhotos] = useState<EditablePhoto[]>([]);
   const [photosChanged, setPhotosChanged] = useState(false);
@@ -70,6 +72,7 @@ export function EditEventScreen({ eventId, onBack, onUpdated, mode = 'edit' }: P
           throw new Error(mode === 'reschedule' ? 'Only a completed event can be rescheduled.' : 'This event is read-only. Reschedule a completed event to create a new one.');
         }
         setSourceEvent(event);
+        setUseTickets(event.useTickets === true);
         setScheduleChosen(mode === 'reschedule' || Number.isFinite(Date.parse(event.startsAt)) && Number.isFinite(Date.parse(event.endsAt)));
         originalSchedule.current = { startsAt: event.startsAt, endsAt: event.endsAt, timeZone: event.timeZone };
         setTitle(event.title);
@@ -148,7 +151,7 @@ export function EditEventScreen({ eventId, onBack, onUpdated, mode = 'edit' }: P
     const { start, end } = validateEventDraft(draft);
     const payload: UpdateEventRequest = {
       title: title.trim(), description: description.trim(), categories: selectedCategories,
-      price: priceToAmount(price) ?? 0, timeZone,
+      price: priceToAmount(price) ?? 0, timeZone, useTickets,
       ...(start && Number.isFinite(start.getTime()) ? { startsAt: start.toISOString() } : {}),
       ...(end && Number.isFinite(end.getTime()) ? { endsAt: end.toISOString() } : {}),
       place: selectedVenue?.name ?? '', address: selectedVenue?.address ?? '',
@@ -186,6 +189,7 @@ export function EditEventScreen({ eventId, onBack, onUpdated, mode = 'edit' }: P
       categories: selectedCategories,
       description: description.trim(),
       price: priceAmount,
+      useTickets,
       startsAt: start.toISOString(),
       endsAt: end.toISOString(),
       timeZone: savedTimeZone,
@@ -283,6 +287,10 @@ export function EditEventScreen({ eventId, onBack, onUpdated, mode = 'edit' }: P
 
         <PriceInputField label="Ticket Price" price={price} onPriceChange={setPrice}
           error={errors.price} onBlur={() => validateFields(['price'])} disabled={isSaving} />
+
+        <EventTicketModeField value={useTickets} onChange={setUseTickets} disabled={isSaving}
+          locked={mode === 'edit' && !isDraft && sourceEvent?.ticketsModeLocked === true}
+          error={errors.useTickets} />
 
         <LocationComponent initialValue={selectedVenue?.name}
           onVenueSelected={venue => { setSelectedVenue(venue); validateFields(['location'], { venue }); }}

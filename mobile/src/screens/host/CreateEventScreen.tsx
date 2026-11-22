@@ -12,6 +12,7 @@ import { DatePickerField } from '../../components/DatePickerField';
 import { TimePickerField } from '../../components/TimePickerField';
 import { CategoryPickerField } from '../../components/CategoryPickerField';
 import { PriceInputField } from '../../components/PriceInputField';
+import { EventTicketModeField } from '../../components/EventTicketModeField';
 import { LocationComponent } from '../../components/LocationInputField';
 import type { EventPlace } from '../../api/maps';
 import { createEvent, createEventDraft } from '../../api/events';
@@ -48,6 +49,7 @@ export function CreateEventScreen({ onBack, onCreated }: Props) {
   const [startTime, setStartTime] = useState(initial.start);
   const [endTime, setEndTime] = useState(initial.end);
   const [price, setPrice] = useState('');
+  const [useTickets, setUseTickets] = useState(false);
   const [selectedVenue, setSelectedVenue] = useState<EventPlace | null>(null);
   // The device-local preview URI is never sent as a shared image URL.
   const [photos, setPhotos] = useState<EditablePhoto[]>([]);
@@ -105,7 +107,7 @@ export function CreateEventScreen({ onBack, onCreated }: Props) {
     try {
       const saved = await createEventDraft({
         title: title.trim(), description: description.trim(), categories: selectedCategories,
-        price: priceToAmount(price) ?? 0, timeZone,
+        price: priceToAmount(price) ?? 0, timeZone, useTickets,
         ...(start && Number.isFinite(start.getTime()) ? { startsAt: start.toISOString() } : {}),
         ...(end && Number.isFinite(end.getTime()) ? { endsAt: end.toISOString() } : {}),
         ...(selectedVenue ? { place: selectedVenue.name, address: selectedVenue.address,
@@ -134,7 +136,7 @@ export function CreateEventScreen({ onBack, onCreated }: Props) {
     // Send real UTC instants plus the display time zone, venue details and optional
     // image bytes. The backend derives hostId from the authenticated session.
     const payload: CreateEventRequest = {
-      title: title.trim(), categories: selectedCategories, description: description.trim(), price: priceAmount,
+      title: title.trim(), categories: selectedCategories, description: description.trim(), price: priceAmount, useTickets,
       startsAt: start.toISOString(), endsAt: end.toISOString(), timeZone,
       address: selectedVenue.address.trim(), place: selectedVenue.name.trim(),
       placeId: selectedVenue.placeId || undefined, latitude: selectedVenue.latitude, longitude: selectedVenue.longitude,
@@ -224,6 +226,9 @@ export function CreateEventScreen({ onBack, onCreated }: Props) {
         {/* Numbers-only price input (blank = free) */}
         <PriceInputField label="Ticket Price" price={price} onPriceChange={setPrice}
           error={errors.price} onBlur={() => validateFields(['price'])} disabled={isSaving} />
+
+        <EventTicketModeField value={useTickets} onChange={setUseTickets} disabled={isSaving}
+          error={errors.useTickets} />
 
         {/* Secure typeahead autocomplete proxy search drop-down location field */}
         <LocationComponent onVenueSelected={venue => { setSelectedVenue(venue); validateFields(['location'], { venue }); }}

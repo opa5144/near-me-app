@@ -17,13 +17,14 @@ interface EventsContextValue {
   addCreatedEvent: (event: EventItem) => void;
   interestedEventIds: string[];
   attendingEventIds: string[];
+  attendedEventIds: string[];
   toggleInterested: (id: string) => void;
   toggleAttending: (id: string) => void;
   selectionsLoading: boolean;
   selectionsReady: boolean;
   selectionsSavingEventIds: string[];
   selectionsError: string | null;
-  refreshSelections: () => Promise<void>;
+  refreshSelections: (clearError?: boolean, quiet?: boolean) => Promise<void>;
   viewedEventIds: string[];
   recordView: (id: string) => Promise<void>;
 }
@@ -92,11 +93,11 @@ export function EventsProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const refreshSelections = useCallback(async (clearError = true): Promise<void> => {
+  const refreshSelections = useCallback(async (clearError = true, quiet = false): Promise<void> => {
     const thisRequest = ++selectionRequestId.current;
     const versionAtStart = selectionMutationVersion.current;
     if (mounted.current) {
-      setSelectionsLoading(true);
+      if (!quiet) setSelectionsLoading(true);
       if (clearError) setSelectionsError(null);
     }
     try {
@@ -185,6 +186,10 @@ export function EventsProvider({ children }: { children: ReactNode }) {
     // event has one in-flight write; its other independent flag is left unchanged.
     if (!mounted.current || !selectionLoadSucceeded.current || selectionWrites.current.has(id)) return;
     const desired = !(selectionValues.current[id]?.[field] ?? false);
+    if (field === 'attending' && !desired && selectionValues.current[id]?.attended) {
+      Alert.alert('Attendance verified', 'You cannot unregister after the host has checked you in.');
+      return;
+    }
     selectionWrites.current.add(id);
     ++selectionMutationVersion.current;
     setSelectionsSavingEventIds([...selectionWrites.current]);
@@ -226,6 +231,7 @@ export function EventsProvider({ children }: { children: ReactNode }) {
   const toggleAttending = useCallback((id: string) => { void toggleSelection(id, 'attending'); }, [toggleSelection]);
   const interestedEventIds = Object.values(selections).filter(item => item.interested).map(item => item.eventId);
   const attendingEventIds = Object.values(selections).filter(item => item.attending).map(item => item.eventId);
+  const attendedEventIds = Object.values(selections).filter(item => item.attended).map(item => item.eventId);
 
   const recordView = useCallback(async (id: string) => {
     setViewedEventIds(current => current.includes(id) ? current : [...current, id]);
@@ -233,7 +239,7 @@ export function EventsProvider({ children }: { children: ReactNode }) {
 
   return (
     <EventsContext.Provider value={{ events, myEvents, isLoading, error, refreshEvents,
-      addCreatedEvent, interestedEventIds, attendingEventIds, toggleInterested, toggleAttending,
+      addCreatedEvent, interestedEventIds, attendingEventIds, attendedEventIds, toggleInterested, toggleAttending,
       selectionsLoading, selectionsReady, selectionsSavingEventIds, selectionsError, refreshSelections,
       viewedEventIds, recordView }}>
       {children}

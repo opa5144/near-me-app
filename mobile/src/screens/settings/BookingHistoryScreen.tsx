@@ -5,7 +5,7 @@ import { isAxiosError } from 'axios';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { AppButton } from '../../components/AppButton';
 import { EventCard } from '../../components/EventCard';
-import { fetchBookingHistory } from '../../api/events';
+import { bookingAttendanceStatus, fetchBookingHistory } from '../../api/events';
 import type { BookingHistoryItem } from '../../api/events';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -39,8 +39,9 @@ export function BookingHistoryScreen({ navigation }: any) {
   }, [attempt]));
 
   // Attendance takes display priority without changing either saved selection flag.
-  const attended = bookings.filter(booking => booking.attending);
-  const interested = bookings.filter(booking => booking.interested && !booking.attending);
+  const attended = bookings.filter(booking => bookingAttendanceStatus(booking) === 'attended');
+  const interested = bookings.filter(booking => bookingAttendanceStatus(booking) === 'interested');
+  const notCheckedIn = bookings.filter(booking => bookingAttendanceStatus(booking) === 'not_checked_in');
 
   const section = (title: string, entries: BookingHistoryItem[], emptyMessage: string) => (
     <View style={styles.section}>
@@ -66,8 +67,9 @@ export function BookingHistoryScreen({ navigation }: any) {
           <AppButton title="Retry" variant="secondary" onPress={() => setAttempt(current => current + 1)} />
         </View>
       ) : <>
-        {section('Attended', attended, 'No past events marked as attending yet.')}
+        {section('Attended', attended, 'No attended events yet. Ticketed events require the host to verify check-in.')}
         {section('Interested', interested, 'No past events marked only as interested yet.')}
+        {notCheckedIn.length > 0 && section('Not checked in', notCheckedIn, '')}
       </>}
     </ScrollView>
   );

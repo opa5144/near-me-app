@@ -4,7 +4,7 @@ import { fetchUserProfile } from '../api/client';
 import type { UserProfileResponse } from '../api/client';
 import { fetchFriendsNetwork } from '../api/friends';
 import type { FriendItem, FriendsNetworkResponse, PendingRequest, SentRequest } from '../api/friends';
-import { fetchBookingHistory } from '../api/events';
+import { fetchBookingHistory, hasAttendedBooking } from '../api/events';
 import type { BookingHistoryItem } from '../api/events';
 import { fetchMyStores } from '../api/stores';
 import type { StoreItem } from '../api/stores';
@@ -37,7 +37,7 @@ interface UserDataContextValue {
 const UserDataContext = createContext<UserDataContextValue | undefined>(undefined);
 const STALE_MS = 30_000;
 const readProfile = async (signal: AbortSignal) => (await fetchUserProfile(signal)).user;
-const readAttended = async (signal: AbortSignal) => (await fetchBookingHistory(signal)).filter(booking => booking.attending);
+const readAttended = async (signal: AbortSignal) => (await fetchBookingHistory(signal)).filter(hasAttendedBooking);
 
 // One cache per resource shares requests between screens. A forced refresh or a
 // saved response supersedes older reads; late/unmounted responses cannot win.

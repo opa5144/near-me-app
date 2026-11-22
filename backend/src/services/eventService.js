@@ -9,6 +9,8 @@ const { ServiceError } = require('./serviceError');
 const { loadPhotoMetadata, getResourcePhotoImage, replaceResourcePhotos } = require('./photoCollectionService');
 const { loadEventAudienceCounts } = require('./eventAudienceService');
 const { getFriendsAttendingByEvents } = require('./friendAttendance');
+const { loadTicketModeLocks, validateTicketModeChange, updateEventTickets } = require('./ticketService');
+const { requireTicketConfiguration } = require('./ticketCredentials');
 const { recordEventCreated, recordEventChanged } = require('./notifications/triggerService');
 
 function requireEventId(id) {
@@ -18,7 +20,7 @@ function requireEventId(id) {
 }
 
 function eventWriteError(error) {
-  if (error instanceof EventInputError) return new ServiceError(error.status, error.message);
+  if (error instanceof EventInputError) return new ServiceError(error.status, error.message, { errors: error.errors });
   if (error.name === 'ValidationError') return new ServiceError(400, 'Please check your event details.');
   return error;
 }
@@ -28,8 +30,9 @@ async function eventItems(events, baseUrl, session, viewerId) {
   // Keep operations sequential when this helper runs inside a transaction.
   const audience = await loadEventAudienceCounts(events.map(event => event._id), session);
   const friends = await getFriendsAttendingByEvents(viewerId, events.map(event => event._id), baseUrl, { session });
+  const locked = await loadTicketModeLocks(events.map(event => event._id), session);
   return events.map(event => ({
-    ...toEventItem(event, baseUrl, photos.get(String(event._id)) ?? [],
+    ...toEventItem({ ...event, ticketsModeLocked: locked.has(String(event._id)) }, baseUrl, photos.get(String(event._id)) ?? [],
       audience.get(String(event._id)) ?? { interestedCount: 0, attendingCount: 0 }),
     friendsAttending: friends.get(String(event._id)) ?? [],
   }));
@@ -93,6 +96,7 @@ function eventPhotoInput(body) {
 async function createEvent(auth, body, baseUrl) {
   try {
     const fields = parseCreateEvent(body);
+    if (fields.useTickets) requireTicketConfiguration();
     const input = eventPhotoInput(body) ?? [];
     // Ignore client ownership and seed keys; a verified account owns every new event.
     return await withActiveAccountWrite(auth, [], async session => {
@@ -123,6 +127,7 @@ async function updateEvent(auth, id, body, baseUrl) {
       if (String(before.hostId) !== String(auth.userId)) throw new ServiceError(403, 'Unauthorized to edit this event.');
       if (['cancelled', 'archived', 'draft'].includes(before.status) || new Date(before.endsAt).getTime() <= Date.now()) throw new ServiceError(409, 'This event is read-only. Reschedule a completed event to create a new occurrence.');
       const fields = parseCreateEvent(body, { existingEvent: before });
+      const ticketsModeLocked = await validateTicketModeChange(before, fields, session);
       const photoInput = eventPhotoInput(body);
       const occurredAt = new Date();
       const changes = eventChanges(before, { ...before, ...fields });
@@ -130,12 +135,13 @@ async function updateEvent(auth, id, body, baseUrl) {
       const updated = await Event.findOneAndUpdate({ _id: id, hostId: auth.userId },
         { $set: { ...fields, notificationVersion } }, { new: true, runValidators: true, session }).lean();
       if (!updated) throw new ServiceError(404, 'Event not found.');
+      await updateEventTickets(updated, session);
       if (Object.keys(changes).length) await recordEventChanged({ before, after: updated, changes, occurredAt }, session);
       await Event.populate(updated, { path: 'hostId', select: 'firstName lastName username', options: { session } });
       if (photoInput !== undefined) {
         const photos = await replaceResourcePhotos('event', updated._id, photoInput, session);
         const audience = await loadEventAudienceCounts([updated._id], session);
-        return toEventItem(updated, baseUrl, photos,
+        return toEventItem({ ...updated, ticketsModeLocked }, baseUrl, photos,
           audience.get(String(updated._id)) ?? { interestedCount: 0, attendingCount: 0 });
       }
       // Omission preserves the new collection unchanged; original media is never consulted.

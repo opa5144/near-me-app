@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, Share, StyleSheet, View, Modal, TouchableOpacity } from 'react-native';
+import { Alert, AppState, Image, Pressable, ScrollView, Share, StyleSheet, View, Modal, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { EventItem } from '../../data/events';
@@ -18,11 +18,13 @@ import { FriendAvatarStack } from '../../components/FriendAvatarStack';
 import { InviteFriendsModal } from '../../components/InviteFriendsModal';
 import { addEventToCalendar } from '../../utils/eventCalendar';
 import { formatEventPrice } from '../../utils/eventPrice';
+import { EventTicketModal } from '../../components/EventTicket';
 
 type EventDetailsScreenProps = {
   event: EventItem;
   interested: boolean;
   attending: boolean;
+  attended: boolean;
   onToggleInterested: () => void;
   onToggleAttending: () => void;
   selectionsLoading: boolean;
@@ -34,13 +36,13 @@ type EventDetailsScreenProps = {
   navigation?: any;
 };
 
-export function EventDetailsScreen({ event, interested, attending, onToggleInterested, onToggleAttending,
+export function EventDetailsScreen({ event, interested, attending, attended, onToggleInterested, onToggleAttending,
   selectionsLoading, selectionsReady, selectionSaving, selectionError, onRetrySelections,
   onBack, navigation }: EventDetailsScreenProps) {
   const { colors, theme } = useTheme();
-  const { events: globalEvents } = useEvents();
+  const { events: globalEvents, refreshSelections } = useEvents();
   const { user: currentUserProfile, friends, friendRequests, sentRequests, profileError,
-    friendsError: friendNetworkError, refreshProfile, refreshFriends } = useUserData();
+    friendsError: friendNetworkError, refreshProfile, refreshFriends, refreshAttended } = useUserData();
   const friendNetwork = { friends, pendingRequests: friendRequests, sentRequests };
   const errorColor = theme === 'dark' ? '#FF8A80' : '#C62828';
   const [mapError, setMapError] = useState<string | null>(null);
@@ -48,6 +50,7 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [calendarError, setCalendarError] = useState<string | null>(null);
   const [openingCalendar, setOpeningCalendar] = useState(false);
+  const [showTicket, setShowTicket] = useState(false);
   
   // A screen left open becomes read-only as soon as the saved end time passes.
   const [hasEnded, setHasEnded] = useState(() => {
@@ -72,6 +75,23 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
   const unavailable = cancelled || archived || event.status === 'draft';
   const selectionDisabled = unavailable || hasEnded || !selectionsReady || selectionsLoading || selectionSaving;
   const invitationsDisabled = unavailable || hasEnded || registrationClosed;
+
+  // A scan can happen on the host's other device. Refresh quietly only while
+  // this ticketed registration is focused and awaiting verification.
+  useFocusEffect(useCallback(() => {
+    if (!event.useTickets || !attending || attended || !selectionsReady) return;
+    void refreshSelections(false, true);
+    if (hasEnded || unavailable) return;
+    const timer = setInterval(() => {
+      if (AppState.currentState === 'active') void refreshSelections(false, true);
+    }, 15000);
+    const listener = AppState.addEventListener('change', state => {
+      if (state === 'active') void refreshSelections(false, true);
+    });
+    return () => { clearInterval(timer); listener.remove(); };
+  }, [event.id, event.useTickets, attending, attended, selectionsReady, hasEnded, unavailable, refreshSelections]));
+  useEffect(() => { if (!attending) setShowTicket(false); }, [attending]);
+  const attendanceUpdated = () => { void refreshSelections(false, true); void refreshAttended(true); };
 
   // Reuse the authenticated cache; explicit retries bypass its freshness window.
   const loadFriendNetwork = useCallback(() => {
@@ -283,6 +303,10 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
       </View>}
       {selectionsLoading && <AppText style={[styles.selectionNotice, { color: colors.muted }]}>Loading your saved choices...</AppText>}
       {hasEnded && <AppText style={[styles.selectionNotice, { color: colors.muted }]}>This event has ended. Your saved choices are read-only.</AppText>}
+      {event.useTickets && attended && <AppText accessibilityLiveRegion="polite" style={[styles.selectionNotice, { color: colors.primary }]}>Checked in by the host. Your attendance is verified and you cannot unregister.</AppText>}
+      {event.useTickets && attending && !attended && !unavailable && <AppText style={[styles.selectionNotice, { color: colors.muted }]}>
+        {hasEnded ? 'This ticketed event requires verified check-in to leave a rating.' : 'This event uses QR tickets. Show your ticket to the host when you arrive.'}
+      </AppText>}
       {!hasEnded && !unavailable && registrationClosed && <AppText style={[styles.selectionNotice, { color: colors.muted }]}>Registration for this event has closed.</AppText>}
       {cancelled && <AppText accessibilityRole="alert" style={[styles.selectionNotice, { color: errorColor }]}>
         This event has been cancelled.{event.cancellationReason ? ' ' + event.cancellationReason : ''}
@@ -294,12 +318,14 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
         <AppButton title={interested ? 'Interested' : "I'm Interested"} onPress={onToggleInterested} minHeight={44}
           disabled={selectionDisabled} variant={interested ? 'primary' : 'secondary'} style={styles.selectionButton}
           textStyle={styles.selectionButtonText} />
-        <AppButton title={attending ? 'Attending' : "I'll Attend"} minHeight={44}
-          onPress={onToggleAttending} disabled={selectionDisabled || (!attending && registrationClosed)} variant={attending ? 'primary' : 'secondary'}
+        <AppButton title={attended ? 'Checked in' : attending ? 'Attending' : "I'll Attend"} minHeight={44}
+          onPress={onToggleAttending} disabled={selectionDisabled || attended || (!attending && registrationClosed)} variant={attending ? 'primary' : 'secondary'}
           style={styles.selectionButton} textStyle={styles.selectionButtonText} />
       </View>
+      {event.useTickets && attending && <AppButton title="View Ticket" onPress={() => setShowTicket(true)} variant="secondary"
+        disabled={!selectionsReady || selectionsLoading || selectionSaving} style={{ marginBottom: 12 }} />}
       {selectionSaving && <AppText accessibilityLiveRegion="polite" style={{ color: colors.muted, marginBottom: 12 }}>Saving choices...</AppText>}
-      {hasEnded && attending && !unavailable && currentUserId && currentUserId !== hostUserId && <EventRatingForm eventId={event.id} />}
+      {hasEnded && attending && (!event.useTickets || attended) && !unavailable && currentUserId && currentUserId !== hostUserId && <EventRatingForm eventId={event.id} />}
       
       <AppText style={[styles.section, { color: colors.text }]}>About Event</AppText>
       <AppText style={[styles.description, { color: colors.muted }]}>{event.description}</AppText>
@@ -344,6 +370,7 @@ export function EventDetailsScreen({ event, interested, attending, onToggleInter
         eventTitle={event.title}
         onClose={() => setShowInviteModal(false)}
       />
+      <EventTicketModal eventId={showTicket ? event.id : null} onClose={() => { setShowTicket(false); void refreshSelections(false, true); }} onAttendanceUpdated={attendanceUpdated} />
     </ScrollView>
   );
 }

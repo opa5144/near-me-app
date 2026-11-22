@@ -22,6 +22,9 @@ export type EventItem = {
   registrationClosesAt?: string;
   timeZone?: string;
   priceAmount?: number;
+  useTickets?: boolean;
+  ticketsModeLocked?: boolean;
+  checkedInCount?: number;
   venue: string;
   address: string;
   place?: string;

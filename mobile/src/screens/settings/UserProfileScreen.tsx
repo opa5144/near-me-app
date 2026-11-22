@@ -244,7 +244,7 @@ export function UserProfileScreen({ navigation, events, onOpenEvent, onOpenNotif
 
       {/* Private Dashboard Cards */}
       <View style={styles.tripleCardRow}>
-        <TouchableOpacity style={[styles.miniCard, { backgroundColor: colors.surface, borderColor: colors.border }]} activeOpacity={0.7} onPress={() => alert('Tickets')}>
+        <TouchableOpacity style={[styles.miniCard, { backgroundColor: colors.surface, borderColor: colors.border }]} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Open my tickets" onPress={() => navigation.navigate('Tickets')}>
           <Ionicons name="ticket-outline" size={22} color={colors.primary} />
           <AppText variant="bodyMedium" style={styles.miniCardTitle}>Tickets</AppText>
         </TouchableOpacity>

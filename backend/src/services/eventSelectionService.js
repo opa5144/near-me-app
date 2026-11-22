@@ -6,6 +6,7 @@ const { withActiveAccountWrite } = require('./activeAccountWrite');
 const { ServiceError } = require('./serviceError');
 const { loadPhotoMetadata } = require('./photoCollectionService');
 const { recordSelectionChange } = require('./notifications/triggerService');
+const { issueTicketForSelection, revokeSelectionTickets } = require('./ticketService');
 
 function requireId(value, label) {
   if (typeof value !== 'string' || !/^[a-f0-9]{24}$/i.test(value) || !mongoose.isObjectIdOrHexString(value)) {
@@ -19,12 +20,16 @@ function selectionItem(selection) {
   return {
     eventId: String(selection.eventId._id ?? selection.eventId),
     interested: Boolean(selection.interested), attending: Boolean(selection.attending),
+    attended: Boolean(selection.attended), checkedInAt: selection.checkedInAt || null,
+    checkedInBy: selection.checkedInBy ? String(selection.checkedInBy) : null,
   };
 }
 
 function bookingItem(selection, baseUrl, photos = []) {
   // History uses current event details, rather than claiming to store a purchase snapshot.
-  return { id: String(selection._id), ...selectionItem(selection), event: toEventItem(selection.eventId, baseUrl, photos) };
+  const attended = selection.attending && (!selection.eventId.useTickets || selection.attended);
+  const attendanceStatus = attended ? 'attended' : selection.attending ? 'not_checked_in' : 'interested';
+  return { id: String(selection._id), ...selectionItem(selection), attendanceStatus, event: toEventItem(selection.eventId, baseUrl, photos) };
 }
 
 async function hydrateSelections(selections, session, pastOnly = false) {
@@ -95,6 +100,9 @@ async function writeEventSelection(userId, current, input, session, { now = new 
     throw new ServiceError(409, 'This event has ended. Past selections are read-only.');
   }
   const before = await EventSelection.findOne({ userId, eventId: current._id }).session(session).lean();
+  if (before?.attended && changes.attending === false) {
+    throw new ServiceError(409, 'You have already checked in and cannot unregister from this event.');
+  }
   const interested = changes.interested ?? Boolean(before?.interested);
   const attending = changes.attending ?? Boolean(before?.attending);
   const registrationChanged = attending !== Boolean(before?.attending);
@@ -104,7 +112,10 @@ async function writeEventSelection(userId, current, input, session, { now = new 
     throw new ServiceError(409, 'Registration for this event has closed.');
   }
   // Repeating the same request neither changes its generation nor emits a fact.
-  if (!registrationChanged && !interestChanged) return before || { eventId: current._id, userId, interested, attending };
+  if (!registrationChanged && !interestChanged) {
+    if (before?.attending && current.useTickets) await issueTicketForSelection(current, before, session, { now: occurredAt });
+    return before || { eventId: current._id, userId, interested, attending };
+  }
   const registrationVersion = generation(before?.registrationVersion) + (registrationChanged ? 1 : 0);
   const selectionVersion = generation(before?.selectionVersion) + (interestChanged ? 1 : 0);
   const after = await EventSelection.findOneAndUpdate({ userId, eventId: current._id }, {
@@ -115,6 +126,8 @@ async function writeEventSelection(userId, current, input, session, { now = new 
       savedAt: interestChanged ? (interested ? occurredAt : null) : before?.savedAt || null,
     }, $setOnInsert: { userId, eventId: current._id },
   }, { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true, session }).lean();
+  if (attending && current.useTickets) await issueTicketForSelection(current, after, session, { now: occurredAt });
+  else if (registrationChanged) await revokeSelectionTickets(after, session, occurredAt);
   await recordSelectionChange({ before, after, event: current, occurredAt }, session);
   return after;
 }

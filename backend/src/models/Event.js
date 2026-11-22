@@ -19,6 +19,8 @@ const eventSchema = new mongoose.Schema({
   // Recognize older documents during the migration. New API writes use categories.
   category: { type: String, enum: EVENT_CATEGORIES },
   price: { type: Number, required: requiredPublished, min: 0, default: 0 },
+  // Old events remain ordinary registration events unless a host opts into tickets.
+  useTickets: { type: Boolean, default: false, required: true },
   startsAt: { type: Date, required: requiredPublished, default: null },
   endsAt: { type: Date, required: requiredPublished, default: null },
   // Missing status on older records means published. Cancellation retains history.

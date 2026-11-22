@@ -4,12 +4,14 @@ const { optionalAuth } = require('../middleware/optionalAuth');
 const controller = require('../controllers/eventController');
 const ratings = require('../controllers/eventRatingController');
 const invites = require('../controllers/eventInviteController');
+const tickets = require('../controllers/ticketController');
 
 const router = express.Router();
 
 router.get('/', optionalAuth, controller.listEvents);
 // Register these before /:id so "mine" and "invites" are never treated as event IDs.
 router.get('/mine', requireAuth, controller.listHostedEvents);
+router.get('/tickets/me', requireAuth, tickets.listTickets);
 router.get('/invites/me', requireAuth, invites.getMyEventInvites);
 router.get('/invites/:inviteId', requireAuth, invites.getEventInvite);
 router.patch('/invites/:inviteId', requireAuth, invites.updateEventInvite);
@@ -29,5 +31,7 @@ router.patch('/:id/draft', requireAuth, controller.updateDraft);
 router.post('/:id/publish', requireAuth, controller.publishDraft);
 router.post('/:id/archive', requireAuth, controller.archiveEvent);
 router.post('/:id/reschedule', requireAuth, controller.rescheduleEvent);
+router.post('/:id/ticket', requireAuth, tickets.getTicket);
+router.post('/:id/check-in', requireAuth, tickets.checkIn);
 
 module.exports = router;

@@ -8,6 +8,7 @@ export type { EventItem };
 // Creation sends canonical values, not the formatted strings shown in event cards.
 // hostId is deliberately absent: the backend derives it from the Bearer session.
 export interface CreateEventRequest {
+  useTickets?: boolean;
   title: string;
   categories: string[];
   description: string;
@@ -29,9 +30,9 @@ export type UpdateEventRequest = Partial<CreateEventRequest>;
 
 type ApiEventItem = Omit<EventItem, 'categories'> & { categories?: unknown; category?: unknown };
 
-function normalizeEvent(event: ApiEventItem): EventItem {
+export function normalizeEvent(event: ApiEventItem): EventItem {
   const { category, ...fields } = event;
-  return { ...fields, categories: normalizeEventCategories(event.categories, category), date: event.startsAt ? formatEventDate(event.startsAt, event.timeZone) : '' };
+  return { ...fields, useTickets: event.useTickets === true, categories: normalizeEventCategories(event.categories, category), date: event.startsAt ? formatEventDate(event.startsAt, event.timeZone) : '' };
 }
 
 // Home/Search share this public list; the backend formats each EventItem response.
@@ -112,12 +113,25 @@ export interface EventSelection {
   eventId: string;
   interested: boolean;
   attending: boolean;
+  attended: boolean;
+  checkedInAt: string | null;
+  checkedInBy: string | null;
 }
 
 export interface BookingHistoryItem extends EventSelection {
   id: string; // The selection record ID, used by the private history detail route.
   event: EventItem;
+  attendanceStatus?: 'attended' | 'not_checked_in' | 'interested';
 }
+
+// Ticketed events require the host's check-in; ordinary events retain the
+// existing registration-based history rule. Legacy records are never verified.
+export function bookingAttendanceStatus(booking: BookingHistoryItem): 'attended' | 'not_checked_in' | 'interested' {
+  if (booking.attendanceStatus) return booking.attendanceStatus;
+  if (booking.attending) return !booking.event.useTickets || booking.attended ? 'attended' : 'not_checked_in';
+  return 'interested';
+}
+export const hasAttendedBooking = (booking: BookingHistoryItem) => bookingAttendanceStatus(booking) === 'attended';
 type ApiBookingHistoryItem = Omit<BookingHistoryItem, 'event'> & { event: ApiEventItem };
 
 export async function fetchEventSelections(signal?: AbortSignal): Promise<EventSelection[]> {

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, RefreshControl, ScrollView, Share, StyleSheet, View } from 'react-native';
+import { Alert, AppState, Pressable, RefreshControl, ScrollView, Share, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { usePreventRemove } from '@react-navigation/native';
 import { EventItem } from '../../data/events';
@@ -15,6 +15,8 @@ import { addEventToCalendar } from '../../utils/eventCalendar';
 import { estimatedRevenueCents, formatCurrency, formatEventPrice } from '../../utils/eventPrice';
 import { archiveEvent, cancelEvent, eventPhotoHeaders } from '../../api/events';
 import { hostRequestError } from './hostFormUtils';
+import { CheckInOverlay } from '../../components/CheckInOverlay';
+import type { CheckInResponse } from '../../api/tickets';
 
 // Host details screen modeled after EventDetailsScreen, adding analytics and host management actions.
 export function EventHostDetailsScreen({ event, onEditEvent, onRescheduleEvent, onChanged, onBack, onRefresh, refreshing, refreshError, ratingRefreshKey }: {
@@ -37,7 +39,11 @@ export function EventHostDetailsScreen({ event, onEditEvent, onRescheduleEvent, 
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [changing, setChanging] = useState(false);
-  usePreventRemove(changing, () => {});
+  const [showCheckIn, setShowCheckIn] = useState(false);
+  const [checkInBusy, setCheckInBusy] = useState(false);
+  const [checkedInCount, setCheckedInCount] = useState(event.checkedInCount ?? 0);
+  const [scanNow, setScanNow] = useState(Date.now());
+  usePreventRemove(changing || checkInBusy, () => {});
   const changingRef = useRef(false);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -46,25 +52,42 @@ export function EventHostDetailsScreen({ event, onEditEvent, onRescheduleEvent, 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     function update() {
-      const remaining = Date.parse(event.endsAt) - Date.now();
-      const untilClosing = Date.parse(event.registrationClosesAt || event.endsAt) - Date.now();
+      if (timer) clearTimeout(timer);
+      const now = Date.now();
+      const remaining = Date.parse(event.endsAt) - now;
+      const untilClosing = Date.parse(event.registrationClosesAt || event.endsAt) - now;
+      const untilCheckIn = Date.parse(event.startsAt) - 60 * 60 * 1000 - now;
+      setScanNow(now);
       setHasEnded(Number.isFinite(remaining) && remaining <= 0);
       setRegistrationClosed(!Number.isFinite(untilClosing) || untilClosing <= 0);
-      if (remaining > 0) timer = setTimeout(update, Math.min(remaining, untilClosing > 0 ? untilClosing : 60000, 60000));
+      if (remaining > 0) timer = setTimeout(update, Math.min(remaining, untilClosing > 0 ? untilClosing : 60000, untilCheckIn > 0 ? untilCheckIn : 60000, 60000));
     }
     update();
-    return () => { if (timer) clearTimeout(timer); };
+    const listener = AppState.addEventListener('change', state => { if (state === 'active') update(); });
+    return () => { if (timer) clearTimeout(timer); listener.remove(); };
   }, [event.endsAt, event.startsAt, event.registrationClosesAt]);
   const cancelled = event.status === 'cancelled';
   const archived = event.status === 'archived';
   const isDraft = event.status === 'draft';
   const readOnly = cancelled || archived || hasEnded || event.storage === 'past';
+  const useTickets = event.useTickets === true;
+  const checkInOpensAt = Date.parse(event.startsAt) - 60 * 60 * 1000;
+  const canCheckIn = useTickets && !readOnly && !isDraft && Number.isFinite(checkInOpensAt) && scanNow >= checkInOpensAt && Date.parse(event.endsAt) > scanNow;
+  const checkInMessage = readOnly || isDraft || !Number.isFinite(checkInOpensAt) ? 'Check-in is closed for this event.'
+    : scanNow < checkInOpensAt ? `Check-in opens ${new Date(checkInOpensAt).toLocaleString('en-US', { timeZone: event.timeZone, month: '2-digit', day: '2-digit', year: 'numeric', hour: 'numeric', minute: '2-digit' })}.`
+    : 'Check-in is open until the event ends.';
   const invitationsDisabled = readOnly || isDraft || registrationClosed || !Number.isFinite(Date.parse(event.endsAt));
   useEffect(() => { if (invitationsDisabled) setShowInviteModal(false); }, [invitationsDisabled]);
   // These are saved choices across active accounts, not the host's personal flags.
   const interestedCount = event.interestedCount ?? 0;
   const attendingCount = event.attendingCount ?? 0;
   const revenueCents = cancelled || archived || isDraft ? 0 : estimatedRevenueCents(event, attendingCount);
+  useEffect(() => { setCheckedInCount(event.checkedInCount ?? 0); }, [event.id, event.checkedInCount]);
+  useEffect(() => { setShowCheckIn(false); }, [event.id]);
+  const handleCheckedIn = (result: CheckInResponse) => {
+    setCheckedInCount(result.checkedInCount);
+    onRefresh();
+  };
 
   const changeLifecycle = async (action: 'archive' | 'cancel') => {
     if (changingRef.current || readOnly || isDraft) return;
@@ -134,6 +157,13 @@ export function EventHostDetailsScreen({ event, onEditEvent, onRescheduleEvent, 
           <Pressable onPress={handleShare} style={[styles.shareButton, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Ionicons name="share-social-outline" size={16} color={colors.primary} />
           </Pressable>
+          {useTickets && <Pressable onPress={() => setShowCheckIn(true)} disabled={changing || refreshing || readOnly || checkInBusy}
+            accessibilityRole="button" accessibilityLabel="Scan QR or enter an attendee ticket code"
+            accessibilityState={{ disabled: changing || refreshing || readOnly || checkInBusy }}
+            style={[styles.invitePillButton, { backgroundColor: colors.surface, borderColor: colors.primary }, (changing || refreshing || readOnly) && styles.disabled]}>
+            <Ionicons name="qr-code-outline" size={14} color={colors.primary} />
+            <AppText style={[styles.invitePillText, { color: colors.primary }]}>Scan QR</AppText>
+          </Pressable>}
         </View>}
       </View>
       {refreshError && <View style={{ marginBottom: 12 }}>
@@ -141,6 +171,11 @@ export function EventHostDetailsScreen({ event, onEditEvent, onRescheduleEvent, 
         <Pressable accessibilityRole="button" onPress={onRefresh} style={{ paddingVertical: 8 }}>
           <AppText style={{ color: colors.primary }}>Retry</AppText>
         </Pressable>
+      </View>}
+
+      {useTickets && !isDraft && <View style={styles.checkInSummary}>
+        <AppText style={{ color: colors.primary, fontSize: 12, fontWeight: '800' }}>{checkedInCount} checked in · {attendingCount} registered</AppText>
+        <AppText style={{ color: colors.muted, fontSize: 11 }}>{checkInMessage}</AppText>
       </View>}
 
       <PhotoCollection photos={event.photos ?? []} fallbackUri={event.bannerImage} title={event.title}
@@ -242,14 +277,17 @@ export function EventHostDetailsScreen({ event, onEditEvent, onRescheduleEvent, 
         eventTitle={event.title}
         onClose={() => setShowInviteModal(false)}
       />
+      <CheckInOverlay visible={showCheckIn} eventId={event.id} eventTitle={event.title} canCheckIn={canCheckIn}
+        unavailableMessage={checkInMessage} onClose={() => setShowCheckIn(false)} onCheckedIn={handleCheckedIn}
+        onBusyChange={setCheckInBusy} />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 20, flexGrow: 1 },
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  topBarActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
+  topBarActions: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, maxWidth: '100%' },
   back: { fontWeight: '800', fontSize: 13 },
   invitePillButton: { height: 34, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 5 },
   invitePillText: { fontSize: 12, fontWeight: '800' },
@@ -275,4 +313,6 @@ const styles = StyleSheet.create({
   description: { fontSize: 12, lineHeight: 19, marginBottom: 12 },
   mapButton: { flexDirection: 'row', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   mapButtonText: { fontSize: 11, fontWeight: '800' },
+  checkInSummary: { gap: 3, marginBottom: 8 },
+  disabled: { opacity: 0.45 },
 });

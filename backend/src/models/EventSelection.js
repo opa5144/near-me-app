@@ -6,6 +6,11 @@ const eventSelectionSchema = new mongoose.Schema({
   eventId: { type: mongoose.Schema.Types.ObjectId, ref: 'Event', required: true },
   interested: { type: Boolean, default: false, required: true },
   attending: { type: Boolean, default: false, required: true },
+  // Registration and verified arrival are separate facts. Only the host check-in
+  // service can set attended; normal selection payloads cannot supply these fields.
+  attended: { type: Boolean, default: false, required: true },
+  checkedInAt: { type: Date, default: null },
+  checkedInBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   // Each transition has a generation, so cancel/re-register can notify again
   // while retries of the same saved choice cannot create duplicate notifications.
   registrationVersion: { type: Number, default: 0, min: 0, validate: Number.isSafeInteger },

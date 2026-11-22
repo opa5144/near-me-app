@@ -40,6 +40,7 @@ function eventSnapshot(event) {
     status: event.status || 'published',
     cancelledAt: event.cancelledAt ? iso(event.cancelledAt) : null,
     cancellationReason: event.cancellationReason || '',
+    useTickets: Boolean(event.useTickets),
   };
 }
 
@@ -70,7 +71,8 @@ async function scheduleSelectionNotifications(event, selection, session, { now =
   };
   const schedules = [];
   if (selection.attending) {
-    schedules.push(['EVENT_STARTS_24H', start - 24 * HOUR], ['EVENT_STARTS_1H', start - HOUR], ['RATE_ATTENDED_EVENT', end + HOUR]);
+    schedules.push(['EVENT_STARTS_24H', start - 24 * HOUR], ['EVENT_STARTS_1H', start - HOUR]);
+    if (!event.useTickets || selection.attended) schedules.push(['RATE_ATTENDED_EVENT', end + HOUR]);
   } else if (selection.interested) schedules.push(['SAVED_EVENT_REGISTRATION_CLOSING', closing - 24 * HOUR]);
   let count = 0;
   for (const [type, due] of schedules) {

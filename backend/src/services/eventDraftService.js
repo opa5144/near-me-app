@@ -7,6 +7,8 @@ const { ServiceError } = require('./serviceError');
 const { replaceResourcePhotos, loadPhotoMetadata, copyResourcePhotos } = require('./photoCollectionService');
 const { loadEventAudienceCounts } = require('./eventAudienceService');
 const { recordEventCreated, recordEventCancelled } = require('./notifications/triggerService');
+const { loadTicketModeLocks, updateEventTickets } = require('./ticketService');
+const { requireTicketConfiguration } = require('./ticketCredentials');
 
 function requireId(id) {
   if (typeof id !== 'string' || !/^[a-f0-9]{24}$/i.test(id)) throw new ServiceError(400, 'Invalid event ID.');
@@ -21,13 +23,14 @@ async function response(event, baseUrl, session) {
   await Event.populate(event, { path: 'hostId', select: 'firstName lastName username', options: { session } });
   const photos = await loadPhotoMetadata('event', [event._id], session);
   const counts = await loadEventAudienceCounts([event._id], session);
-  return toEventItem(event, baseUrl, photos.get(String(event._id)) || [], counts.get(String(event._id)) || { interestedCount: 0, attendingCount: 0 });
+  const locked = await loadTicketModeLocks([event._id], session);
+  return toEventItem({ ...event, ticketsModeLocked: locked.has(String(event._id)) }, baseUrl, photos.get(String(event._id)) || [], counts.get(String(event._id)) || { interestedCount: 0, attendingCount: 0, checkedInCount: 0 });
 }
 
 async function validation(write) {
   try { return await write(); }
   catch (error) {
-    if (error instanceof EventInputError) throw new ServiceError(error.status, error.message);
+    if (error instanceof EventInputError) throw new ServiceError(error.status, error.message, { errors: error.errors });
     if (error.name === 'ValidationError') throw new ServiceError(400, 'Please check your event details.');
     throw error;
   }
@@ -65,6 +68,7 @@ async function publishDraft(auth, id, body, baseUrl) {
     owner(before, auth);
     if (before.status !== 'draft') throw new ServiceError(409, 'Only a draft can be published.');
     const fields = parseCreateEvent(body, { existingEvent: before });
+    if (fields.useTickets) requireTicketConfiguration();
     const now = new Date();
     const event = await relocateEvent(before, 'current', session, {
       ...fields, status: 'published', archivedAt: null, archiveReason: '', updatedAt: now,
@@ -95,6 +99,7 @@ async function archivePublishedEvent(auth, id, body, baseUrl, status = 'archived
       ...(ongoingOrUpcoming ? { cancelledAt: now, cancellationReason: input.reason?.trim() || '' } : {}),
       notificationVersion: (Number.isSafeInteger(before.notificationVersion) ? before.notificationVersion : 0) + 1,
     });
+    await updateEventTickets(after, session);
     if (ongoingOrUpcoming) await recordEventCancelled({ before, after, occurredAt: now }, session);
     return response(after, baseUrl, session);
   });
@@ -112,6 +117,7 @@ async function rescheduleEvent(auth, id, body, baseUrl) {
       throw new ServiceError(409, 'Only a completed event can be rescheduled as a new event.');
     }
     const fields = parseCreateEvent(body);
+    if (fields.useTickets) requireTicketConfiguration();
     const [created] = await Event.create([{ ...fields, hostId: auth.userId, sourceEventId: source._id }], { session });
     const event = { ...created.toObject(), storage: 'current' };
     await copyResourcePhotos('event', source._id, event._id, session,

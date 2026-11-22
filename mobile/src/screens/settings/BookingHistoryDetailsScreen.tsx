@@ -5,7 +5,7 @@ import { isAxiosError } from 'axios';
 import { AppButton } from '../../components/AppButton';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { PhotoCollection } from '../../components/PhotoCollection';
-import { fetchBookingHistoryDetails } from '../../api/events';
+import { bookingAttendanceStatus, fetchBookingHistoryDetails, hasAttendedBooking } from '../../api/events';
 import type { BookingHistoryItem } from '../../api/events';
 import { useTheme } from '../../context/ThemeContext';
 import { formatEventDate } from '../../utils/dateFormat';
@@ -103,8 +103,10 @@ export function BookingHistoryDetailsScreen({ navigation, route }: BookingHistor
         {typeof event.latitude === 'number' && typeof event.longitude === 'number' &&
           <DetailRow label="Coordinates" value={event.latitude.toFixed(5) + ', ' + event.longitude.toFixed(5)} />}
         {host?.username && <DetailRow label="Host" value={'@' + host.username + (hostName ? ' (' + hostName + ')' : '')} />}
-        <DetailRow label="History section" value={booking.attending ? 'Attended' : 'Interested'} />
-        {booking.attending && event.status !== 'cancelled' && <EventRatingForm eventId={event.id} />}
+        <DetailRow label="History section" value={bookingAttendanceStatus(booking) === 'attended' ? 'Attended' : bookingAttendanceStatus(booking) === 'not_checked_in' ? 'Not checked in' : 'Interested'} />
+        {event.useTickets && <DetailRow label="Check-in" value={booking.attended ? 'Verified by the host' : 'Not checked in'} />}
+        {booking.checkedInAt && <DetailRow label="Checked in at" value={savedTimestamp(booking.checkedInAt, event.timeZone)} />}
+        {hasAttendedBooking(booking) && event.status !== 'cancelled' && event.status !== 'archived' && event.status !== 'draft' && <EventRatingForm eventId={event.id} />}
         <Text style={[styles.section, { color: colors.text }]}>About this event</Text>
         <Text style={[styles.description, { color: colors.muted }]}>{event.description}</Text>
         <PhotoCollection photos={event.photos ?? []} fallbackUri={event.bannerImage} title={event.title}

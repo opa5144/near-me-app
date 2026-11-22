@@ -3,10 +3,11 @@ const { EVENT_CATEGORIES } = require('../constants/eventCategories');
 
 // Validation failures carry a safe message and HTTP status for the event route.
 class EventInputError extends Error {
-  constructor(message, status = 400) {
+  constructor(message, status = 400, errors) {
     super(message);
     this.name = 'EventInputError';
     this.status = status;
+    if (errors) this.errors = errors;
   }
 }
 
@@ -76,6 +77,10 @@ function parseCreateEvent(body, { existingEvent } = {}) {
   const address = requiredText(body.address, 'Address', 500);
   const place = requiredText(body.place, 'Place', 300);
   const categories = parseEventCategories(body);
+  if (body.useTickets !== undefined && typeof body.useTickets !== 'boolean') {
+    throw new EventInputError('Choose whether this event uses tickets.', 400, { useTickets: 'Choose on or off.' });
+  }
+  const useTickets = body.useTickets ?? Boolean(existingEvent?.useTickets);
 
   // Accept zero for free events and reject amounts with fractions smaller than one cent.
   if (typeof body.price !== 'number' || !Number.isFinite(body.price) || body.price < 0 ||
@@ -134,7 +139,7 @@ function parseCreateEvent(body, { existingEvent } = {}) {
 
   // Ownership and seed keys are deliberately omitted; the route assigns the authenticated host.
   return {
-    title, description, address, place, categories,
+    title, description, address, place, categories, useTickets,
     price: Number(body.price.toFixed(2)), startsAt, endsAt, registrationClosesAt, timeZone: body.timeZone,
     placeId: typeof body.placeId === 'string' ? body.placeId.slice(0, 500) : null,
     latitude: hasLatitude ? body.latitude : null,
@@ -147,6 +152,10 @@ function parseCreateEvent(body, { existingEvent } = {}) {
 function parseDraftEvent(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new EventInputError('Please submit an event object.');
   const result = {};
+  if (Object.prototype.hasOwnProperty.call(body, 'useTickets')) {
+    if (typeof body.useTickets !== 'boolean') throw new EventInputError('Choose whether this event uses tickets.', 400, { useTickets: 'Choose on or off.' });
+    result.useTickets = body.useTickets;
+  }
   for (const [field, maximum] of Object.entries({ title: 150, description: 10000, address: 500, place: 300 })) {
     if (!Object.prototype.hasOwnProperty.call(body, field)) continue;
     if (typeof body[field] !== 'string' || body[field].trim().length > maximum) throw new EventInputError(field + ' must be at most ' + maximum + ' characters.');
@@ -222,7 +231,7 @@ function toEventItem(event, apiBaseUrl, photoDocuments = [], audience) {
     // adopts the complete array. This compatibility value is never stored anew.
     ...(categories[0] ? { category: categories[0] } : {}),
     // Optional for history serializers; event list/detail responses supply live totals.
-    ...(audience ? { interestedCount: audience.interestedCount, attendingCount: audience.attendingCount } : {}),
+    ...(audience ? { interestedCount: audience.interestedCount, attendingCount: audience.attendingCount, checkedInCount: audience.checkedInCount || 0 } : {}),
     date: hasSchedule ? dateFormat.format(start) : '',
     time: hasSchedule ? timeFormat.format(start) + ' – ' + timeFormat.format(end) +
       (crossesDay ? ' (ends ' + dateFormat.format(end) + ')' : '') : '',
@@ -237,6 +246,8 @@ function toEventItem(event, apiBaseUrl, photoDocuments = [], audience) {
     photos,
     ...(photos[0] ? { bannerImage: photos[0].url } : {}),
     priceAmount,
+    useTickets: Boolean(event.useTickets),
+    ticketsModeLocked: Boolean(event.ticketsModeLocked),
     startsAt: Number.isFinite(start.getTime()) ? start.toISOString() : '',
     endsAt: Number.isFinite(end.getTime()) ? end.toISOString() : '',
     status: event.status || 'published',

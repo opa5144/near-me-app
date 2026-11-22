@@ -45,7 +45,7 @@ Reading the inbox does not pass through delivery adapters. A background reminder
 | `RATE_ATTENDED_EVENT` | 1 hour after end; eligible attending users who have not rated yet. New records open the rating form with a `RATE_EVENT` action. |
 | `EVENT_INVITE` | An accepted friend sends an invitation to an open event; the recipient. Pending/read state, current friendship/block status, active accounts, and event registration cutoff are checked before materialization. |
 
-Attending is the existing registration flag; interested is the existing saved flag. A follow is a directed organizer subscription, separate from friendship. Following now does not backfill previous event announcements.
+Attending is the existing registration flag; interested is the existing saved flag. Ticketed events additionally require host-verified attendance before a rating prompt can be scheduled; non-ticketed events keep registration-based eligibility. First check-in schedules the prompt in the same transaction as attendance. See [QR tickets and attendance](qr-tickets-and-attendance.md). A follow is a directed organizer subscription, separate from friendship. Following now does not backfill previous event announcements.
 
 Registration closes at `registrationClosesAt` if the host supplied an earlier deadline, otherwise at `endsAt`. Deadlines cannot exceed end time. Ongoing events remain open to new registrations until that cutoff. An existing registration can still be cancelled before the event ends. Past, archived, draft, and host-cancelled selections are read-only. See the [event lifecycle update](event-lifecycle-and-picker-overlays.md) for the three event collections and host actions.
 

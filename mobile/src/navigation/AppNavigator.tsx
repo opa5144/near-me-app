@@ -45,6 +45,7 @@ import { DisplayScreen } from '../screens/settings/DisplayScreen';
 import { AboutScreen } from '../screens/settings/AboutScreen';
 import { NotificationInboxScreen } from '../screens/settings/NotificationInboxScreen';
 import { RateEventScreen } from '../screens/event/RateEventScreen';
+import { TicketsScreen } from '../screens/event/TicketsScreen';
 import { FriendRequestScreen } from '../screens/settings/FriendRequestScreen';
 
 export type RootStackParamList = {
@@ -57,6 +58,7 @@ export type RootStackParamList = {
   NotificationInbox: undefined;
   RateEvent: { eventId: string };
   FriendRequest: { requestId: string };
+  Tickets: undefined;
 };
 
 const Tab = createBottomTabNavigator();
@@ -286,7 +288,7 @@ function TabNavigator() {
 
 function EventDetailsRoute({ route, navigation }: NativeStackScreenProps<RootStackParamList, 'EventDetails'>) {
   const { colors } = useTheme();
-  const { interestedEventIds, attendingEventIds, toggleInterested, toggleAttending, recordView,
+  const { interestedEventIds, attendingEventIds, attendedEventIds, toggleInterested, toggleAttending, recordView,
     selectionsLoading, selectionsReady, selectionsSavingEventIds, selectionsError, refreshSelections } = useEvents();
   const eventId = route.params?.eventId;
   const [event, setEvent] = useState<EventItem | null>(null);
@@ -359,6 +361,7 @@ function EventDetailsRoute({ route, navigation }: NativeStackScreenProps<RootSta
         interested={interestedEventIds.includes(event.id)}
         onToggleInterested={() => toggleInterested(event.id)}
         attending={attendingEventIds.includes(event.id)}
+        attended={attendedEventIds.includes(event.id)}
         onToggleAttending={() => toggleAttending(event.id)}
         selectionsLoading={selectionsLoading}
         selectionsReady={selectionsReady}
@@ -511,6 +514,12 @@ function RootNavigator() {
       <RootStack.Screen name="NotificationInbox" component={NotificationInboxRoute} />
       <RootStack.Screen name="RateEvent" component={RateEventRoute} />
       <RootStack.Screen name="FriendRequest" component={FriendRequestRoute} />
+      <RootStack.Screen name="Tickets">
+        {props => <ScreenContainer style={{ paddingHorizontal: 0 }}>
+          <TicketsScreen onBack={() => props.navigation.canGoBack() ? props.navigation.goBack() : props.navigation.navigate('MainTabs')}
+            onOpenEvent={event => props.navigation.navigate('EventDetails', { eventId: event.id })} />
+        </ScreenContainer>}
+      </RootStack.Screen>
       <RootStack.Screen name="EditEvent">
         {props => {
           const route = props.route as { params?: { eventId: string } };

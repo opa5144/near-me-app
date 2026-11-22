@@ -7,7 +7,7 @@ const { EVENT_RATING_OPTIONS, EVENT_RATING_SCORES } = require('../constants/even
 const { withActiveAccountWrite } = require('./activeAccountWrite');
 const { ServiceError } = require('./serviceError');
 
-const EVENT_FIELDS = '_id hostId startsAt endsAt status';
+const EVENT_FIELDS = '_id hostId startsAt endsAt status useTickets';
 
 function requireEventId(id) {
   if (typeof id !== 'string' || !/^[a-f0-9]{24}$/i.test(id) || !mongoose.isObjectIdOrHexString(id)) {
@@ -22,6 +22,7 @@ function ratingEligibility(event, selection, userId, now = new Date()) {
   }
   if (['cancelled', 'archived', 'draft'].includes(event.status)) return { canRate: false, reason: 'This event is unavailable for rating.' };
   if (!selection?.attending) return { canRate: false, reason: 'You must be registered for this event to rate it.' };
+  if (event.useTickets && !selection.attended) return { canRate: false, reason: 'Your ticket must be checked in by the host before you can rate this event.' };
   const start = event.startsAt instanceof Date ? event.startsAt.getTime() : NaN;
   const end = event.endsAt instanceof Date ? event.endsAt.getTime() : NaN;
   if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) {
@@ -55,7 +56,7 @@ async function readEvent(auth, eventId) {
 
 async function getRating(auth, eventId) {
   const event = await readEvent(auth, eventId);
-  const selection = await EventSelection.findOne({ userId: auth.userId, eventId: event._id }).select('attending').lean();
+  const selection = await EventSelection.findOne({ userId: auth.userId, eventId: event._id }).select('attending attended checkedInAt checkedInBy').lean();
   const rating = await EventRating.findOne({ userId: auth.userId, eventId: event._id }).lean();
   // Return an existing rating even after rescheduling/cancellation, while the
   // current eligibility flag controls whether the user can edit it now.
@@ -82,7 +83,7 @@ async function putRating(auth, eventId, body) {
       const event = await findEventById(eventId, { session, select: EVENT_FIELDS });
       if (!event) throw new ServiceError(404, 'Event not found.');
       const selection = await EventSelection.findOne({ userId: auth.userId, eventId: event._id })
-        .select('attending').session(session).lean();
+        .select('attending attended checkedInAt checkedInBy').session(session).lean();
       const eligibility = ratingEligibility(event, selection, auth.userId);
       if (!eligibility.canRate) {
         const forbidden = String(event.hostId) === String(auth.userId) || !selection?.attending;
@@ -118,6 +119,13 @@ async function getRatingSummary(auth, eventId) {
       pipeline: [{ $match: { deletedAt: null } }, { $project: { _id: 1 } }], as: 'activeAccount',
     } },
     { $match: { 'activeAccount.0': { $exists: true } } },
+    // Existing votes remain stored. Ticketed-event totals only include verified
+    // registrations, while ordinary events retain their existing rating rule.
+    ...(event.useTickets ? [
+      { $lookup: { from: EventSelection.collection.name, localField: 'userId', foreignField: 'userId',
+        pipeline: [{ $match: { eventId: event._id, attending: true, attended: true } }, { $project: { _id: 1 } }], as: 'verifiedAttendance' } },
+      { $match: { 'verifiedAttendance.0': { $exists: true } } },
+    ] : []),
     { $group: { _id: '$score', count: { $sum: 1 } } },
   ]);
   const byScore = new Map(totals.map(row => [row._id, row.count]));

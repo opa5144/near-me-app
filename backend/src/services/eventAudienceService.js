@@ -17,6 +17,7 @@ async function loadEventAudienceCounts(eventIds, session) {
       _id: { eventId: '$eventId', userId: '$userId' },
       interested: { $max: { $cond: [{ $eq: ['$interested', true] }, 1, 0] } },
       attending: { $max: { $cond: [{ $eq: ['$attending', true] }, 1, 0] } },
+      checkedIn: { $max: { $cond: [{ $and: [{ $eq: ['$attending', true] }, { $eq: ['$attended', true] }] }, 1, 0] } },
     } },
     { $lookup: {
       from: User.collection.name,
@@ -29,6 +30,7 @@ async function loadEventAudienceCounts(eventIds, session) {
       _id: '$_id.eventId',
       interestedCount: { $sum: '$interested' },
       attendingCount: { $sum: '$attending' },
+      checkedInCount: { $sum: '$checkedIn' },
     } },
   ]);
   if (session) query.session(session);
@@ -36,6 +38,7 @@ async function loadEventAudienceCounts(eventIds, session) {
     counts.set(String(total._id), {
       interestedCount: total.interestedCount,
       attendingCount: total.attendingCount,
+      checkedInCount: total.checkedInCount,
     });
   }
   return counts;

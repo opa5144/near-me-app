@@ -20,6 +20,7 @@ const organizerFollowRoutes = require('./routes/organizerFollows');
 const { initializeNotificationModels, startNotificationWorker } = require('./workers/notificationWorker');
 const { initializeEventLifecycleModels } = require('./services/eventLifecycleService');
 const { startEventLifecycleWorker } = require('./workers/eventLifecycleWorker');
+const { initializeTicketModels } = require('./services/ticketService');
 
 const app = express();
 app.use(cors());
@@ -64,6 +65,7 @@ async function startServer() {
   try {
     await mongoose.connect(process.env.MONGO_URI);
     await initializeEventLifecycleModels();
+    await initializeTicketModels();
     await initializeNotificationModels();
     console.log('MongoDB Connected');
     worker = startNotificationWorker();
