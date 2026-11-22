@@ -1,3 +1,4 @@
+
 import { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { EventItem } from '../../data/events';
@@ -5,15 +6,18 @@ import { ScreenHeader } from '../../components/ScreenHeader';
 import { useTheme } from '../../context/ThemeContext';
 import { NotificationBell } from '../../components/NotificationBell';
 import { EventCard } from '../../components/EventCard';
+import { MostPopularEventCard } from '../../components/MostPopularEventCard';
 
 export function HomeScreen({
   events,
   interestedEvents,
   onOpenEvent,
   onSeeAll,
+  hostedEvents,
   onOpenNotifications
 }: {
   events: EventItem[];
+  hostedEvents: EventItem[];
   interestedEvents: EventItem[];
   onOpenEvent: (event: EventItem) => void;
   onSeeAll: () => void;
@@ -32,6 +36,40 @@ export function HomeScreen({
       })
       .sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt))[0];
   }, [interestedEvents]);
+
+  const mostPopularEvent = useMemo(() => {
+    const eligibleEvents = (hostedEvents ?? []).filter(event =>
+      event.status !== 'draft' &&
+      event.status !== 'cancelled' &&
+      event.status !== 'archived'
+    );
+
+    const mostAttended = [...eligibleEvents].sort(
+      (a, b) => (b.attendingCount ?? 0) - (a.attendingCount ?? 0)
+    )[0];
+
+    if (mostAttended && (mostAttended.attendingCount ?? 0) > 0) {
+      return {
+        event: mostAttended,
+        metricLabel: 'Going',
+        metricValue: mostAttended.attendingCount ?? 0
+      };
+    }
+
+    const mostInterested = [...eligibleEvents].sort(
+      (a, b) => (b.interestedCount ?? 0) - (a.interestedCount ?? 0)
+    )[0];
+
+    if (mostInterested && (mostInterested.interestedCount ?? 0) > 0) {
+      return {
+        event: mostInterested,
+        metricLabel: 'Interested',
+        metricValue: mostInterested.interestedCount ?? 0
+      };
+    }
+
+    return null;
+  }, [hostedEvents]);
 
   const topPicks = events.slice(0, 4);
   const featuredWidth = Math.min(320, Math.max(220, width - 48));
@@ -107,6 +145,15 @@ export function HomeScreen({
         <Text style={{ color: colors.muted }}>
           No events available right now.
         </Text>
+      )}
+
+      {mostPopularEvent && (
+        <MostPopularEventCard
+          event={mostPopularEvent.event}
+          metricLabel={mostPopularEvent.metricLabel}
+          metricValue={mostPopularEvent.metricValue}
+          onPress={() => onOpenEvent(mostPopularEvent.event)}
+        />
       )}
     </ScrollView>
   );
