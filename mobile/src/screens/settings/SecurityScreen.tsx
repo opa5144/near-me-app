@@ -279,7 +279,7 @@ export function SecurityScreen({ navigation }: any) {
   return (
     <>
       <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]} keyboardShouldPersistTaps="handled">
-        <AppButton title="Back to Settings" variant="quiet" alignment="left" minHeight={44} onPress={() => { if (!busyRef.current && !recoveryRef.current.length) navigation.goBack(); }} disabled={isBusy || recoveryCodes.length > 0} style={styles.backButton} textStyle={styles.backText} />
+        <AppButton title="‹ Back to Settings" variant="quiet" alignment="left" minHeight={44} onPress={() => { if (!busyRef.current && !recoveryRef.current.length) navigation.goBack(); }} disabled={isBusy || recoveryCodes.length > 0} style={styles.backButton} textStyle={styles.backText} />
         <ScreenHeader title="Security & Login" subtitle="Manage your password, two-factor authentication, and account." />
         {cooldownSeconds > 0 && <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.feedback, { color: errorColor }]}>Security verification is temporarily locked. Try again in {clockText(cooldownSeconds)}.</Text>}
         {isLoading ? (

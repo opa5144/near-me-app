@@ -182,7 +182,7 @@ export function NotificationsScreen({ navigation }: any) {
 
   return (
     <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]}>
-      <AppButton title="Back to Settings" variant="quiet" alignment="left" onPress={() => navigation.goBack()} disabled={isSaving} style={styles.backButton} />
+      <AppButton title="‹ Back to Settings" variant="quiet" alignment="left" onPress={() => navigation.goBack()} disabled={isSaving} style={styles.backButton} />
       <ScreenHeader title="Notification Settings" subtitle="Choose your channels and alerts." />
       {isLoading ? <View style={styles.status}><ActivityIndicator color={colors.primary} /><Text style={[styles.note, { color: colors.muted }]}>Loading notification preferences...</Text></View> : loadError ? (
         <View style={styles.status}><Text accessibilityRole="alert" style={[styles.note, { color: errorColor }]}>{loadError}</Text><AppButton title="Retry" onPress={() => setLoadAttempt(current => current + 1)} /></View>

@@ -125,6 +125,7 @@ export function validateSavedEventDraft(draft: EventDraft) {
 export interface StoreDraft {
   name: string; description: string; categories: string[]; venue: HostVenue | null;
   timeZone: string; hours: BusinessHoursData; photos: EditablePhoto[];
+  phone?: string; email?: string; website?: string;
 }
 
 export function validateStoreDraft(draft: StoreDraft): HostFieldErrors {
@@ -134,6 +135,21 @@ export function validateStoreDraft(draft: StoreDraft): HostFieldErrors {
     location: locationError(draft.venue), timeZone: timeZoneError(draft.timeZone), photos: photoError(draft.photos),
   };
   if (!validCategories(draft.categories, storeCategories)) errors.categories = 'Choose at least one vendor category.';
+  // Contact details stay optional and follow the backend's limits and formats.
+  // Callers display only the exited field's error, or all errors on publish.
+  for (const [field, maximum] of [['phone', 30], ['email', 254], ['website', 500]] as const) {
+    if ((draft[field]?.trim().length ?? 0) > maximum) errors[field] = `Use ${maximum} characters or fewer.`;
+  }
+  const email = draft.email?.trim() ?? '';
+  if (email && !errors.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = 'Enter a valid email address.';
+  const website = draft.website?.trim() ?? '';
+  if (website && !errors.website) {
+    try {
+      if (!['http:', 'https:'].includes(new URL(website).protocol)) errors.website = 'Website must use HTTP or HTTPS.';
+    } catch {
+      errors.website = 'Enter a valid website URL, including https://.';
+    }
+  }
   for (const day of businessDays) {
     const hours = draft.hours[day];
     if (!hours || typeof hours.open !== 'boolean') errors[`hours.${day}`] = 'Choose open or closed for this day.';
@@ -182,7 +198,7 @@ export function hostRequestError(reason: unknown, fallback: string): { errors: H
   const data = reason.response.data;
   const message = typeof data?.message === 'string' ? data.message : fallback;
   if (reason.response.status !== 400 && reason.response.status !== 422) return { errors, message };
-  const knownFields = new Set(['title', 'name', 'description', 'category', 'categories', 'location', 'date', 'startTime', 'endTime', 'price', 'timeZone', 'photos', 'businessHours']);
+  const knownFields = new Set(['title', 'name', 'description', 'category', 'categories', 'location', 'date', 'startTime', 'endTime', 'price', 'timeZone', 'photos', 'businessHours', 'phone', 'email', 'website']);
   const unmapped: string[] = [];
   for (const [key, value] of Object.entries(data?.errors || {})) {
     if (typeof value !== 'string' || !value) continue;

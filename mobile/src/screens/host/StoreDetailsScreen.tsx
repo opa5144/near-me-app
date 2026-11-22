@@ -1,6 +1,6 @@
 
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { isAxiosError } from 'axios';
 
@@ -22,6 +22,14 @@ function openingHours(hours: StoreBusinessHours): string {
   };
 
   return `${clockLabel(hours.opensAt)} – ${clockLabel(hours.closesAt)}${hours.closesAt < hours.opensAt ? ' (next day)' : ''}`;
+}
+
+async function openContactLink(url: string, label: string) {
+  try {
+    await Linking.openURL(url);
+  } catch {
+    Alert.alert('Unable to open link', `Your device couldn't open the ${label}.`);
+  }
 }
 
 export function StoreDetailsScreen({
@@ -149,6 +157,47 @@ export function StoreDetailsScreen({
             {store.address}
           </Text>
 
+          {(store.phone || store.email || store.website) && (
+            <>
+              <Text style={[styles.section, { color: colors.text }]}>
+                Contact Information
+              </Text>
+
+              {store.phone && (
+                <Text
+                  accessibilityRole="link"
+                  accessibilityLabel={`Call ${store.phone}`}
+                  onPress={() => void openContactLink(`tel:${store.phone}`, 'phone number')}
+                  style={[styles.contactLink, { color: colors.primary }]}
+                >
+                  Phone: {store.phone}
+                </Text>
+              )}
+
+              {store.email && (
+                <Text
+                  accessibilityRole="link"
+                  accessibilityLabel={`Email ${store.email}`}
+                  onPress={() => void openContactLink(`mailto:${store.email}`, 'email address')}
+                  style={[styles.contactLink, { color: colors.primary }]}
+                >
+                  Email: {store.email}
+                </Text>
+              )}
+
+              {store.website && (
+                <Text
+                  accessibilityRole="link"
+                  accessibilityLabel={`Visit ${store.website}`}
+                  onPress={() => void openContactLink(store.website!, 'website')}
+                  style={[styles.contactLink, { color: colors.primary }]}
+                >
+                  Website: {store.website}
+                </Text>
+              )}
+            </>
+          )}
+
           <Text style={[styles.section, { color: colors.text }]}>
             About this store
           </Text>
@@ -202,6 +251,7 @@ const styles = StyleSheet.create({
   categories: { fontSize: 12, fontWeight: '700' },
   section: { fontSize: 16, fontWeight: '800', marginTop: 10, marginBottom: 4 },
   body: { fontSize: 13, lineHeight: 19 },
+  contactLink: { fontSize: 14, lineHeight: 24, textDecorationLine: 'underline' },
   caption: { fontSize: 11, marginBottom: 4 },
   hours: { flexDirection: 'row', gap: 8, borderBottomWidth: 1, paddingVertical: 8 },
   day: { width: 84, fontSize: 13, fontWeight: '600' },

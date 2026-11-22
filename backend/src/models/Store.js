@@ -24,8 +24,16 @@ const businessHoursSchema = new mongoose.Schema({
 }, { _id: false });
 
 const storeSchema = new mongoose.Schema({
-  ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   name: { type: String, required: true, trim: true, maxlength: 150 },
+  ownerId: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'User',
+  required: true,
+  index: true
+  },
+  phone: { type: String, trim: true, maxlength: 30, default: null },
+  email: { type: String, trim: true, lowercase: true, maxlength: 254, default: null },
+  website: { type: String, trim: true, maxlength: 500, default: null },
   categories: {
     type: [{ type: String, enum: STORE_CATEGORIES }], required: true,
     validate: {

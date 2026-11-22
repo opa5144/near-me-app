@@ -1,3 +1,4 @@
+
 const mongoose = require('mongoose');
 const Store = require('../models/Store');
 const User = require('../models/User');
@@ -29,6 +30,39 @@ function parseStore(body) {
     if (typeof body[field] !== 'string' || !body[field].trim()) errors[field] = `${label} is required.`;
     else if (body[field].trim().length > maximum) errors[field] = `Use ${maximum} characters or fewer.`;
     else fields[field] = body[field].trim();
+  }
+
+  // Optional contact information
+  for (const [field, maximum] of [['phone', 30], ['email', 254], ['website', 500]]) {
+    const value = body[field];
+
+    if (value == null || (typeof value === 'string' && !value.trim())) {
+      fields[field] = null;
+    } else if (typeof value !== 'string') {
+      errors[field] = 'Enter a valid contact detail.';
+    } else if (value.trim().length > maximum) {
+      errors[field] = `Use ${maximum} characters or fewer.`;
+    } else {
+      fields[field] = value.trim();
+    }
+  }
+
+  if (fields.email) {
+    fields.email = fields.email.toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fields.email)) {
+      errors.email = 'Enter a valid email address.';
+    }
+  }
+
+  if (fields.website) {
+    try {
+      const websiteUrl = new URL(fields.website);
+      if (!['http:', 'https:'].includes(websiteUrl.protocol)) {
+        errors.website = 'Website must use HTTP or HTTPS.';
+      }
+    } catch {
+      errors.website = 'Enter a valid website URL, including https://.';
+    }
   }
 
   if (!Array.isArray(body.categories) || !body.categories.length ||
@@ -97,6 +131,9 @@ function toStoreItem(store, baseUrl, photoDocuments = []) {
       _id: String(owner._id), username: owner.username, firstName: owner.firstName, lastName: owner.lastName,
     } : String(owner),
     name: store.name, categories: store.categories, description: store.description,
+    phone: store.phone || undefined,
+    email: store.email || undefined,
+    website: store.website || undefined,
     address: store.address, place: store.place,
     placeId: store.placeId || undefined, latitude: store.latitude ?? undefined, longitude: store.longitude ?? undefined,
     timeZone: store.timeZone,

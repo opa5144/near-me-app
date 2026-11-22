@@ -1,3 +1,4 @@
+
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { usePreventRemove } from '@react-navigation/native';
@@ -34,6 +35,9 @@ export function CreateStoreScreen({ onBack, onCreated }: Props) {
   const [storeName, setStoreName] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [description, setDescription] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [website, setWebsite] = useState('');
   const [hours, setHours] = useState<BusinessHoursData>(initialHours);
   const [selectedVenue, setSelectedVenue] = useState<EventPlace | null>(null);
   const [timeZone, setTimeZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone || '');
@@ -61,7 +65,7 @@ export function CreateStoreScreen({ onBack, onCreated }: Props) {
     else onBack();
   }, [publishedStore, isSaving, onCreated, onBack]);
 
-  const draft: StoreDraft = { name: storeName, description, categories: selectedCategories, venue: selectedVenue, timeZone, hours, photos };
+  const draft: StoreDraft = { name: storeName, description, categories: selectedCategories, venue: selectedVenue, timeZone, hours, photos, phone, email, website };
   const validateFields = (fields: string[], changes: Partial<StoreDraft> = {}) => {
     const next = validateStoreDraft({ ...draft, ...changes });
     setErrors(current => mergeHostFieldErrors(current, next, fields));
@@ -80,6 +84,9 @@ export function CreateStoreScreen({ onBack, onCreated }: Props) {
     try {
       const input: CreateStoreRequest = {
         name: storeName.trim(), categories: selectedCategories, description: description.trim(),
+        phone: phone.trim() || undefined,
+        email: email.trim() || undefined,
+        website: website.trim() || undefined,
         address: selectedVenue.address.trim(), place: selectedVenue.name.trim(),
         ...(selectedVenue.placeId ? { placeId: selectedVenue.placeId } : {}),
         latitude: selectedVenue.latitude, longitude: selectedVenue.longitude, timeZone: timeZone.trim(),
@@ -108,7 +115,8 @@ export function CreateStoreScreen({ onBack, onCreated }: Props) {
   return (
     <KeyboardAvoidingView style={[styles.container, { backgroundColor: colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <AppButton title="Back" variant="quiet" alignment="left" onPress={onBack} disabled={isSaving} />
+        {/* Navigation */}
+        <AppButton title="‹  Back" variant="quiet" alignment="left" minHeight={44} onPress={onBack} disabled={isSaving} style={styles.backButton} textStyle={styles.backText} />
         <ScreenHeader eyebrow="Your business" title="Create Store" subtitle="Publish your store, photos, and weekly opening hours." />
         <View pointerEvents={isSaving ? 'none' : 'auto'}>
           <Text style={[styles.label, { color: colors.text }]}>Business Name</Text>
@@ -125,6 +133,18 @@ export function CreateStoreScreen({ onBack, onCreated }: Props) {
             textAlignVertical="top" accessibilityLabel="Store description" placeholder="Share your specialties with customers…"
             placeholderTextColor={colors.muted} style={[...inputStyle, styles.description]} />
           <FieldError message={errors.description} />
+
+          <Text style={[styles.label, { color: colors.text }]}>Contact Information</Text>
+          <Text style={[styles.hint, { color: colors.muted }]}>All contact details are optional.</Text>
+          <TextInput value={phone} onChangeText={setPhone} onBlur={() => validateFields(['phone'])} editable={!isSaving} maxLength={30} keyboardType="phone-pad"
+            accessibilityLabel="Business phone number" placeholder="Phone number (optional)" placeholderTextColor={colors.muted} style={inputStyle} />
+          <FieldError message={errors.phone} />
+          <TextInput value={email} onChangeText={setEmail} onBlur={() => validateFields(['email'])} editable={!isSaving} maxLength={254} keyboardType="email-address" autoCapitalize="none" autoCorrect={false}
+            accessibilityLabel="Business email address" placeholder="Email address (optional)" placeholderTextColor={colors.muted} style={[inputStyle, styles.contactInput]} />
+          <FieldError message={errors.email} />
+          <TextInput value={website} onChangeText={setWebsite} onBlur={() => validateFields(['website'])} editable={!isSaving} maxLength={500} keyboardType="url" autoCapitalize="none" autoCorrect={false}
+            accessibilityLabel="Business website" placeholder="Website URL (optional, include https://)" placeholderTextColor={colors.muted} style={[inputStyle, styles.contactInput]} />
+          <FieldError message={errors.website} />
 
           <Text style={[styles.label, { color: colors.text }]}>Store Address</Text>
           <LocationComponent onVenueSelected={venue => { setSelectedVenue(venue); validateFields(['location'], { venue }); }}
@@ -165,9 +185,12 @@ export function CreateStoreScreen({ onBack, onCreated }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 16, paddingBottom: 32 },
+  backButton: { paddingHorizontal: 8, marginLeft: -8, marginBottom: 8 },
+  backText: { fontWeight: '800', fontSize: 14 },
   label: { fontSize: 13, fontWeight: '800', marginTop: 18, marginBottom: 8 },
   input: { minHeight: 46, borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, fontSize: 14 },
   description: { minHeight: 110, paddingTop: 12 },
+  contactInput: { marginTop: 10 },
   hint: { fontSize: 12, lineHeight: 18, marginBottom: 12, marginTop: 5 },
   categories: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   category: { borderWidth: 1, borderRadius: 18, paddingVertical: 9, paddingHorizontal: 14 },

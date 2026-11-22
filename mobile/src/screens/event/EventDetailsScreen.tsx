@@ -1,3 +1,4 @@
+
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, AppState, Image, Pressable, ScrollView, Share, StyleSheet, View, Modal, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -215,7 +216,7 @@ export function EventDetailsScreen({ event, interested, attending, attended, onT
   return (
     <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]}>
       <View style={styles.topBar}>
-        <AppText onPress={onBack} style={[styles.back, { color: colors.primary }]}>‹  Back to events</AppText>
+        <AppButton title="‹  Back" variant="quiet" alignment="left" minHeight={44} onPress={onBack} style={styles.backButton} textStyle={styles.backText} />
         <View style={styles.topBarActions}>
           <Pressable
             onPress={() => setShowInviteModal(true)}
@@ -379,7 +380,8 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 20, flexGrow: 1 },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   topBarActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  back: { fontWeight: '800', fontSize: 13 },
+  backButton: { paddingHorizontal: 8, marginLeft: -8 },
+  backText: { fontWeight: '800', fontSize: 14 },
   invitePillButton: { height: 34, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 5 },
   invitePillText: { fontSize: 12, fontWeight: '800' },
   shareButton: { width: 34, height: 34, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
