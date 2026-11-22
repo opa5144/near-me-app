@@ -26,6 +26,13 @@
       "@react-native-community/datetimepicker",
       "expo-status-bar",
       [
+        "expo-calendar",
+        {
+          "calendarPermission": "Allow Near Me to access your calendars to add itinerary events.",
+          "remindersPermission": false
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "The app accesses your photos to let you share them with your friends."

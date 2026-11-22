@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -6,14 +6,17 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  Modal,
-  TextInput,
+  Share,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { EventItem } from '../../data/events';
 import { EventCard } from '../../components/EventCard';
 import { AppText } from '../../components/AppText';
 import { FieldError } from '../../components/FieldError';
+import { ItineraryActionBar } from '../../components/ItineraryActionBar';
+import { SaveItineraryModal } from '../../components/SaveItineraryModal';
+import { SavedItinerariesSection } from '../../components/SavedItinerariesSection';
+import { addEventsToCalendarAndOpen } from '../../utils/eventCalendar';
 import { useTheme } from '../../context/ThemeContext';
 import { useEvents, SavedItinerary } from '../../context/EventsContext'; // Context types and persistence actions.
 import { isAvailableEvent } from '../../utils/eventAvailability';
@@ -22,7 +25,8 @@ import { isAvailableEvent } from '../../utils/eventAvailability';
 export function ItineraryScreen({ events: plannedEvents, onOpenEvent }: { events: EventItem[]; onOpenEvent: (event: EventItem) => void }) {
   const { colors, theme } = useTheme();
   const { events: globalEvents, isLoading, error, savedItineraries, saveItinerary, deleteItinerary,
-    savedItinerariesLoading, savedItinerariesReady, savedItinerariesError, refreshSavedItineraries } = useEvents();
+    savedItinerariesLoading, savedItinerariesReady, savedItinerariesError, refreshSavedItineraries,
+    setBulkRsvp, selectionsReady, selectionsLoading, selectionsSavingEventIds } = useEvents();
   const [isSmartLoading, setIsSmartLoading] = useState(false);
   const [isSurpriseLoading, setIsSurpriseLoading] = useState(false);
   const [isSavingPlan, setIsSavingPlan] = useState(false); // Tracks in-flight save operation.
@@ -34,6 +38,16 @@ export function ItineraryScreen({ events: plannedEvents, onOpenEvent }: { events
   const [nameModalVisible, setNameModalVisible] = useState(false); // Controls itinerary naming modal.
   const [draftTitle, setDraftTitle] = useState(''); // Editable name input inside modal.
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [isBulkRsvping, setIsBulkRsvping] = useState(false);
+  const [isExportingCalendar, setIsExportingCalendar] = useState(false);
+  const [isSharingPlan, setIsSharingPlan] = useState(false);
+  const actionInFlight = useRef(false);
+  const mounted = useRef(true);
+  const generationTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; if (generationTimer.current) clearTimeout(generationTimer.current); };
+  }, []);
 
   // Current server details take precedence over snapshots. A saved plan cannot
   // restore an ended/cancelled event that has left discovery.
@@ -63,8 +77,9 @@ export function ItineraryScreen({ events: plannedEvents, onOpenEvent }: { events
 
   // Smart Plan: Organizes current saved events chronologically
   const handleGenerateSmartPlan = () => {
+    if (actionInFlight.current || isSmartLoading || isSurpriseLoading) return;
     setIsSmartLoading(true);
-    setTimeout(() => {
+    generationTimer.current = setTimeout(() => {
       const sorted = sortChronologically(availablePlan(plannedEvents));
       setActivePlan(sorted);
       setPlanTitle('Chronological Master Itinerary');
@@ -76,8 +91,9 @@ export function ItineraryScreen({ events: plannedEvents, onOpenEvent }: { events
 
   // Surprise Me!: Pulls a new 1-2 day adventure from the global event ecosystem independently
   const handleSurprisePlan = () => {
+    if (actionInFlight.current || isSmartLoading || isSurpriseLoading) return;
     setIsSurpriseLoading(true);
-    setTimeout(() => {
+    generationTimer.current = setTimeout(() => {
       const sourcePool = availablePlan(globalEvents.length > 0 ? globalEvents : plannedEvents);
       const shuffled = [...sourcePool].sort(() => 0.5 - Math.random());
       const surpriseSelection = shuffled.slice(0, Math.min(sourcePool.length, 5));
@@ -93,6 +109,7 @@ export function ItineraryScreen({ events: plannedEvents, onOpenEvent }: { events
 
   // Opens naming modal pre-filled with the current itinerary title.
   const openSaveModal = () => {
+    if (actionInFlight.current || !savedItinerariesReady) return;
     setSaveError(null);
     setDraftTitle(planTitle); // Seed input with current plan title.
     setNameModalVisible(true); // Show modal.
@@ -100,30 +117,98 @@ export function ItineraryScreen({ events: plannedEvents, onOpenEvent }: { events
 
   // Persists current itinerary with the user-entered name.
   const handleConfirmSave = async () => {
-    if (isSavingPlan || !savedItinerariesReady) return;
+    if (actionInFlight.current || !savedItinerariesReady) return;
     const listToSave = sortChronologically(availablePlan(planGenerated ? activePlan : plannedEvents));
     if (!listToSave.length) {
       setSaveError('These events have ended or are no longer available.');
       return;
     }
     setSaveError(null);
+    actionInFlight.current = true;
     setIsSavingPlan(true);
     try {
       const finalName = draftTitle.trim() || planTitle; // Fallback to current title if blank.
       const saved = await saveItinerary(finalName, listToSave);
-      if (saved) {
+      if (saved && mounted.current) {
         setPlanTitle(saved.title); // Reflect saved name in active timeline header.
         setSelectedSavedId(saved.id); // Mark newly saved itinerary as active.
         setNameModalVisible(false); // Close modal.
         Alert.alert('Itinerary Saved', `"${saved.title}" has been saved.`);
       }
     } finally {
-      setIsSavingPlan(false);
+      actionInFlight.current = false;
+      if (mounted.current) setIsSavingPlan(false);
+    }
+  };
+
+  // RSVP uses the shared writer, preserving QR issuance and check-in rules.
+  const handleBulkRsvp = async (list: EventItem[]) => {
+    if (actionInFlight.current || !selectionsReady || selectionsLoading) return;
+    const ids = [...new Set(availablePlan(list).map(event => event.id))];
+    if (!ids.length) {
+      Alert.alert('No available events', 'These events have ended or are no longer available.');
+      return;
+    }
+    actionInFlight.current = true;
+    setIsBulkRsvping(true);
+    try {
+      const saved = await setBulkRsvp(ids, true);
+      if (saved && mounted.current) Alert.alert('RSVP Updated', `Registered for ${ids.length} ${ids.length === 1 ? 'event' : 'events'}.`);
+    } finally {
+      actionInFlight.current = false;
+      if (mounted.current) setIsBulkRsvping(false);
+    }
+  };
+
+  // Share current schedules and venue details rather than stale saved snapshots.
+  const handleShareItinerary = async (title: string, list: EventItem[]) => {
+    if (actionInFlight.current) return;
+    const current = availablePlan(list);
+    if (!current.length) return;
+    actionInFlight.current = true;
+    setIsSharingPlan(true);
+    const lines = current.map((event, index) => {
+      const when = [event.date, event.time].filter(Boolean).join(' · ');
+      const location = [event.venue, event.address || event.location].filter(Boolean).join(', ');
+      return `${index + 1}. ${event.title}${when ? ` (${when})` : ''}${location ? ` @ ${location}` : ''}`;
+    });
+    try {
+      await Share.share({ title: `${title} · NearMe`,
+        message: `Check out my NearMe itinerary: ${title}\n\n${lines.join('\n')}\n\nPlanned with NearMe` });
+    } catch {
+      if (mounted.current) Alert.alert('Share Failed', 'Could not open the share sheet.');
+    } finally {
+      actionInFlight.current = false;
+      if (mounted.current) setIsSharingPlan(false);
+    }
+  };
+
+  // Export once and report partial results without claiming failed inserts saved.
+  const handleAddToCalendar = async (list: EventItem[]) => {
+    if (actionInFlight.current) return;
+    const current = availablePlan(list);
+    if (!current.length) {
+      Alert.alert('No available events', 'These events have ended or are no longer available.');
+      return;
+    }
+    actionInFlight.current = true;
+    setIsExportingCalendar(true);
+    try {
+      const { addedCount, skippedCount } = await addEventsToCalendarAndOpen(current);
+      if (!mounted.current) return;
+      if (!addedCount) Alert.alert('No Scheduled Events', 'No available events could be added to your calendar.');
+      else if (skippedCount) Alert.alert('Calendar partially updated', `${addedCount} added; ${skippedCount} could not be added. Please check your calendar before trying again.`);
+    } catch {
+      if (mounted.current) Alert.alert('Calendar Error', 'Your calendar could not be updated. Check calendar access in device settings and try again.');
+    } finally {
+      actionInFlight.current = false;
+      if (mounted.current) setIsExportingCalendar(false);
     }
   };
 
   // Confirms and deletes a saved itinerary via context.
   const handleDeleteItinerary = (item: SavedItinerary) => {
+    if (actionInFlight.current || !savedItinerariesReady) return;
     Alert.alert(
       'Delete Itinerary',
       `Delete "${item.title}"?`,
@@ -163,6 +248,8 @@ export function ItineraryScreen({ events: plannedEvents, onOpenEvent }: { events
 
   const isDark = theme === 'dark';
   const currentDisplayList = sortChronologically(planGenerated ? availablePlan(activePlan) : savedOutings);
+  const isBusyAction = isBulkRsvping || isSavingPlan || isExportingCalendar || isSharingPlan ||
+    isSmartLoading || isSurpriseLoading || selectionsSavingEventIds.length > 0;
 
   const resetPlan = () => {
     setPlanGenerated(false); setActivePlan(savedOutings);
@@ -242,107 +329,13 @@ export function ItineraryScreen({ events: plannedEvents, onOpenEvent }: { events
         </TouchableOpacity>}
       </View>}
 
-      {/* Saved Itineraries list with full primary fill when active and dropdown event names + date & time */}
-      {savedItineraries.length > 0 && (
-        <View style={styles.savedItinerariesSection}>
-          <AppText variant="bodyMedium" color={colors.primary} style={styles.timelineHeaderLabel}>
-            SAVED ITINERARIES
-          </AppText>
-          {savedItineraries.map(item => {
-            const isSelected = selectedSavedId === item.id; // True when this saved itinerary card is filled with primary color.
-            const isExpanded = Boolean(expandedSavedIds[item.id]); // Dropdown collapsed by default until toggled.
-            const cardEvents = sortChronologically(resolveSavedEvents(item)); // Sorted events inside this card.
-            const primaryTextColor = isSelected ? '#FFFFFF' : colors.text; // High-contrast text when card uses primary fill.
-            const secondaryTextColor = isSelected ? 'rgba(255, 255, 255, 0.85)' : colors.muted; // Readable secondary text on primary fill.
-
-            return (
-              <View
-                key={item.id}
-                style={[
-                  styles.savedItineraryCard,
-                  {
-                    backgroundColor: isSelected ? colors.primary : colors.surface, // Full primary fill when active.
-                    borderColor: isSelected ? colors.primary : colors.border,
-                  },
-                ]}
-              >
-                <View style={styles.savedItineraryTopRow}>
-                  <TouchableOpacity
-                    style={styles.savedItineraryNameBtn}
-                    activeOpacity={0.8}
-                    onPress={() => handleSelectSavedItinerary(item)}
-                  >
-                    <AppText style={[styles.savedItineraryTitle, { color: primaryTextColor }]}>{item.title}</AppText>
-                    <AppText style={[styles.savedItineraryCount, { color: secondaryTextColor }]}>
-                      {cardEvents.length} {cardEvents.length === 1 ? 'event' : 'events'}
-                    </AppText>
-                  </TouchableOpacity>
-
-                  <View style={styles.cardRightActions}>
-                    {/* Dropdown toggle button to show or hide event names, dates, and times */}
-                    {cardEvents.length > 0 && (
-                      <TouchableOpacity
-                        onPress={() => toggleSavedDropdown(item.id)}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        accessibilityLabel={`${isExpanded ? 'Hide' : 'Show'} events for ${item.title}`}
-                      >
-                        <Ionicons
-                          name={isExpanded ? 'chevron-up' : 'chevron-down'}
-                          size={18}
-                          color={secondaryTextColor}
-                        />
-                      </TouchableOpacity>
-                    )}
-
-                    <TouchableOpacity
-                      onPress={() => handleDeleteItinerary(item)}
-                      disabled={!savedItinerariesReady || isSavingPlan}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      accessibilityLabel={`Delete ${item.title}`}
-                    >
-                      <Ionicons
-                        name="trash-outline"
-                        size={18}
-                        color={isSelected ? '#FFFFFF' : '#EF4444'}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {/* Dropdown list of event names with date and time, shown only when expanded */}
-                {isExpanded && cardEvents.length > 0 && (
-                  <View
-                    style={[
-                      styles.cardEventsList,
-                      { borderTopColor: isSelected ? 'rgba(255, 255, 255, 0.25)' : colors.border },
-                    ]}
-                  >
-                    {cardEvents.map(ev => (
-                      <TouchableOpacity
-                        key={ev.id}
-                        style={styles.cardEventItemRow}
-                        activeOpacity={0.75}
-                        onPress={() => onOpenEvent(ev)}
-                      >
-                        <Ionicons name="ellipse" size={6} color={isSelected ? '#FFFFFF' : colors.primary} />
-                        <AppText style={[styles.cardEventItemText, { color: primaryTextColor }]} numberOfLines={1}>
-                          {ev.title || 'Untitled Event'}
-                        </AppText>
-                        <AppText
-                          style={[styles.cardEventItemMeta, { color: secondaryTextColor }]}
-                          numberOfLines={1}
-                        >
-                          {[ev.date, ev.time].filter(Boolean).join(' · ')}
-                        </AppText>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-              </View>
-            );
-          })}
-        </View>
-      )}
+      <SavedItinerariesSection
+        itineraries={savedItineraries} selectedId={selectedSavedId} expandedIds={expandedSavedIds}
+        colors={colors} resolveEvents={resolveSavedEvents} sortEvents={sortChronologically}
+        onSelect={handleSelectSavedItinerary} onToggleDropdown={toggleSavedDropdown}
+        onDelete={handleDeleteItinerary} onOpenEvent={onOpenEvent}
+        deleteDisabled={!savedItinerariesReady || isBusyAction}
+      />
 
       {/* Timeline Section */}
       {currentDisplayList.length ? (
@@ -355,17 +348,16 @@ export function ItineraryScreen({ events: plannedEvents, onOpenEvent }: { events
             {planGenerated && <TouchableOpacity accessibilityRole="button" onPress={resetPlan}>
               <AppText style={[styles.resetText, { color: colors.muted }]}>Reset View</AppText>
             </TouchableOpacity>}
-            {/* Save button to name and persist the current itinerary */}
-            <TouchableOpacity
-              style={[styles.saveBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              activeOpacity={0.8}
-              onPress={openSaveModal}
-              disabled={isSavingPlan || savedItinerariesLoading || !savedItinerariesReady}
-            >
-              <Ionicons name="bookmark-outline" size={14} color={colors.primary} />
-              <AppText style={[styles.saveBtnText, { color: colors.primary }]}>Save</AppText>
-            </TouchableOpacity>
           </View>
+
+          <ItineraryActionBar
+            disabled={isBusyAction} saveDisabled={savedItinerariesLoading || !savedItinerariesReady}
+            rsvpDisabled={!selectionsReady || selectionsLoading}
+            isBulkRsvping={isBulkRsvping} isExportingCalendar={isExportingCalendar} colors={colors}
+            onBulkRsvp={() => { void handleBulkRsvp(currentDisplayList); }} onSave={openSaveModal}
+            onShare={() => { void handleShareItinerary(planTitle, currentDisplayList); }}
+            onAddToCalendar={() => { void handleAddToCalendar(currentDisplayList); }}
+          />
 
           {Object.entries(groupedByDate).map(([dateStr, dateEvents]) => (
             <View key={dateStr} style={styles.dateSection}>
@@ -414,50 +406,12 @@ export function ItineraryScreen({ events: plannedEvents, onOpenEvent }: { events
         </View>
       )}
 
-      {/* Modal to name and save the current itinerary */}
-      <Modal
-        visible={nameModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => { if (!isSavingPlan) setNameModalVisible(false); }}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <AppText style={[styles.modalTitle, { color: colors.text }]}>Save Itinerary</AppText>
-            <TextInput
-              value={draftTitle}
-              onChangeText={setDraftTitle}
-              placeholder="Itinerary name"
-              placeholderTextColor={colors.muted}
-              style={[styles.nameInput, { color: colors.text, backgroundColor: colors.background, borderColor: colors.border }]}
-              maxLength={60}
-              editable={!isSavingPlan}
-              autoFocus
-            />
-            <FieldError message={saveError || savedItinerariesError} />
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalBtnSecondary, { borderColor: colors.border }]}
-                onPress={() => setNameModalVisible(false)}
-                disabled={isSavingPlan}
-              >
-                <AppText style={[styles.modalBtnSecondaryText, { color: colors.text }]}>Cancel</AppText>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalBtnPrimary, { backgroundColor: colors.primary }]}
-                onPress={() => { void handleConfirmSave(); }}
-                disabled={isSavingPlan || !savedItinerariesReady}
-              >
-                {isSavingPlan ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                ) : (
-                  <AppText style={styles.modalBtnPrimaryText}>Save</AppText>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <SaveItineraryModal
+        visible={nameModalVisible} value={draftTitle} isSaving={isSavingPlan} colors={colors}
+        error={saveError || savedItinerariesError} canSave={savedItinerariesReady}
+        onChangeText={setDraftTitle} onCancel={() => { if (!actionInFlight.current) setNameModalVisible(false); }}
+        onConfirm={() => { void handleConfirmSave(); }}
+      />
     </ScrollView>
   );
 }
@@ -498,84 +452,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   secondaryActionText: { fontWeight: '800', fontSize: 12, paddingVertical: 8, flexShrink: 1, textAlign: 'center' },
-  // Styles for saved itinerary cards, dropdown event list, and save button.
-  savedItinerariesSection: { marginBottom: 12, gap: 8 },
-  savedItineraryCard: {
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  savedItineraryTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  savedItineraryNameBtn: { flex: 1, marginRight: 10 },
-  savedItineraryTitle: { fontSize: 13, fontWeight: '800' },
-  savedItineraryCount: { fontSize: 11, fontWeight: '600', marginTop: 2 },
-  cardRightActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  cardEventsList: {
-    marginTop: 10,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    gap: 6,
-  },
-  cardEventItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  cardEventItemText: { flex: 1, fontSize: 12, fontWeight: '600' },
-  cardEventItemMeta: { fontSize: 11, fontWeight: '600' },
-  saveBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  saveBtnText: { fontSize: 11, fontWeight: '800' },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  modalCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 16,
-    gap: 12,
-  },
-  modalTitle: { fontSize: 16, fontWeight: '900' },
-  nameInput: {
-    height: 42,
-    borderRadius: 10,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  modalActions: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  modalBtnSecondary: {
-    flex: 1,
-    height: 40,
-    borderRadius: 10,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalBtnSecondaryText: { fontSize: 13, fontWeight: '700' },
-  modalBtnPrimary: {
-    flex: 1,
-    height: 40,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalBtnPrimaryText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
   timelineContainer: { marginTop: 0 },
   timelineHeaderRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
   statusDotLive: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' },
