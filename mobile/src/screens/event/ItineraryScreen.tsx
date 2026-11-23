@@ -11,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { EventItem } from '../../data/events';
 import { EventCard } from '../../components/EventCard';
+import { ScreenHeader } from '../../components/ScreenHeader';
 import { AppText } from '../../components/AppText';
 import { FieldError } from '../../components/FieldError';
 import { ItineraryActionBar } from '../../components/ItineraryActionBar';
@@ -266,20 +267,25 @@ export function ItineraryScreen({ events: plannedEvents, onOpenEvent }: { events
 
   return (
     <ScrollView contentContainerStyle={[styles.content, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
-      <View style={styles.pageHeader}>
-        <AppText accessibilityRole="header" style={[styles.pageTitle, { color: colors.text }]}>My Itinerary</AppText>
-        <AppText style={[styles.pageSubtitle, { color: colors.muted }]}>{planGenerated
-          ? 'Your planned outings, in time order.'
-          : `${savedOutings.length} saved ${savedOutings.length === 1 ? 'event' : 'events'}`}</AppText>
-      </View>
+      <ScreenHeader
+        title="My Itinerary"
+        subtitle={planGenerated
+          ? 'Your custom multi-day itinerary, fully optimized.'
+          : `${savedOutings.length} saved ${savedOutings.length === 1 ? 'event' : 'events'} ready to plan around.`}
+      />
 
-      {/* Keep planning controls compact while retaining saved-plan features. */}
+      {/* Preserve the full assistant introduction alongside the itinerary actions. */}
       {(savedOutings.length > 0 || globalEvents.length > 0) && (
         <View style={[styles.assistantCard, { backgroundColor: colors.surface, borderColor: colors.primary }]}>
           <View style={styles.assistantHeader}>
-            <Ionicons name="sparkles" size={14} color={colors.primary} />
-            <AppText style={[styles.assistantTitle, { color: colors.text }]}>Plan your outings</AppText>
+            <Ionicons name="sparkles" size={16} color={colors.primary} />
+            <AppText style={[styles.assistantEyebrow, { color: colors.primary }]}>SMART ITINERARY ASSISTANT</AppText>
           </View>
+
+          <AppText style={[styles.assistantTitle, { color: colors.text }]}>Find what's happening NearMe</AppText>
+          <AppText style={[styles.assistantBody, { color: colors.muted }]}>
+            Generate a smart chronological timeline from your saved items, or hit Surprise Me to instantly discover a 1-2 day local adventure.
+          </AppText>
 
           <View style={styles.actionRow}>
             <TouchableOpacity
@@ -418,15 +424,14 @@ export function ItineraryScreen({ events: plannedEvents, onOpenEvent }: { events
 
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 20, flexGrow: 1 },
-  pageHeader: { marginBottom: 10 },
-  pageTitle: { fontSize: 28, fontWeight: '900' },
-  pageSubtitle: { fontSize: 12, fontWeight: '600', marginTop: 3 },
   storageLoading: { marginBottom: 8 },
   storageNotice: { marginBottom: 10 },
-  assistantCard: { borderRadius: 14, borderWidth: 1, padding: 10, marginBottom: 12 },
-  assistantHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-  assistantTitle: { fontSize: 12, fontWeight: '800' },
-  actionRow: { flexDirection: 'row', gap: 8 },
+  assistantCard: { borderRadius: 14, borderWidth: 1, padding: 14, marginBottom: 22 },
+  assistantHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  assistantEyebrow: { fontSize: 10, fontWeight: '900', letterSpacing: 0.6 },
+  assistantTitle: { fontSize: 13, fontWeight: '800', marginBottom: 3 },
+  assistantBody: { fontSize: 12, lineHeight: 17, marginBottom: 14 },
+  actionRow: { flexDirection: 'row', gap: 10 },
   primaryActionBtn: {
     flex: 1,
     minWidth: 0,
@@ -438,7 +443,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
   },
-  primaryActionText: { color: '#FFFFFF', fontWeight: '800', fontSize: 12, paddingVertical: 8, flexShrink: 1, textAlign: 'center' },
+  primaryActionText: { color: '#FFFFFF', fontWeight: '800', fontSize: 13, paddingVertical: 8, flexShrink: 1, textAlign: 'center' },
   secondaryActionBtn: {
     flex: 1,
     minWidth: 0,
@@ -451,7 +456,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
   },
-  secondaryActionText: { fontWeight: '800', fontSize: 12, paddingVertical: 8, flexShrink: 1, textAlign: 'center' },
+  secondaryActionText: { fontWeight: '800', fontSize: 13, paddingVertical: 8, flexShrink: 1, textAlign: 'center' },
   timelineContainer: { marginTop: 0 },
   timelineHeaderRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
   statusDotLive: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' },
